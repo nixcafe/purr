@@ -48,6 +48,18 @@ in
       example = "cattery";
     };
 
+    libDir = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Path (relative to `src`) to a directory containing library
+        functions. When set, the directory is imported and placed under
+        `lib.<namespace>`, making functions accessible as
+        `lib.<namespace>.someFunc` within module evaluation.
+      '';
+      example = "lib";
+    };
+
     modulesDir = mkOption {
       type = types.str;
       default = "modules";
@@ -131,9 +143,31 @@ in
         modules:
         if cfg.namespace != null then namespacedModules.wrapModuleSet cfg.namespace modules else modules;
 
-      wrappedNixos = wrap discoveredModules.nixos;
-      wrappedDarwin = wrap discoveredModules.darwin;
-      wrappedHome = wrap discoveredModules.home;
+      makeLibExtension =
+        if cfg.namespace != null && cfg.libDir != null then
+          {
+            _module.args.lib = lib // {
+              ${cfg.namespace} = import (cfg.src + "/${cfg.libDir}") { inherit lib; };
+            };
+          }
+        else
+          null;
+
+      wrapWithLib =
+        modules:
+        if makeLibExtension != null then
+          builtins.mapAttrs (_name: module: {
+            imports = [
+              makeLibExtension
+              module
+            ];
+          }) modules
+        else
+          modules;
+
+      wrappedNixos = wrapWithLib (wrap discoveredModules.nixos);
+      wrappedDarwin = wrapWithLib (wrap discoveredModules.darwin);
+      wrappedHome = wrapWithLib (wrap discoveredModules.home);
 
       resolve =
         dir: candidates:
