@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v27
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Flake check (root)
+        run: nix flake check
+
+      - name: Flake show (root)
+        run: nix flake show
+
+      - name: Flake check (dev)
+        run: nix flake check ./dev
+
+      - name: Flake show (dev)
+        run: nix flake show ./dev
