@@ -8,15 +8,20 @@ let
     in
     result;
 
+  deepMapAttrs =
+    f: value:
+    if builtins.isAttrs value && !builtins.isFunction value then
+      builtins.mapAttrs (_: deepMapAttrs f) value
+    else
+      f value;
+
   wrapModuleSet =
     namespace: modules:
-    if namespace == null then
-      modules
-    else
-      builtins.mapAttrs (_: module: wrapModule namespace module) modules;
+    if namespace == null then modules else deepMapAttrs (wrapModule namespace) modules;
 in
 {
   inherit
+    deepMapAttrs
     wrapModule
     wrapModuleSet
     ;

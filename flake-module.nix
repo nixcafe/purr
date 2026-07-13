@@ -156,7 +156,7 @@ in
       wrapWithLib =
         modules:
         if makeLibExtension != null then
-          builtins.mapAttrs (_name: module: {
+          namespacedModules.deepMapAttrs (module: {
             imports = [
               makeLibExtension
               module

@@ -81,7 +81,7 @@ let
       wrapWithLib =
         modules:
         if makeLibExtension != null then
-          builtins.mapAttrs (_name: module: {
+          namespacedModules.deepMapAttrs (module: {
             imports = [
               makeLibExtension
               module
@@ -90,15 +90,15 @@ let
         else
           modules;
 
-      nixosModules =
-        wrapWithLib (namespacedModules.wrapModuleSet namespace (allModules.nixos or { }))
-        // (extra.nixos or { });
-      darwinModules =
-        wrapWithLib (namespacedModules.wrapModuleSet namespace (allModules.darwin or { }))
-        // (extra.darwin or { });
-      homeModules =
-        wrapWithLib (namespacedModules.wrapModuleSet namespace (allModules.home or { }))
-        // (extra.home or { });
+      nixosModules = lib.recursiveUpdate (wrapWithLib (
+        namespacedModules.wrapModuleSet namespace (allModules.nixos or { })
+      )) (extra.nixos or { });
+      darwinModules = lib.recursiveUpdate (wrapWithLib (
+        namespacedModules.wrapModuleSet namespace (allModules.darwin or { })
+      )) (extra.darwin or { });
+      homeModules = lib.recursiveUpdate (wrapWithLib (
+        namespacedModules.wrapModuleSet namespace (allModules.home or { })
+      )) (extra.home or { });
 
       resolve =
         dir: candidates:

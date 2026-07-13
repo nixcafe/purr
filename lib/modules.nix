@@ -4,9 +4,12 @@ let
     concatMap
     filterAttrs
     hasSuffix
+    head
+    recursiveUpdate
     removePrefix
     removeSuffix
     splitString
+    tail
     ;
 
   inherit (fs)
@@ -22,13 +25,16 @@ let
     if dirExists then
       let
         files = getDefaultNixFiles dir;
-      in
-      builtins.listToAttrs (
-        builtins.map (file: {
-          name = removePrefix (toString dir + "/") (removeSuffix "/default.nix" (toString file.path));
+        fileList = builtins.map (file: {
+          pathParts = splitString "/" (
+            removePrefix (toString dir + "/") (removeSuffix "/default.nix" (toString file.path))
+          );
           value = file.path;
-        }) files
-      )
+        }) files;
+        setNested =
+          parts: val: if parts == [ ] then val else { ${head parts} = setNested (tail parts) val; };
+      in
+      builtins.foldl' (acc: item: recursiveUpdate acc (setNested item.pathParts item.value)) { } fileList
     else
       { };
 
@@ -43,7 +49,7 @@ let
   discoverModules =
     modulesDir: dirMap:
     let
-      collect = types: builtins.foldl' (acc: t: acc // findModules modulesDir t) { } types;
+      collect = types: builtins.foldl' (acc: t: recursiveUpdate acc (findModules modulesDir t)) { } types;
     in
     builtins.mapAttrs (_: collect) dirMap;
 
@@ -76,9 +82,19 @@ let
       sub = concatMap (name: loadModules (path + "/${name}")) dirs;
     in
     current ++ sub;
+
+  collectModules =
+    attrs:
+    let
+      isLeaf = value: !builtins.isAttrs value || builtins.isFunction value || builtins.isPath value;
+    in
+    concatMap (value: if isLeaf value then [ value ] else collectModules value) (
+      builtins.attrValues attrs
+    );
 in
 {
   inherit
+    collectModules
     discoverModules
     findAllModules
     findModules
