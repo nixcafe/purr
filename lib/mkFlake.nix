@@ -26,6 +26,7 @@ let
       inputs,
       src,
       namespace ? null,
+      libDir ? null,
       systems ? defaultSystems,
       channelsConfig ? { },
       outputsBuilder ? (_: { }),
@@ -67,12 +68,37 @@ let
 
       extra = builtins.mapAttrs (_: listModules) extraModules;
 
+      makeLibExtension =
+        if namespace != null && libDir != null then
+          {
+            _module.args.lib = lib // {
+              ${namespace} = import libDir { inherit lib; };
+            };
+          }
+        else
+          null;
+
+      wrapWithLib =
+        modules:
+        if makeLibExtension != null then
+          builtins.mapAttrs (_name: module: {
+            imports = [
+              makeLibExtension
+              module
+            ];
+          }) modules
+        else
+          modules;
+
       nixosModules =
-        namespacedModules.wrapModuleSet namespace (allModules.nixos or { }) // (extra.nixos or { });
+        wrapWithLib (namespacedModules.wrapModuleSet namespace (allModules.nixos or { }))
+        // (extra.nixos or { });
       darwinModules =
-        namespacedModules.wrapModuleSet namespace (allModules.darwin or { }) // (extra.darwin or { });
+        wrapWithLib (namespacedModules.wrapModuleSet namespace (allModules.darwin or { }))
+        // (extra.darwin or { });
       homeModules =
-        namespacedModules.wrapModuleSet namespace (allModules.home or { }) // (extra.home or { });
+        wrapWithLib (namespacedModules.wrapModuleSet namespace (allModules.home or { }))
+        // (extra.home or { });
 
       resolve =
         dir: candidates:

@@ -1,6 +1,9 @@
 { fs, lib, ... }:
 let
   inherit (lib)
+    concatMap
+    filterAttrs
+    hasSuffix
     removePrefix
     removeSuffix
     splitString
@@ -60,12 +63,26 @@ let
         "shared"
       ];
     };
+
+  loadModules =
+    path:
+    let
+      entries = builtins.readDir path;
+      nixFiles = builtins.attrNames (
+        filterAttrs (name: type: type == "regular" && hasSuffix ".nix" name) entries
+      );
+      dirs = builtins.attrNames (filterAttrs (_name: type: type == "directory") entries);
+      current = builtins.map (name: path + "/${name}") nixFiles;
+      sub = concatMap (name: loadModules (path + "/${name}")) dirs;
+    in
+    current ++ sub;
 in
 {
   inherit
     discoverModules
     findAllModules
     findModules
+    loadModules
     toKebabCase
     ;
 }
