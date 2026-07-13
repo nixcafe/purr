@@ -29,5 +29,5 @@ in
 {
   inherit (eachSystem) eachSystem eachDefaultSystem defaultSystems;
   inherit (mkFlake) mkFlake;
-  inherit (modules) loadModules;
+  inherit (modules) collectModules loadModules;
 }
