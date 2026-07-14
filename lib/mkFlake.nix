@@ -163,7 +163,13 @@ let
             let
               shellModules = modules.findModules src shellsDir';
             in
-            builtins.mapAttrs (_: module: import module { pkgs = pkgs.${system}; }) shellModules
+            builtins.mapAttrs (
+              _: module:
+              import module {
+                inherit system;
+                pkgs = pkgs.${system};
+              }
+            ) shellModules
           )
         else
           { };
