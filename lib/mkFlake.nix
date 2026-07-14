@@ -49,6 +49,7 @@ let
       shellsDir ? null,
       overlaysDir ? null,
       packagesDir ? null,
+      appsDir ? null,
       ...
     }@args:
     let
@@ -117,6 +118,7 @@ let
       ];
       overlaysDir' = resolve overlaysDir [ "overlays" ];
       packagesDir' = resolve packagesDir [ "packages" ];
+      appsDir' = resolve appsDir [ "apps" ];
 
       pkgs = forAllSystems (
         system:
@@ -146,40 +148,30 @@ let
           }) allKeys
         );
 
-      checks =
-        if checksDir' != null then
-          forAllSystems (
-            system:
-            let
-              checkModules = modules.findModules src checksDir';
-            in
-            builtins.mapAttrs (
-              _: module:
-              import module {
-                inherit inputs system;
-              }
-            ) checkModules
-          )
+      autoModules =
+        system: dir:
+        if dir != null then
+          let
+            mods = modules.findModules src dir;
+          in
+          builtins.mapAttrs (
+            _: module:
+            import module {
+              inherit
+                inputs
+                system
+                lib
+                namespace
+                ;
+              pkgs = pkgs.${system};
+            }
+          ) mods
         else
           { };
 
-      shells =
-        if shellsDir' != null then
-          forAllSystems (
-            system:
-            let
-              shellModules = modules.findModules src shellsDir';
-            in
-            builtins.mapAttrs (
-              _: module:
-              import module {
-                inherit inputs system;
-                pkgs = pkgs.${system};
-              }
-            ) shellModules
-          )
-        else
-          { };
+      checks = forAllSystems (system: autoModules system checksDir');
+
+      shells = forAllSystems (system: autoModules system shellsDir');
 
       overlays =
         if overlaysDir' != null then
@@ -190,28 +182,9 @@ let
         else
           { };
 
-      packages =
-        if packagesDir' != null then
-          forAllSystems (
-            system:
-            let
-              packageModules = modules.findModules src packagesDir';
-            in
-            builtins.mapAttrs (
-              _: module:
-              import module {
-                inherit
-                  inputs
-                  system
-                  lib
-                  namespace
-                  ;
-                pkgs = pkgs.${system};
-              }
-            ) packageModules
-          )
-        else
-          { };
+      packages = forAllSystems (system: autoModules system packagesDir');
+
+      apps = forAllSystems (system: autoModules system appsDir');
     in
     {
       inherit
@@ -235,6 +208,7 @@ let
     // optionalAttrs (shells != { }) { devShells = shells; }
     // optionalAttrs (overlays != { }) { inherit overlays; }
     // optionalAttrs (packages != { }) { inherit packages; }
+    // optionalAttrs (apps != { }) { inherit apps; }
     // builtins.removeAttrs pivotedOutputs [ "formatter" ];
 in
 {
