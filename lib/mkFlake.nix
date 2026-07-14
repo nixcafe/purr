@@ -1,6 +1,6 @@
 {
   attrs,
-  eachSystem,
+  systems,
   lib,
   modules,
   namespacedModules,
@@ -17,7 +17,7 @@ let
     optionalAttrs
     ;
 
-  inherit (eachSystem)
+  inherit (systems)
     defaultSystems
     eachDefaultSystem
     eachSystem
@@ -71,7 +71,7 @@ let
         if namespace != null && libDir != null then
           {
             _module.args.lib = lib // {
-              ${namespace} = import libDir { inherit lib; };
+              ${namespace} = import (src + "/${libDir}") { inherit lib; };
             };
           }
         else

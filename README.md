@@ -110,6 +110,7 @@ extraModules = {
 | `inputs` | attrs | *required* | Flake inputs (must include nixpkgs) |
 | `src` | path | *required* | Project root directory |
 | `namespace` | nullOr str | `null` | Module option namespace |
+| `libDir` | nullOr str | `null` | Lib directory (relative to `src`), injected as `lib.<namespace>` |
 | `systems` | list | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` | Systems to generate for |
 | `channelsConfig` | attrs | `{}` | nixpkgs config (allowUnfree, etc.) |
 | `outputsBuilder` | fn | `({ pkgs, system }: {})` | Per-system extra flake outputs (formatter, packages, etc.) |
@@ -127,6 +128,7 @@ extraModules = {
 | `purr.enable` | bool | `false` | |
 | `purr.src` | path | *required* | Project root |
 | `purr.namespace` | nullOr str | `null` | |
+| `purr.libDir` | nullOr str | `null` | Lib directory (relative to `src`) |
 | `purr.modulesDir` | str | `"modules"` | |
 | `purr.moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | |
 | `purr.checksDir` | nullOr str | `null` | auto-detects |
@@ -139,6 +141,8 @@ extraModules = {
 inputs.purr.lib.defaultSystems  # ["x86_64-linux" "aarch64-linux" "aarch64-darwin"]
 inputs.purr.lib.eachSystem [...]
 inputs.purr.lib.eachDefaultSystem
+inputs.purr.lib.collectModules  # flatten nested modules to a list
+inputs.purr.lib.loadModules     # recursively load .nix files from a dir
 ```
 
 ## License
