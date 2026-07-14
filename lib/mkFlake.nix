@@ -166,7 +166,7 @@ let
             builtins.mapAttrs (
               _: module:
               import module {
-                inherit system;
+                inherit inputs system;
                 pkgs = pkgs.${system};
               }
             ) shellModules
