@@ -208,7 +208,13 @@ let
               else
                 modules.findModulesFlat src templatesDir';
           in
-          builtins.mapAttrs (_: import) templateModules
+          builtins.mapAttrs (
+            _name: module:
+            import module {
+              inherit inputs namespace;
+              lib = purrLib;
+            }
+          ) templateModules
         else
           { };
 

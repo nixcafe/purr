@@ -2,6 +2,7 @@
   config,
   lib,
   flake-parts-lib,
+  inputs,
   ...
 }:
 let
@@ -253,8 +254,16 @@ in
         if templatesDir' != null then
           let
             scan = if cfg.templatesRecursive then modulesLib.findModules else modulesLib.findModulesFlat;
+            modules = scan cfg.src templatesDir';
           in
-          scan cfg.src templatesDir'
+          builtins.mapAttrs (
+            _: module:
+            import module {
+              inherit (cfg) namespace;
+              inherit inputs;
+              lib = purrLib;
+            }
+          ) modules
         else
           { };
       autoModules =
