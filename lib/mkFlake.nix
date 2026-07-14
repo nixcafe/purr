@@ -70,7 +70,20 @@ let
 
       extra = builtins.mapAttrs (_: listModules) extraModules;
 
-      importedPurrLib = if libDir' != null then import (src + "/${libDir'}") { inherit lib; } else null;
+      importedPurrLib =
+        if libDir' != null then
+          let
+            rootModule =
+              if builtins.pathExists (src + "/${libDir'}/default.nix") then
+                import (src + "/${libDir'}/default.nix") { inherit lib; }
+              else
+                { };
+            subModules = modules.findModules src libDir';
+            importedSubModules = namespacedModules.deepMapAttrs (path: import path { inherit lib; }) subModules;
+          in
+          rootModule // importedSubModules
+        else
+          null;
 
       purrLib =
         if namespace != null && importedPurrLib != null then

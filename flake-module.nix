@@ -145,7 +145,19 @@ in
       discoveredModules = modulesLib.discoverModules modulesPath cfg.moduleTypes;
 
       importedPurrLib =
-        if libDir' != null then import (cfg.src + "/${libDir'}") { inherit lib; } else null;
+        if libDir' != null then
+          let
+            rootModule =
+              if builtins.pathExists (cfg.src + "/${libDir'}/default.nix") then
+                import (cfg.src + "/${libDir'}/default.nix") { inherit lib; }
+              else
+                { };
+            subModules = modulesLib.findModules cfg.src libDir';
+            importedSubModules = namespacedModules.deepMapAttrs (path: import path { inherit lib; }) subModules;
+          in
+          rootModule // importedSubModules
+        else
+          null;
 
       purrLib =
         if cfg.namespace != null && importedPurrLib != null then
