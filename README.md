@@ -27,7 +27,7 @@ minimal with a single dependency and a smaller default surface area.
       inherit inputs;
       src = ./.;
       namespace = "myproject";
-      outputsBuilder = { pkgs }: {
+      outputsBuilder = { pkgs, ... }: {
         formatter = pkgs.nixfmt;
       };
     };
