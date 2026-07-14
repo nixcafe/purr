@@ -7,8 +7,9 @@ minimal with a single dependency and a smaller default surface area.
 ## Why Purr?
 
 - **Minimal footprint** — single dependency (`nixpkgs-lib`, ~2MB)
-- **Auto-discovery** — recursively scans `modules/{nixos,darwin,home,shared}/` for modules
+- **Auto-discovery** — recursively scans directories for modules, packages, shells, checks, apps, overlays, and lib
 - **Namespace support** — injects `namespace` into every module, keeping options under `config.<namespace>.*`
+- **Lib propagation** — project custom lib (`lib.<namespace>.*`) available to all auto-discovered modules
 - **Dual integration** — works standalone via `mkFlake` or as a flake-parts module
 
 ## Usage
@@ -57,6 +58,65 @@ minimal with a single dependency and a smaller default surface area.
 }
 ```
 
+## Directory Structure
+
+All directories are auto-detected under `src`:
+
+```
+src/
+├── lib/                              # Project library (auto-detect: "lib")
+│   ├── default.nix                   #   import { lib }: returns attrset
+│   ├── keys/
+│   │   └── default.nix               #   → lib.<namespace>.keys
+│   └── utils/
+│       └── default.nix               #   → lib.<namespace>.utils
+│
+├── modules/                          # NixOS/darwin/home modules
+│   ├── nixos/                        #   → nixosModules
+│   ├── darwin/                       #   → darwinModules
+│   ├── home/                         #   → homeModules
+│   └── shared/                       #   → merged into nixos + darwin
+│
+├── packages/                         # Per-system packages (auto-detect: "packages")
+│   ├── known-hosts/
+│   │   └── default.nix               #   → packages.<system>.known-hosts
+│   └── match-blocks/
+│       └── default.nix               #   → packages.<system>.match-blocks
+│
+├── shells/                           # Dev shells (auto-detect: "shells", "devShells")
+│   └── default/
+│       └── default.nix               #   → devShells.<system>.default
+│
+├── checks/                           # Per-system checks (auto-detect: "checks")
+│   └── pre-commit/
+│       └── default.nix               #   → checks.<system>.pre-commit
+│
+├── overlays/                         # Overlays (auto-detect: "overlays")
+│   └── custom/
+│       └── default.nix               #   → overlays.custom
+│
+└── apps/                             # Per-system apps (auto-detect: "apps")
+    └── serve/
+        └── default.nix               #   → apps.<system>.serve
+```
+
+### Module arguments
+
+Each auto-discovered module receives different arguments:
+
+| Directory | Arguments |
+|---|---|
+| `lib/` | `{ lib }` |
+| `modules/` | `{ config, options, lib, pkgs, namespace, ... }` |
+| `packages/` | `{ inputs, system, namespace, lib, pkgs }` |
+| `shells/` | `{ inputs, system, namespace, lib, pkgs }` |
+| `checks/` | `{ inputs, system, namespace, lib, pkgs }` |
+| `apps/` | `{ inputs, system, namespace, lib, pkgs }` |
+| `overlays/` | `final: prev:` (Nix overlay convention) |
+
+> **Note:** `lib` in `packages/`, `shells/`, `checks/`, and `apps/` includes the
+> project's custom lib under `lib.<namespace>.*`, merged via `purrLib`.
+
 ## Module Discovery
 
 Place modules under `modules/` and they're auto-discovered:
@@ -81,6 +141,34 @@ in
   config = lib.mkIf cfg.enable { ... };
 }
 ```
+
+## Custom Lib
+
+Create a `lib/` directory under `src` to share functions across all modules:
+
+```nix
+# lib/default.nix
+{ lib }:
+{
+  keys = import ./keys.nix { inherit lib; };
+  utils = import ./utils.nix { inherit lib; };
+}
+```
+
+Functions are accessible as `lib.<namespace>.*` in all modules, packages,
+shells, and checks:
+
+```nix
+# packages/known-hosts/default.nix
+{ pkgs, lib, namespace, ... }:
+let
+  inherit (lib.${namespace}) keys;
+in
+pkgs.writeText "known-hosts" (keys.generate { ... })
+```
+
+The `lib/` directory supports both a root `default.nix` and recursive
+subdirectory discovery via `findModules` — both can coexist.
 
 ### Custom module directories
 
@@ -109,8 +197,8 @@ extraModules = {
 |-----------|------|---------|---|
 | `inputs` | attrs | *required* | Flake inputs (must include nixpkgs) |
 | `src` | path | *required* | Project root directory |
-| `namespace` | nullOr str | `null` | Module option namespace |
-| `libDir` | nullOr str | `null` | Lib directory (relative to `src`), injected as `lib.<namespace>` |
+| `namespace` | nullOr str | `null` | Module option namespace, also used as lib key (`lib.<namespace>`) |
+| `libDir` | nullOr str | `null` | Lib directory (relative to `src`), auto-detects `lib/` |
 | `systems` | list | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` | Systems to generate for |
 | `channelsConfig` | attrs | `{}` | nixpkgs config (allowUnfree, etc.) |
 | `outputsBuilder` | fn | `({ pkgs, system }: {})` | Per-system extra flake outputs (formatter, packages, etc.) |
@@ -120,6 +208,8 @@ extraModules = {
 | `checksDir` | nullOr str | `null` | auto-detects `checks/` |
 | `shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
+| `packagesDir` | nullOr str | `null` | auto-detects `packages/` |
+| `appsDir` | nullOr str | `null` | auto-detects `apps/` |
 
 ### flake-parts Options
 
@@ -128,14 +218,13 @@ extraModules = {
 | `purr.enable` | bool | `false` | |
 | `purr.src` | path | *required* | Project root |
 | `purr.namespace` | nullOr str | `null` | |
-| `purr.libDir` | nullOr str | `null` | Lib directory (relative to `src`) |
+| `purr.libDir` | nullOr str | `null` | auto-detects `lib/` |
 | `purr.modulesDir` | str | `"modules"` | |
 | `purr.moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | |
-| `purr.checksDir` | nullOr str | `null` | auto-detects |
-| `purr.shellsDir` | nullOr str | `null` | auto-detects |
-| `purr.overlaysDir` | nullOr str | `null` | auto-detects |
-
-### Helpers
+| `purr.checksDir` | nullOr str | `null` | auto-detects `checks/` |
+| `purr.shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
+| `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
+| `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
 
 ```nix
 inputs.purr.lib.defaultSystems  # ["x86_64-linux" "aarch64-linux" "aarch64-darwin"]
