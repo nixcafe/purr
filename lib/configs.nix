@@ -3,7 +3,12 @@
   ...
 }:
 let
-  inherit (lib) concatMap;
+  inherit (lib)
+    concatMap
+    groupBy
+    mapAttrs
+    mkDefault
+    ;
 
   parseArchFormat =
     archFormat:
@@ -56,9 +61,9 @@ let
     }:
     let
       hasHomeManager = inputs ? home-manager;
-    in
-    builtins.listToAttrs (
-      concatMap (
+      hasNixDarwin = inputs ? nix-darwin;
+
+      allEntries = concatMap (
         archFormat:
         let
           parsed = parseArchFormat archFormat;
@@ -68,18 +73,23 @@ let
           system = if format == "darwin" then "${arch}-darwin" else "${arch}-linux";
         in
         builtins.map (systemName: {
-          name = "${outputKey}.${systemName}";
+          inherit outputKey systemName;
           value =
             let
               sysModule = discoveredSystems.${archFormat}.${systemName};
               matchingHomes = if hasHomeManager then findMatchingHomes discoveredHomes systemName else [ ];
+              hmModule =
+                if format == "darwin" then
+                  inputs.home-manager.darwinModules.home-manager
+                else
+                  inputs.home-manager.nixosModules.home-manager;
               homeModules =
                 if matchingHomes != [ ] then
                   [
-                    inputs.home-manager.nixosModules.home-manager
+                    hmModule
                     {
-                      home-manager.useGlobalPkgs = lib.mkDefault true;
-                      home-manager.useUserPackages = lib.mkDefault true;
+                      home-manager.useGlobalPkgs = mkDefault true;
+                      home-manager.useUserPackages = mkDefault true;
                       home-manager.users = builtins.listToAttrs (
                         builtins.map (h: {
                           name = h.user;
@@ -99,7 +109,7 @@ let
                 inherit system;
                 modules = baseModules;
               }
-            else if format == "darwin" && inputs ? nix-darwin then
+            else if format == "darwin" && hasNixDarwin then
               inputs.nix-darwin.lib.darwinSystem {
                 inherit system;
                 modules = baseModules;
@@ -112,8 +122,19 @@ let
                 ];
               };
         }) (builtins.attrNames systems)
-      ) (builtins.attrNames discoveredSystems)
-    );
+      ) (builtins.attrNames discoveredSystems);
+
+      grouped = groupBy ({ outputKey, ... }: outputKey) allEntries;
+    in
+    mapAttrs (
+      _outputKey: entries:
+      builtins.listToAttrs (
+        builtins.map ({ systemName, value, ... }: {
+          name = systemName;
+          inherit value;
+        }) entries
+      )
+    ) grouped;
 
   buildHomeConfigs =
     {

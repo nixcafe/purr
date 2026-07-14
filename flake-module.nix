@@ -25,7 +25,6 @@ let
 
   configsLib = import ./lib/configs.nix {
     inherit lib;
-    modules = modulesLib;
   };
 in
 {
