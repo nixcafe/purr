@@ -200,8 +200,8 @@ extraModules = {
 
 ### Default module bundle
 
-By default (`bundleModules = true`), a `default` module is auto-generated
-that imports all sub-modules, so consumers can import everything at once:
+By default, sub-modules are exported individually. Enable `bundleModules = true`
+to auto-generate a `default` module that imports all sub-modules:
 
 ```nix
 { imports = [ inputs.myflake.nixosModules.default ]; }
@@ -229,7 +229,7 @@ to disable it entirely. If you define your own `default` module under
 | `modulesDir` | str | `"modules"` | Module directory name under src |
 | `moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | Subdirectory mapping per output |
 | `extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` — raw module injection |
-| `bundleModules` | bool | `true` | Bundle all modules into a `default` module |
+| `bundleModules` | bool | `false` | Bundle all modules into a `default` module |
 | `bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
 | `checksDir` | nullOr str | `null` | auto-detects `checks/` |
 | `shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
@@ -256,7 +256,7 @@ to disable it entirely. If you define your own `default` module under
 | `purr.templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 | `purr.templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
 | `purr.extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` |
-| `purr.bundleModules` | bool | `true` | Bundle all modules into a `default` module |
+| `purr.bundleModules` | bool | `false` | Bundle all modules into a `default` module |
 | `purr.bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
 
 ```nix

@@ -45,7 +45,7 @@ let
         home = [ "home" ];
       },
       extraModules ? { },
-      bundleModules ? true,
+      bundleModules ? false,
       bundleExtraModules ? true,
       checksDir ? null,
       shellsDir ? null,

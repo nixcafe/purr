@@ -82,7 +82,10 @@ let
   collectModules =
     attrs:
     let
-      isLeaf = value: !builtins.isAttrs value || builtins.isFunction value || builtins.isPath value;
+      isModule = value: builtins.isAttrs value && (value ? imports || value ? options || value ? config);
+      isLeaf =
+        value:
+        !builtins.isAttrs value || builtins.isFunction value || builtins.isPath value || isModule value;
     in
     concatMap (value: if isLeaf value then [ value ] else collectModules value) (
       builtins.attrValues attrs
