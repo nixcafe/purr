@@ -22,6 +22,11 @@ let
   };
 
   namespacedModules = import ./lib/namespacedModules.nix;
+
+  configsLib = import ./lib/configs.nix {
+    inherit lib;
+    modules = modulesLib;
+  };
 in
 {
   options.purr = {
@@ -190,7 +195,7 @@ in
 
     bundleModules = mkOption {
       type = types.bool;
-      default = true;
+      default = false;
       description = ''
         Whether to bundle all modules into a `default` module.
         When enabled, a `default` key is added to each module output
@@ -207,6 +212,29 @@ in
         Whether to include {option}`purr.extraModules` in the
         auto-generated `default` bundle. Ignored when
         {option}`purr.bundleModules` is `false`.
+      '';
+    };
+
+    systemsDir = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Directory name under `src` for system/host configurations.
+        If `null`, auto-detects from `systems/` then `hosts/`.
+        Each subdirectory named `<arch>-<format>/<name>/default.nix`
+        becomes a flake configuration.
+      '';
+    };
+
+    homesDir = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Directory name under `src` for home-manager configurations.
+        If `null`, auto-detects from `homes/`.
+        Each subdirectory named `<arch>-<format>/<user>@<host>/default.nix`
+        becomes a home configuration. Homes with a matching host name
+        are automatically linked when home-manager is available.
       '';
     };
   };
@@ -311,6 +339,11 @@ in
       packagesDir' = resolve cfg.packagesDir [ "packages" ];
       appsDir' = resolve cfg.appsDir [ "apps" ];
       templatesDir' = resolve cfg.templatesDir [ "templates" ];
+      systemsDir' = resolve cfg.systemsDir [
+        "systems"
+        "hosts"
+      ];
+      homesDir' = resolve cfg.homesDir [ "homes" ];
       libDir' = resolve cfg.libDir [ "lib" ];
 
       discoveredOverlays =
@@ -338,6 +371,35 @@ in
           ) modules
         else
           { };
+
+      discoveredSystems =
+        if systemsDir' != null then modulesLib.discoverSystems cfg.src systemsDir' else { };
+
+      discoveredHomes = if homesDir' != null then modulesLib.discoverHomes cfg.src homesDir' else { };
+
+      buildSystemConfigs =
+        if discoveredSystems != { } then
+          configsLib.buildSystemConfigs {
+            inherit
+              discoveredSystems
+              discoveredHomes
+              inputs
+              ;
+          }
+        else
+          { };
+
+      buildHomeConfigs =
+        if discoveredHomes != { } then
+          configsLib.buildHomeConfigs {
+            inherit
+              discoveredHomes
+              inputs
+              ;
+            channelsConfig = { };
+          }
+        else
+          { };
       autoModules =
         pkgs: dir:
         if dir != null then
@@ -357,12 +419,13 @@ in
           { };
     in
     {
-      flake = {
+      flake = buildSystemConfigs // {
         nixosModules = makeBundled "nixos";
         darwinModules = makeBundled "darwin";
         homeModules = makeBundled "home";
         overlays = discoveredOverlays;
         templates = discoveredTemplates;
+        homeConfigurations = buildHomeConfigs;
       };
 
       perSystem = flake-parts-lib.mkPerSystemOption (

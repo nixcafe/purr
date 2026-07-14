@@ -82,16 +82,85 @@ let
   collectModules =
     attrs:
     let
-      isLeaf = value: !builtins.isAttrs value || builtins.isFunction value || builtins.isPath value;
+      isModule = value: builtins.isAttrs value && (value ? imports || value ? options || value ? config);
+      isLeaf =
+        value:
+        !builtins.isAttrs value || builtins.isFunction value || builtins.isPath value || isModule value;
     in
     concatMap (value: if isLeaf value then [ value ] else collectModules value) (
       builtins.attrValues attrs
     );
+
+  discoverSystems =
+    parentDir: type:
+    let
+      dir = parentDir + "/${type}";
+      dirExists = builtins.pathExists dir;
+    in
+    if dirExists then
+      let
+        entries = builtins.readDir dir;
+        archDirs = builtins.attrNames (filterAttrs (_: t: t == "directory") entries);
+        scanArch =
+          archFormat:
+          let
+            archDir = dir + "/${archFormat}";
+            archEntries = builtins.readDir archDir;
+            subDirs = builtins.attrNames (filterAttrs (_: t: t == "directory") archEntries);
+            systems = builtins.filter (d: builtins.pathExists (archDir + "/${d}/default.nix")) subDirs;
+          in
+          {
+            name = archFormat;
+            value = builtins.listToAttrs (
+              builtins.map (d: {
+                name = d;
+                value = archDir + "/${d}/default.nix";
+              }) systems
+            );
+          };
+      in
+      builtins.listToAttrs (builtins.map scanArch archDirs)
+    else
+      { };
+
+  discoverHomes =
+    parentDir: type:
+    let
+      dir = parentDir + "/${type}";
+      dirExists = builtins.pathExists dir;
+    in
+    if dirExists then
+      let
+        entries = builtins.readDir dir;
+        archDirs = builtins.attrNames (filterAttrs (_: t: t == "directory") entries);
+        scanArch =
+          arch:
+          let
+            archDir = dir + "/${arch}";
+            archEntries = builtins.readDir archDir;
+            subDirs = builtins.attrNames (filterAttrs (_: t: t == "directory") archEntries);
+            homes = builtins.filter (d: builtins.pathExists (archDir + "/${d}/default.nix")) subDirs;
+          in
+          {
+            name = arch;
+            value = builtins.listToAttrs (
+              builtins.map (d: {
+                name = d;
+                value = archDir + "/${d}/default.nix";
+              }) homes
+            );
+          };
+      in
+      builtins.listToAttrs (builtins.map scanArch archDirs)
+    else
+      { };
 in
 {
   inherit
     collectModules
+    discoverHomes
     discoverModules
+    discoverSystems
     findModules
     findModulesFlat
     loadModules

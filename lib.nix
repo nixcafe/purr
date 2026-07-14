@@ -10,11 +10,16 @@ let
     inherit fs lib;
   };
 
+  configs = import ./lib/configs.nix {
+    inherit lib;
+  };
+
   namespacedModules = import ./lib/namespacedModules.nix;
 
   mkFlake = import ./lib/mkFlake.nix {
     inherit
       attrs
+      configs
       lib
       modules
       namespacedModules
