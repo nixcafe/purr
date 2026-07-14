@@ -70,15 +70,16 @@ let
 
       extra = builtins.mapAttrs (_: listModules) extraModules;
 
-      makeLibExtension =
-        if namespace != null && libDir != null then
-          {
-            _module.args.lib = lib // {
-              ${namespace} = import (src + "/${libDir}") { inherit lib; };
-            };
-          }
+      importedPurrLib = if libDir != null then import (src + "/${libDir}") { inherit lib; } else null;
+
+      purrLib =
+        if namespace != null && importedPurrLib != null then
+          lib // { ${namespace} = importedPurrLib; }
         else
-          null;
+          lib;
+
+      makeLibExtension =
+        if namespace != null && importedPurrLib != null then { _module.args.lib = purrLib; } else null;
 
       wrapWithLib =
         modules:
@@ -161,9 +162,9 @@ let
               inherit
                 inputs
                 system
-                lib
                 namespace
                 ;
+              lib = purrLib;
               pkgs = pkgs.${system};
             }
           ) mods

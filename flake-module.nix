@@ -144,19 +144,21 @@ in
       modulesPath = cfg.src + "/${cfg.modulesDir}";
       discoveredModules = modulesLib.discoverModules modulesPath cfg.moduleTypes;
 
+      importedPurrLib =
+        if cfg.libDir != null then import (cfg.src + "/${cfg.libDir}") { inherit lib; } else null;
+
+      purrLib =
+        if cfg.namespace != null && importedPurrLib != null then
+          lib // { ${cfg.namespace} = importedPurrLib; }
+        else
+          lib;
+
       wrap =
         modules:
         if cfg.namespace != null then namespacedModules.wrapModuleSet cfg.namespace modules else modules;
 
       makeLibExtension =
-        if cfg.namespace != null && cfg.libDir != null then
-          {
-            _module.args.lib = lib // {
-              ${cfg.namespace} = import (cfg.src + "/${cfg.libDir}") { inherit lib; };
-            };
-          }
-        else
-          null;
+        if cfg.namespace != null && importedPurrLib != null then { _module.args.lib = purrLib; } else null;
 
       wrapWithLib =
         modules:
@@ -218,17 +220,32 @@ in
           config =
             { }
             // lib.optionalAttrs (discoveredChecks != { }) {
-              checks = builtins.mapAttrs (_: import) discoveredChecks;
+              checks = builtins.mapAttrs (
+                _: module:
+                import module {
+                  inherit pkgs;
+                  inherit (cfg) namespace;
+                  lib = purrLib;
+                }
+              ) discoveredChecks;
             }
             // lib.optionalAttrs (discoveredShells != { }) {
-              devShells = builtins.mapAttrs (_: module: import module { inherit pkgs; }) discoveredShells;
+              devShells = builtins.mapAttrs (
+                _: module:
+                import module {
+                  inherit pkgs;
+                  inherit (cfg) namespace;
+                  lib = purrLib;
+                }
+              ) discoveredShells;
             }
             // lib.optionalAttrs (discoveredPackages != { }) {
               packages = builtins.mapAttrs (
                 _: module:
                 import module {
-                  inherit lib pkgs;
+                  inherit pkgs;
                   inherit (cfg) namespace;
+                  lib = purrLib;
                 }
               ) discoveredPackages;
             };
