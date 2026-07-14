@@ -138,6 +138,17 @@ in
       '';
     };
 
+    appsDir = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Directory name under `src` for per-system apps.
+        If `null`, auto-detects from `apps/`.
+        Each `default.nix` under subdirectories becomes an app.
+      '';
+    };
+
+
     templatesDir = mkOption {
       type = types.nullOr types.str;
       default = null;
@@ -207,9 +218,7 @@ in
         else
           modules;
 
-      wrappedNixos = wrapWithLib (wrap discoveredModules.nixos);
-      wrappedDarwin = wrapWithLib (wrap discoveredModules.darwin);
-      wrappedHome = wrapWithLib (wrap discoveredModules.home);
+      makeModuleSet = name: wrapWithLib (wrap (discoveredModules.${name} or { }));
 
       resolve =
         dir: candidates:
@@ -228,18 +237,18 @@ in
       ];
       overlaysDir' = resolve cfg.overlaysDir [ "overlays" ];
       packagesDir' = resolve cfg.packagesDir [ "packages" ];
+      appsDir' = resolve cfg.appsDir [ "apps" ];
       templatesDir' = resolve cfg.templatesDir [ "templates" ];
       libDir' = resolve cfg.libDir [ "lib" ];
 
-      discoveredChecks = if checksDir' != null then modulesLib.findModules cfg.src checksDir' else { };
-
-      discoveredShells = if shellsDir' != null then modulesLib.findModules cfg.src shellsDir' else { };
-
       discoveredOverlays =
-        if overlaysDir' != null then modulesLib.findModules cfg.src overlaysDir' else { };
-
-      discoveredPackages =
-        if packagesDir' != null then modulesLib.findModules cfg.src packagesDir' else { };
+        if overlaysDir' != null then
+          let
+            overlayModules = modulesLib.findModules cfg.src overlaysDir';
+          in
+          builtins.mapAttrs (_: import) overlayModules
+        else
+          { };
 
       discoveredTemplates =
         if templatesDir' != null then
@@ -249,52 +258,59 @@ in
           scan cfg.src templatesDir'
         else
           { };
+      autoModules =
+        pkgs: dir:
+        if dir != null then
+          let
+            mods = modulesLib.findModules cfg.src dir;
+          in
+          builtins.mapAttrs (
+            _: module:
+            import module {
+              inherit pkgs;
+              inherit (cfg) namespace;
+              inherit (pkgs) system;
+              lib = purrLib;
+            }
+          ) mods
+        else
+          { };
     in
     {
       flake = {
-        nixosModules = wrappedNixos;
-        darwinModules = wrappedDarwin;
-        homeModules = wrappedHome;
+        nixosModules = makeModuleSet "nixos";
+        darwinModules = makeModuleSet "darwin";
+        homeModules = makeModuleSet "home";
         overlays = discoveredOverlays;
         templates = discoveredTemplates;
       };
 
       perSystem = flake-parts-lib.mkPerSystemOption (
         { pkgs, ... }:
+        let
+          mod = autoModules pkgs;
+
+          checksModules = mod checksDir';
+          shellsModules = mod shellsDir';
+          packagesModules = mod packagesDir';
+          appsModules = mod appsDir';
+        in
         {
           _file = ./flake-module.nix;
 
           config =
             { }
-            // lib.optionalAttrs (discoveredChecks != { }) {
-              checks = builtins.mapAttrs (
-                _: module:
-                import module {
-                  inherit pkgs;
-                  inherit (cfg) namespace;
-                  lib = purrLib;
-                }
-              ) discoveredChecks;
+            // lib.optionalAttrs (checksModules != { }) {
+              checks = checksModules;
             }
-            // lib.optionalAttrs (discoveredShells != { }) {
-              devShells = builtins.mapAttrs (
-                _: module:
-                import module {
-                  inherit pkgs;
-                  inherit (cfg) namespace;
-                  lib = purrLib;
-                }
-              ) discoveredShells;
+            // lib.optionalAttrs (shellsModules != { }) {
+              devShells = shellsModules;
             }
-            // lib.optionalAttrs (discoveredPackages != { }) {
-              packages = builtins.mapAttrs (
-                _: module:
-                import module {
-                  inherit pkgs;
-                  inherit (cfg) namespace;
-                  lib = purrLib;
-                }
-              ) discoveredPackages;
+            // lib.optionalAttrs (packagesModules != { }) {
+              packages = packagesModules;
+            }
+            // lib.optionalAttrs (appsModules != { }) {
+              apps = appsModules;
             };
         }
       );
