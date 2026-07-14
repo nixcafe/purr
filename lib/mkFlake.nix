@@ -45,6 +45,8 @@ let
         home = [ "home" ];
       },
       extraModules ? { },
+      bundleModules ? true,
+      bundleExtraModules ? true,
       checksDir ? null,
       shellsDir ? null,
       overlaysDir ? null,
@@ -112,9 +114,31 @@ let
           namespacedModules.wrapModuleSet namespace (allModules.${name} or { })
         )) (extra.${name} or { });
 
-      nixosModules = makeModuleSet "nixos";
-      darwinModules = makeModuleSet "darwin";
-      homeModules = makeModuleSet "home";
+      makeBundled =
+        name:
+        let
+          merged = makeModuleSet name;
+        in
+        if bundleModules && !(merged ? "default") then
+          let
+            toBundle =
+              if bundleExtraModules then
+                merged
+              else
+                wrapWithLib (namespacedModules.wrapModuleSet namespace (allModules.${name} or { }));
+          in
+          merged
+          // {
+            default = {
+              imports = modules.collectModules toBundle;
+            };
+          }
+        else
+          merged;
+
+      nixosModules = makeBundled "nixos";
+      darwinModules = makeBundled "darwin";
+      homeModules = makeBundled "home";
 
       resolve =
         dir: candidates:

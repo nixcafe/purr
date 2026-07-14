@@ -169,6 +169,46 @@ in
         enable nested directory discovery.
       '';
     };
+
+    extraModules = mkOption {
+      type = types.attrsOf (types.listOf types.raw);
+      default = { };
+      description = ''
+        External modules to merge into flake outputs.
+        Keys are module types (`nixos`, `darwin`, `home`),
+        values are lists of modules.
+      '';
+      example = lib.literalExpression ''
+        {
+          nixos = [
+            inputs.some-flake.nixosModules.default
+            inputs.disko.nixosModules.default
+          ];
+        }
+      '';
+    };
+
+    bundleModules = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Whether to bundle all modules into a `default` module.
+        When enabled, a `default` key is added to each module output
+        (nixosModules, darwinModules, homeModules) that imports all
+        sub-modules. Skipped if the module set already contains a
+        `default` key.
+      '';
+    };
+
+    bundleExtraModules = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Whether to include {option}`purr.extraModules` in the
+        auto-generated `default` bundle. Ignored when
+        {option}`purr.bundleModules` is `false`.
+      '';
+    };
   };
 
   config = mkIf cfg.enable (
@@ -218,7 +258,39 @@ in
         else
           modules;
 
-      makeModuleSet = name: wrapWithLib (wrap (discoveredModules.${name} or { }));
+      listExtraModules =
+        list:
+        builtins.listToAttrs (
+          lib.imap0 (i: m: {
+            name = "extra-${toString i}";
+            value = m;
+          }) list
+        );
+
+      extra = builtins.mapAttrs (_: listExtraModules) cfg.extraModules;
+
+      makeModuleSet =
+        name:
+        lib.recursiveUpdate (wrapWithLib (wrap (discoveredModules.${name} or { }))) (extra.${name} or { });
+
+      makeBundled =
+        name:
+        let
+          merged = makeModuleSet name;
+        in
+        if cfg.bundleModules && !(merged ? "default") then
+          let
+            toBundle =
+              if cfg.bundleExtraModules then merged else wrapWithLib (wrap (discoveredModules.${name} or { }));
+          in
+          merged
+          // {
+            default = {
+              imports = modulesLib.collectModules toBundle;
+            };
+          }
+        else
+          merged;
 
       resolve =
         dir: candidates:
@@ -286,9 +358,9 @@ in
     in
     {
       flake = {
-        nixosModules = makeModuleSet "nixos";
-        darwinModules = makeModuleSet "darwin";
-        homeModules = makeModuleSet "home";
+        nixosModules = makeBundled "nixos";
+        darwinModules = makeBundled "darwin";
+        homeModules = makeBundled "home";
         overlays = discoveredOverlays;
         templates = discoveredTemplates;
       };
