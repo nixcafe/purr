@@ -160,8 +160,11 @@ in
           null;
 
       purrLib =
-        if cfg.namespace != null && importedPurrLib != null then
-          lib // { ${cfg.namespace} = importedPurrLib; }
+        if importedPurrLib != null then
+          if cfg.namespace != null then
+            lib // { ${cfg.namespace} = importedPurrLib; }
+          else
+            lib // importedPurrLib
         else
           lib;
 
@@ -169,8 +172,7 @@ in
         modules:
         if cfg.namespace != null then namespacedModules.wrapModuleSet cfg.namespace modules else modules;
 
-      makeLibExtension =
-        if cfg.namespace != null && importedPurrLib != null then { _module.args.lib = purrLib; } else null;
+      makeLibExtension = if importedPurrLib != null then { _module.args.lib = purrLib; } else null;
 
       wrapWithLib =
         modules:
