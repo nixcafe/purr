@@ -117,7 +117,7 @@ Each auto-discovered module receives different arguments:
 | `checks/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `apps/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `overlays/` | `final: prev:` (Nix overlay convention) |
-| `templates/` | `{ ... }` (imported directly as template attrset) |
+| `templates/` | `{ inputs, namespace, lib }` |
 
 > **Note:** `lib` in `packages/`, `shells/`, `checks/`, and `apps/` includes the
 > project's custom lib under `lib.<namespace>.*`, merged via `purrLib`.
