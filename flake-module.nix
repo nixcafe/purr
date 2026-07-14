@@ -80,10 +80,7 @@ in
           "darwin"
           "shared"
         ];
-        home = [
-          "home"
-          "shared"
-        ];
+        home = [ "home" ];
       };
       description = ''
         Mapping of flake output module type to subdirectory names
@@ -98,7 +95,7 @@ in
         {
           nixos = ["nixos" "shared" "nixos-musl"];
           darwin = ["darwin" "shared"];
-          home = ["home" "shared"];
+          home = ["home"];
         }
       '';
     };
