@@ -20,7 +20,6 @@ let
 
   inherit (systems)
     defaultSystems
-    eachDefaultSystem
     eachSystem
     ;
 
@@ -52,7 +51,7 @@ let
       packagesDir ? null,
       appsDir ? null,
       ...
-    }@args:
+    }:
     let
       listModules =
         list:
@@ -207,15 +206,6 @@ let
         homeModules
         nixosModules
         ;
-
-      lib = {
-        inherit
-          defaultSystems
-          eachDefaultSystem
-          eachSystem
-          ;
-        mkFlake = mkFlake args;
-      };
 
       formatter = pivotedOutputs.formatter or { };
     }
