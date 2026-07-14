@@ -200,7 +200,12 @@ let
             builtins.mapAttrs (
               _: module:
               import module {
-                inherit inputs system lib;
+                inherit
+                  inputs
+                  system
+                  lib
+                  namespace
+                  ;
                 pkgs = pkgs.${system};
               }
             ) packageModules
