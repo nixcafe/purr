@@ -9,6 +9,7 @@
 let
   inherit (lib)
     concatMap
+    foldl'
     imap0
     unique
     ;
@@ -90,15 +91,15 @@ let
         else
           modules;
 
-      nixosModules = lib.recursiveUpdate (wrapWithLib (
-        namespacedModules.wrapModuleSet namespace (allModules.nixos or { })
-      )) (extra.nixos or { });
-      darwinModules = lib.recursiveUpdate (wrapWithLib (
-        namespacedModules.wrapModuleSet namespace (allModules.darwin or { })
-      )) (extra.darwin or { });
-      homeModules = lib.recursiveUpdate (wrapWithLib (
-        namespacedModules.wrapModuleSet namespace (allModules.home or { })
-      )) (extra.home or { });
+      makeModuleSet =
+        name:
+        lib.recursiveUpdate (wrapWithLib (
+          namespacedModules.wrapModuleSet namespace (allModules.${name} or { })
+        )) (extra.${name} or { });
+
+      nixosModules = makeModuleSet "nixos";
+      darwinModules = makeModuleSet "darwin";
+      homeModules = makeModuleSet "home";
 
       resolve =
         dir: candidates:
@@ -231,10 +232,13 @@ let
 
       formatter = pivotedOutputs.formatter or { };
     }
-    // optionalAttrs (checks != { }) { inherit checks; }
-    // optionalAttrs (shells != { }) { devShells = shells; }
-    // optionalAttrs (overlays != { }) { inherit overlays; }
-    // optionalAttrs (packages != { }) { inherit packages; }
+    // foldl' (acc: x: acc // x) { } [
+      (optionalAttrs (checks != { }) { inherit checks; })
+      (optionalAttrs (shells != { }) { devShells = shells; })
+      (optionalAttrs (overlays != { }) { inherit overlays; })
+      (optionalAttrs (packages != { }) { inherit packages; })
+      (optionalAttrs (apps != { }) { inherit apps; })
+    ]
     // builtins.removeAttrs pivotedOutputs [ "formatter" ];
 in
 {
