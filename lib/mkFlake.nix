@@ -49,6 +49,7 @@ let
       shellsDir ? null,
       overlaysDir ? null,
       packagesDir ? null,
+      appsDir ? null,
       ...
     }@args:
     let
@@ -117,6 +118,7 @@ let
       ];
       overlaysDir' = resolve overlaysDir [ "overlays" ];
       packagesDir' = resolve packagesDir [ "packages" ];
+      appsDir' = resolve appsDir [ "apps" ];
 
       pkgs = forAllSystems (
         system:
@@ -207,6 +209,24 @@ let
           )
         else
           { };
+
+      apps =
+        if appsDir' != null then
+          forAllSystems (
+            system:
+            let
+              appModules = modules.findModules src appsDir';
+            in
+            builtins.mapAttrs (
+              _: module:
+              import module {
+                inherit inputs system;
+                pkgs = pkgs.${system};
+              }
+            ) appModules
+          )
+        else
+          { };
     in
     {
       inherit
@@ -230,6 +250,7 @@ let
     // optionalAttrs (shells != { }) { devShells = shells; }
     // optionalAttrs (overlays != { }) { inherit overlays; }
     // optionalAttrs (packages != { }) { inherit packages; }
+    // optionalAttrs (apps != { }) { inherit apps; }
     // builtins.removeAttrs pivotedOutputs [ "formatter" ];
 in
 {
