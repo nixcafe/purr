@@ -7,7 +7,7 @@ minimal with a single dependency and a smaller default surface area.
 ## Why Purr?
 
 - **Minimal footprint** — single dependency (`nixpkgs-lib`, ~2MB)
-- **Auto-discovery** — recursively scans directories for modules, packages, shells, checks, apps, overlays, and lib
+- **Auto-discovery** — recursively scans directories for modules, packages, shells, checks, apps, overlays, templates, and lib
 - **Namespace support** — injects `namespace` into every module, keeping options under `config.<namespace>.*`
 - **Lib propagation** — project custom lib (`lib.<namespace>.*`) available to all auto-discovered modules
 - **Dual integration** — works standalone via `mkFlake` or as a flake-parts module
@@ -95,6 +95,10 @@ src/
 │   └── custom/
 │       └── default.nix               #   → overlays.custom
 │
+├── templates/                        # Flake templates (auto-detect: "templates")
+│   └── rust/
+│       └── default.nix               #   → templates.rust
+│
 └── apps/                             # Per-system apps (auto-detect: "apps")
     └── serve/
         └── default.nix               #   → apps.<system>.serve
@@ -113,6 +117,7 @@ Each auto-discovered module receives different arguments:
 | `checks/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `apps/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `overlays/` | `final: prev:` (Nix overlay convention) |
+| `templates/` | `{ ... }` (imported directly as template attrset) |
 
 > **Note:** `lib` in `packages/`, `shells/`, `checks/`, and `apps/` includes the
 > project's custom lib under `lib.<namespace>.*`, merged via `purrLib`.
@@ -210,6 +215,7 @@ extraModules = {
 | `overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `packagesDir` | nullOr str | `null` | auto-detects `packages/` |
 | `appsDir` | nullOr str | `null` | auto-detects `apps/` |
+| `templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 
 ### flake-parts Options
 
@@ -225,6 +231,7 @@ extraModules = {
 | `purr.shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
+| `purr.templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 
 ```nix
 inputs.purr.lib.defaultSystems  # ["x86_64-linux" "aarch64-linux" "aarch64-darwin"]

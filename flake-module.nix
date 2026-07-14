@@ -137,6 +137,16 @@ in
         Each `default.nix` under subdirectories becomes a package.
       '';
     };
+
+    templatesDir = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Directory name under `src` for flake templates.
+        If `null`, auto-detects from `templates/`.
+        Each `default.nix` under subdirectories becomes a template.
+      '';
+    };
   };
 
   config = mkIf cfg.enable (
@@ -207,6 +217,7 @@ in
       ];
       overlaysDir' = resolve cfg.overlaysDir [ "overlays" ];
       packagesDir' = resolve cfg.packagesDir [ "packages" ];
+      templatesDir' = resolve cfg.templatesDir [ "templates" ];
       libDir' = resolve cfg.libDir [ "lib" ];
 
       discoveredChecks = if checksDir' != null then modulesLib.findModules cfg.src checksDir' else { };
@@ -218,6 +229,9 @@ in
 
       discoveredPackages =
         if packagesDir' != null then modulesLib.findModules cfg.src packagesDir' else { };
+
+      discoveredTemplates =
+        if templatesDir' != null then modulesLib.findModules cfg.src templatesDir' else { };
     in
     {
       flake = {
@@ -225,6 +239,7 @@ in
         darwinModules = wrappedDarwin;
         homeModules = wrappedHome;
         overlays = discoveredOverlays;
+        templates = discoveredTemplates;
       };
 
       perSystem = flake-parts-lib.mkPerSystemOption (
