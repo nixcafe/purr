@@ -224,7 +224,13 @@ in
               devShells = builtins.mapAttrs (_: module: import module { inherit pkgs; }) discoveredShells;
             }
             // lib.optionalAttrs (discoveredPackages != { }) {
-              packages = builtins.mapAttrs (_: module: import module { inherit lib pkgs; }) discoveredPackages;
+              packages = builtins.mapAttrs (
+                _: module:
+                import module {
+                  inherit lib pkgs;
+                  inherit (cfg) namespace;
+                }
+              ) discoveredPackages;
             };
         }
       );
