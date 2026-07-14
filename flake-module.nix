@@ -148,7 +148,6 @@ in
       '';
     };
 
-
     templatesDir = mkOption {
       type = types.nullOr types.str;
       default = null;
