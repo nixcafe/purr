@@ -147,11 +147,16 @@ let
       checks =
         if checksDir' != null then
           forAllSystems (
-            _system:
+            system:
             let
               checkModules = modules.findModules src checksDir';
             in
-            builtins.mapAttrs (_: import) checkModules
+            builtins.mapAttrs (
+              _: module:
+              import module {
+                inherit inputs system;
+              }
+            ) checkModules
           )
         else
           { };
