@@ -83,6 +83,7 @@ let
                   inputs.home-manager.darwinModules.home-manager
                 else
                   inputs.home-manager.nixosModules.home-manager;
+              nonRootHomes = builtins.filter (h: h.user != "root") matchingHomes;
               homeModules =
                 if matchingHomes != [ ] then
                   [
@@ -100,6 +101,16 @@ let
                       );
                     }
                   ]
+                  ++ lib.optional (nonRootHomes != [ ]) {
+                    users.users = builtins.listToAttrs (
+                      builtins.map (h: {
+                        name = h.user;
+                        value = {
+                          isNormalUser = mkDefault true;
+                        };
+                      }) nonRootHomes
+                    );
+                  }
                 else
                   [ ];
               baseModules = [ sysModule ] ++ homeModules;
@@ -157,10 +168,19 @@ let
           in
           builtins.map (userHost: {
             name = userHost;
-            value = inputs.home-manager.lib.homeManagerConfiguration {
-              inherit pkgs;
-              modules = [ discoveredHomes.${archFormat}.${userHost} ];
-            };
+            value =
+              let
+                parsed = parseUserHost userHost;
+              in
+              inputs.home-manager.lib.homeManagerConfiguration {
+                inherit pkgs;
+                modules = [ discoveredHomes.${archFormat}.${userHost} ];
+                extraSpecialArgs = {
+                  purr = {
+                    inherit (parsed) user host;
+                  };
+                };
+              };
           }) (builtins.attrNames discoveredHomes.${archFormat} or { })
         ) (builtins.attrNames discoveredHomes)
       )
