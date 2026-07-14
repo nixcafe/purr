@@ -14,15 +14,13 @@ let
 
   cfg = config.purr;
 
-  fs = import ./lib/fs.nix {
-    inherit lib;
-  };
+  fs = import ./lib/fs.nix;
 
   modulesLib = import ./lib/modules.nix {
     inherit fs lib;
   };
 
-  namespacedModules = import ./lib/namespacedModules.nix { };
+  namespacedModules = import ./lib/namespacedModules.nix;
 in
 {
   options.purr = {
