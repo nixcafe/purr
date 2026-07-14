@@ -27,8 +27,8 @@ minimal with a single dependency and a smaller default surface area.
       inherit inputs;
       src = ./.;
       namespace = "myproject";
-      outputsBuilder = channels: {
-        formatter = channels.nixpkgs.nixfmt;
+      outputsBuilder = { pkgs }: {
+        formatter = pkgs.nixfmt;
       };
     };
 }
@@ -112,7 +112,7 @@ extraModules = {
 | `namespace` | nullOr str | `null` | Module option namespace |
 | `systems` | list | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` | Systems to generate for |
 | `channelsConfig` | attrs | `{}` | nixpkgs config (allowUnfree, etc.) |
-| `outputsBuilder` | fn | `(channels: {})` | Extra flake outputs (formatter, etc.) |
+| `outputsBuilder` | fn | `({ pkgs, system }: {})` | Per-system extra flake outputs (formatter, packages, etc.) |
 | `modulesDir` | str | `"modules"` | Module directory name under src |
 | `moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | Subdirectory mapping per output |
 | `extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` — raw module injection |

@@ -8,7 +8,9 @@
 }:
 let
   inherit (lib)
+    concatMap
     imap0
+    unique
     ;
 
   inherit (attrs)
@@ -114,22 +116,33 @@ let
       ];
       overlaysDir' = resolve overlaysDir [ "overlays" ];
 
-      channels = forAllSystems (
+      pkgs = forAllSystems (
         system:
-        let
-          inherit (inputs) nixpkgs;
-          pkgs = import nixpkgs {
-            inherit system;
-            config = channelsConfig;
-            overlays = [ ];
-          };
-        in
-        {
-          inherit nixpkgs pkgs;
+        import inputs.nixpkgs {
+          inherit system;
+          config = channelsConfig;
+          overlays = [ ];
         }
       );
 
-      extraOutputs = outputsBuilder (builtins.mapAttrs (_: c: c.pkgs) channels);
+      perSystem = forAllSystems (
+        system:
+        outputsBuilder {
+          inherit system;
+          pkgs = pkgs.${system};
+        }
+      );
+
+      pivotedOutputs =
+        let
+          allKeys = unique (concatMap builtins.attrNames (builtins.attrValues perSystem));
+        in
+        builtins.listToAttrs (
+          builtins.map (key: {
+            name = key;
+            value = builtins.mapAttrs (_system: outs: outs.${key}) perSystem;
+          }) allKeys
+        );
 
       checks =
         if checksDir' != null then
@@ -150,7 +163,7 @@ let
             let
               shellModules = modules.findModules src shellsDir';
             in
-            builtins.mapAttrs (_: module: import module { pkgs = channels.${system}.pkgs; }) shellModules
+            builtins.mapAttrs (_: module: import module { pkgs = pkgs.${system}; }) shellModules
           )
         else
           { };
@@ -180,12 +193,12 @@ let
         mkFlake = mkFlake args;
       };
 
-      formatter = extraOutputs.formatter or { };
+      formatter = pivotedOutputs.formatter or { };
     }
     // optionalAttrs (checks != { }) { inherit checks; }
     // optionalAttrs (shells != { }) { devShells = shells; }
     // optionalAttrs (overlays != { }) { inherit overlays; }
-    // builtins.removeAttrs extraOutputs [ "formatter" ];
+    // builtins.removeAttrs pivotedOutputs [ "formatter" ];
 in
 {
   inherit mkFlake;
