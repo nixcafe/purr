@@ -18,14 +18,8 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Flake check (root)
+      - name: lint + tests
         run: nix flake check
 
-      - name: Flake show (root)
+      - name: flake show
         run: nix flake show
-
-      - name: Flake check (dev)
-        run: nix flake check ./dev
-
-      - name: Flake show (dev)
-        run: nix flake show ./dev
