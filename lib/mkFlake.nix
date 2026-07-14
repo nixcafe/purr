@@ -50,6 +50,8 @@ let
       overlaysDir ? null,
       packagesDir ? null,
       appsDir ? null,
+      templatesDir ? null,
+      templatesRecursive ? false,
       ...
     }:
     let
@@ -133,6 +135,7 @@ let
       packagesDir' = resolve packagesDir [ "packages" ];
       appsDir' = resolve appsDir [ "apps" ];
       libDir' = resolve libDir [ "lib" ];
+      templatesDir' = resolve templatesDir [ "templates" ];
 
       pkgs = forAllSystems (
         system:
@@ -196,6 +199,19 @@ let
         else
           { };
 
+      templates =
+        if templatesDir' != null then
+          let
+            templateModules =
+              if templatesRecursive then
+                modules.findModules src templatesDir'
+              else
+                modules.findModulesFlat src templatesDir';
+          in
+          builtins.mapAttrs (_: import) templateModules
+        else
+          { };
+
       packages = forAllSystems (system: autoModules system packagesDir');
 
       apps = forAllSystems (system: autoModules system appsDir');
@@ -213,6 +229,7 @@ let
       (optionalAttrs (checks != { }) { inherit checks; })
       (optionalAttrs (shells != { }) { devShells = shells; })
       (optionalAttrs (overlays != { }) { inherit overlays; })
+      (optionalAttrs (templates != { }) { inherit templates; })
       (optionalAttrs (packages != { }) { inherit packages; })
       (optionalAttrs (apps != { }) { inherit apps; })
       (optionalAttrs (importedPurrLib != null) (

@@ -38,6 +38,27 @@ let
     else
       { };
 
+  findModulesFlat =
+    parentDir: type:
+    let
+      dir = parentDir + "/${type}";
+      dirExists = builtins.pathExists dir;
+    in
+    if dirExists then
+      let
+        entries = builtins.readDir dir;
+        subDirs = builtins.attrNames (filterAttrs (_: t: t == "directory") entries);
+        modules = builtins.filter (d: builtins.pathExists (dir + "/${d}/default.nix")) subDirs;
+      in
+      builtins.listToAttrs (
+        builtins.map (d: {
+          name = d;
+          value = dir + "/${d}/default.nix";
+        }) modules
+      )
+    else
+      { };
+
   discoverModules =
     modulesDir: dirMap:
     let
@@ -72,6 +93,7 @@ in
     collectModules
     discoverModules
     findModules
+    findModulesFlat
     loadModules
     ;
 }
