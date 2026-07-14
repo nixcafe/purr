@@ -12,6 +12,7 @@
 - **Ask before pushing.** Always confirm with the user before pushing to remote.
 - **Ask before merging.** Always confirm with the user before merging a PR.
 - **Always squash merge.** Use `gh pr merge <n> --squash --delete-branch`.
+- **Tests must pass before push/PR.** Run `nix flake check` and verify "all checks passed" before any push or PR. CI MUST be green.
 
 ## Commit Rules
 
