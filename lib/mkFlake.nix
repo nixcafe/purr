@@ -215,6 +215,16 @@ let
       (optionalAttrs (overlays != { }) { inherit overlays; })
       (optionalAttrs (packages != { }) { inherit packages; })
       (optionalAttrs (apps != { }) { inherit apps; })
+      (optionalAttrs (importedPurrLib != null) (
+        if namespace != null then
+          {
+            lib = {
+              ${namespace} = importedPurrLib;
+            };
+          }
+        else
+          { lib = importedPurrLib; }
+      ))
     ]
     // builtins.removeAttrs pivotedOutputs [ "formatter" ];
 in
