@@ -86,13 +86,12 @@ let
           null;
 
       purrLib =
-        if namespace != null && importedPurrLib != null then
-          lib // { ${namespace} = importedPurrLib; }
+        if importedPurrLib != null then
+          if namespace != null then lib // { ${namespace} = importedPurrLib; } else lib // importedPurrLib
         else
           lib;
 
-      makeLibExtension =
-        if namespace != null && importedPurrLib != null then { _module.args.lib = purrLib; } else null;
+      makeLibExtension = if importedPurrLib != null then { _module.args.lib = purrLib; } else null;
 
       wrapWithLib =
         modules:
