@@ -190,7 +190,7 @@ in
 
     bundleModules = mkOption {
       type = types.bool;
-      default = true;
+      default = false;
       description = ''
         Whether to bundle all modules into a `default` module.
         When enabled, a `default` key is added to each module output
