@@ -127,6 +127,16 @@ in
         Each `default.nix` under subdirectories becomes an overlay.
       '';
     };
+
+    packagesDir = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Directory name under `src` for per-system packages.
+        If `null`, auto-detects from `packages/`.
+        Each `default.nix` under subdirectories becomes a package.
+      '';
+    };
   };
 
   config = mkIf cfg.enable (
@@ -180,6 +190,7 @@ in
         "devShells"
       ];
       overlaysDir' = resolve cfg.overlaysDir [ "overlays" ];
+      packagesDir' = resolve cfg.packagesDir [ "packages" ];
 
       discoveredChecks = if checksDir' != null then modulesLib.findModules cfg.src checksDir' else { };
 
@@ -187,6 +198,9 @@ in
 
       discoveredOverlays =
         if overlaysDir' != null then modulesLib.findModules cfg.src overlaysDir' else { };
+
+      discoveredPackages =
+        if packagesDir' != null then modulesLib.findModules cfg.src packagesDir' else { };
     in
     {
       flake = {
@@ -208,6 +222,9 @@ in
             }
             // lib.optionalAttrs (discoveredShells != { }) {
               devShells = builtins.mapAttrs (_: module: import module { inherit pkgs; }) discoveredShells;
+            }
+            // lib.optionalAttrs (discoveredPackages != { }) {
+              packages = builtins.mapAttrs (_: module: import module { inherit pkgs; }) discoveredPackages;
             };
         }
       );
