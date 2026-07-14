@@ -28,6 +28,17 @@
               statix.enable = true;
             };
           };
+
+          purrTests = import ../tests/default.nix { inherit (pkgs) lib; };
+
+          purrTestsFailed = builtins.length purrTests > 0;
+
+          purrTestsMsg = builtins.concatStringsSep "\n" (
+            builtins.map (
+              f:
+              "  FAIL: ${f.name}\n    expected: ${builtins.toJSON f.expected}\n    got: ${builtins.toJSON f.result}"
+            ) purrTests
+          );
         in
         {
           devShells.default = pkgs.mkShell {
@@ -38,6 +49,11 @@
 
           checks = {
             pre-commit = pre-commit-check;
+            purr-tests =
+              if purrTestsFailed then
+                builtins.throw "purr tests FAILED:\n${purrTestsMsg}"
+              else
+                pkgs.runCommand "purr-tests" { } "touch $out";
           };
         }
       );
