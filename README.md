@@ -201,8 +201,15 @@ extraModules = {
 ### Default module bundle
 
 By default, sub-modules are exported individually. Enable `bundleModules = true`
+to auto-generate a `default` module that imports all sub-modules:
 
-...
+```nix
+{ imports = [ inputs.myflake.nixosModules.default ]; }
+```
+
+Set `bundleExtraModules = false` to exclude extraModules from the default
+bundle (only auto-discovered modules will be included). If you define your own
+`default` module under `modules/`, the auto-generated bundle is skipped.
 
 ## Systems & Homes
 
@@ -295,17 +302,6 @@ purr = {
   systemsDir = "systems";
   homesDir = "homes";
 }
-```
-to auto-generate a `default` module that imports all sub-modules:
-
-```nix
-{ imports = [ inputs.myflake.nixosModules.default ]; }
-```
-
-Set `bundleExtraModules = false` to exclude extraModules from the default
-bundle (only auto-discovered modules will be included). Set `bundleModules = false`
-to disable it entirely. If you define your own `default` module under
-`modules/`, the auto-generated bundle is skipped.
 ```
 
 ## API
