@@ -215,7 +215,10 @@ let
           eachSystem
           ;
         mkFlake = mkFlake args;
-      };
+      }
+      // optionalAttrs (importedPurrLib != null) (
+        if namespace != null then { ${namespace} = importedPurrLib; } else importedPurrLib
+      );
 
       formatter = pivotedOutputs.formatter or { };
     }
