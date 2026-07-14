@@ -38,34 +38,12 @@ let
     else
       { };
 
-  toKebabCase =
-    name:
-    let
-      parts = splitString "/" name;
-      kebabParts = builtins.map (builtins.replaceStrings [ "_" ] [ "-" ]) parts;
-    in
-    builtins.concatStringsSep "/" kebabParts;
-
   discoverModules =
     modulesDir: dirMap:
     let
       collect = types: builtins.foldl' (acc: t: recursiveUpdate acc (findModules modulesDir t)) { } types;
     in
     builtins.mapAttrs (_: collect) dirMap;
-
-  findAllModules =
-    modulesDir:
-    discoverModules modulesDir {
-      nixos = [
-        "nixos"
-        "shared"
-      ];
-      darwin = [
-        "darwin"
-        "shared"
-      ];
-      home = [ "home" ];
-    };
 
   loadModules =
     path:
@@ -93,9 +71,7 @@ in
   inherit
     collectModules
     discoverModules
-    findAllModules
     findModules
     loadModules
-    toKebabCase
     ;
 }
