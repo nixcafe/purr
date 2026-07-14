@@ -1,5 +1,6 @@
 {
   attrs,
+  configs,
   systems,
   lib,
   modules,
@@ -54,6 +55,8 @@ let
       appsDir ? null,
       templatesDir ? null,
       templatesRecursive ? false,
+      systemsDir ? null,
+      homesDir ? null,
       ...
     }:
     let
@@ -160,6 +163,11 @@ let
       appsDir' = resolve appsDir [ "apps" ];
       libDir' = resolve libDir [ "lib" ];
       templatesDir' = resolve templatesDir [ "templates" ];
+      systemsDir' = resolve systemsDir [
+        "systems"
+        "hosts"
+      ];
+      homesDir' = resolve homesDir [ "homes" ];
 
       pkgs = forAllSystems (
         system:
@@ -245,6 +253,35 @@ let
       packages = forAllSystems (system: autoModules system packagesDir');
 
       apps = forAllSystems (system: autoModules system appsDir');
+
+      # -- Systems and Homes --
+      discoveredSystems = if systemsDir' != null then modules.discoverSystems src systemsDir' else { };
+
+      discoveredHomes = if homesDir' != null then modules.discoverHomes src homesDir' else { };
+
+      buildSystemConfigs =
+        if discoveredSystems != { } then
+          configs.buildSystemConfigs {
+            inherit
+              discoveredSystems
+              discoveredHomes
+              inputs
+              ;
+          }
+        else
+          { };
+
+      buildHomeConfigs =
+        if discoveredHomes != { } then
+          configs.buildHomeConfigs {
+            inherit
+              discoveredHomes
+              inputs
+              channelsConfig
+              ;
+          }
+        else
+          { };
     in
     {
       inherit
@@ -262,6 +299,8 @@ let
       (optionalAttrs (templates != { }) { inherit templates; })
       (optionalAttrs (packages != { }) { inherit packages; })
       (optionalAttrs (apps != { }) { inherit apps; })
+      (optionalAttrs (discoveredSystems != { }) buildSystemConfigs)
+      (optionalAttrs (discoveredHomes != { }) { homeConfigurations = buildHomeConfigs; })
       (optionalAttrs (importedPurrLib != null) (
         if namespace != null then
           {

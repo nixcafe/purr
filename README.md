@@ -208,9 +208,100 @@ to auto-generate a `default` module that imports all sub-modules:
 ```
 
 Set `bundleExtraModules = false` to exclude extraModules from the default
-bundle (only auto-discovered modules will be included). Set `bundleModules = false`
-to disable it entirely. If you define your own `default` module under
-`modules/`, the auto-generated bundle is skipped.
+bundle (only auto-discovered modules will be included). If you define your own
+`default` module under `modules/`, the auto-generated bundle is skipped.
+
+## Systems & Homes
+
+Purr auto-discovers NixOS/darwin systems, home-manager homes, and image formats
+using the `<arch>-<format>/<name>` convention (compatible with
+[Snowfall Lib](https://snowfall.org)).
+
+### Directory structure
+
+```
+src/
+├── systems/                          # auto-detect: "systems", "hosts"
+│   ├── x86_64-linux/
+│   │   ├── server/default.nix        # → nixosConfigurations.server
+│   │   └── laptop/default.nix        # → nixosConfigurations.laptop
+│   ├── x86_64-iso/
+│   │   └── server/default.nix        # → isoConfigurations.server
+│   ├── x86_64-do/
+│   │   └── server/default.nix        # → doConfigurations.server
+│   └── aarch64-darwin/
+│       └── macbook/default.nix       # → darwinConfigurations.macbook
+│
+├── homes/                            # auto-detect: "homes"
+│   ├── x86_64-linux/
+│   │   ├── alice@server/default.nix  # → homeConfigurations."alice@server"
+│   │   └── bob@server/default.nix    # → homeConfigurations."bob@server"
+│   └── aarch64-darwin/
+│       └── alice@macbook/default.nix # → homeConfigurations."alice@macbook"
+│
+├── modules/
+├── lib/
+└── ...
+```
+
+### System output mapping
+
+| Format in dir name | Flake output key | Builder |
+|---|---|---|
+| `linux` | `nixosConfigurations.<name>` | `nixosSystem` |
+| `darwin` | `darwinConfigurations.<name>` | `darwinSystem` |
+| `iso`, `do`, … | `<format>Configurations.<name>` | `nixosSystem` + `image.variant` |
+
+### Home auto-linking
+
+Homes named `<user>@<host>` are automatically injected into matching hosts.
+When `home-manager` is available as an input, building `nixosConfigurations.server`
+will include all homes with `@server` suffix:
+
+```nix
+# homes/x86_64-linux/alice@server/default.nix
+{ pkgs, ... }: {
+  home.packages = [ pkgs.neovim ];
+  programs.git.enable = true;
+}
+```
+
+The home is auto-configured via `home-manager.users.alice` in the host's NixOS
+config. No additional wiring needed.
+
+### Image formats (nixos-generators replacement)
+
+nixos-generators was merged into nixpkgs (25.05+). Set `image.variant` in the
+system config to build images. Purr auto-detects format directories and adds
+the variant:
+
+```nix
+# systems/x86_64-iso/server/default.nix
+{ ... }: {
+  image.variant = "iso";  # implied, auto-set by Purr
+}
+```
+
+### Example usage
+
+**mkFlake:**
+```nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  systemsDir = "systems";   # or "hosts", or null to auto-detect
+  homesDir = "homes";
+}
+```
+
+**flake-parts:**
+```nix
+purr = {
+  enable = true;
+  src = ./.;
+  systemsDir = "systems";
+  homesDir = "homes";
+}
 ```
 
 ## API
@@ -238,6 +329,8 @@ to disable it entirely. If you define your own `default` module under
 | `appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 | `templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
+| `systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
+| `homesDir` | nullOr str | `null` | auto-detects `homes/` |
 
 ### flake-parts Options
 
@@ -258,6 +351,8 @@ to disable it entirely. If you define your own `default` module under
 | `purr.extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` |
 | `purr.bundleModules` | bool | `false` | Bundle all modules into a `default` module |
 | `purr.bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
+| `purr.systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
+| `purr.homesDir` | nullOr str | `null` | auto-detects `homes/` |
 
 ```nix
 inputs.purr.lib.defaultSystems  # ["x86_64-linux" "aarch64-linux" "aarch64-darwin"]
