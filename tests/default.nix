@@ -14,6 +14,8 @@ let
 
   collectModules = import ./collectModules.nix { inherit lib; };
 
+  configs = import ./configs.nix { inherit lib; };
+
   runGroup = name: tests: runTests { "${name}" = tests; };
 
   failures =
@@ -28,6 +30,8 @@ let
     ++ (runGroup "moduleArgs.nullNamespace" moduleArgs.nullNamespace)
     ++ (runGroup "deepMapAttrs" namespacedModules.deepMapAttrs)
     ++ (runGroup "wrapModuleSet" namespacedModules.wrapModuleSet)
-    ++ (runGroup "collectModules" collectModules.basic);
+    ++ (runGroup "collectModules" collectModules.basic)
+    ++ (runGroup "buildHomeConfigs" configs.buildHomeConfigs)
+    ++ (runGroup "buildSystemConfigs" configs.buildSystemConfigs);
 in
 failures
