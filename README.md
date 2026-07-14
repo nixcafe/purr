@@ -43,6 +43,7 @@ minimal with a single dependency and a smaller default surface area.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     purr.url = "github:nixcafe/purr";
+    my-extra-modules.url = "github:user/my-extra-modules";
   };
 
   outputs = inputs:
@@ -53,6 +54,9 @@ minimal with a single dependency and a smaller default surface area.
         enable = true;
         src = ./.;
         namespace = "cattery";
+        extraModules.nixos = [
+          inputs.my-extra-modules.nixosModules.default
+        ];
       };
     };
 }
@@ -194,6 +198,21 @@ extraModules = {
 };
 ```
 
+### Default module bundle
+
+By default (`bundleModules = true`), a `default` module is auto-generated
+that imports all sub-modules, so consumers can import everything at once:
+
+```nix
+{ imports = [ inputs.myflake.nixosModules.default ]; }
+```
+
+Set `bundleExtraModules = false` to exclude extraModules from the default
+bundle (only auto-discovered modules will be included). Set `bundleModules = false`
+to disable it entirely. If you define your own `default` module under
+`modules/`, the auto-generated bundle is skipped.
+```
+
 ## API
 
 ### `mkFlake`
@@ -210,6 +229,8 @@ extraModules = {
 | `modulesDir` | str | `"modules"` | Module directory name under src |
 | `moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | Subdirectory mapping per output |
 | `extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` — raw module injection |
+| `bundleModules` | bool | `true` | Bundle all modules into a `default` module |
+| `bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
 | `checksDir` | nullOr str | `null` | auto-detects `checks/` |
 | `shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
@@ -234,6 +255,9 @@ extraModules = {
 | `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
 | `purr.templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 | `purr.templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
+| `purr.extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` |
+| `purr.bundleModules` | bool | `true` | Bundle all modules into a `default` module |
+| `purr.bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
 
 ```nix
 inputs.purr.lib.defaultSystems  # ["x86_64-linux" "aarch64-linux" "aarch64-darwin"]
