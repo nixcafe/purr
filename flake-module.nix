@@ -145,7 +145,7 @@ in
       discoveredModules = modulesLib.discoverModules modulesPath cfg.moduleTypes;
 
       importedPurrLib =
-        if cfg.libDir != null then import (cfg.src + "/${cfg.libDir}") { inherit lib; } else null;
+        if libDir' != null then import (cfg.src + "/${libDir'}") { inherit lib; } else null;
 
       purrLib =
         if cfg.namespace != null && importedPurrLib != null then
@@ -193,6 +193,7 @@ in
       ];
       overlaysDir' = resolve cfg.overlaysDir [ "overlays" ];
       packagesDir' = resolve cfg.packagesDir [ "packages" ];
+      libDir' = resolve cfg.libDir [ "lib" ];
 
       discoveredChecks = if checksDir' != null then modulesLib.findModules cfg.src checksDir' else { };
 
