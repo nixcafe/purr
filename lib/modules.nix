@@ -64,10 +64,7 @@ let
         "darwin"
         "shared"
       ];
-      home = [
-        "home"
-        "shared"
-      ];
+      home = [ "home" ];
     };
 
   loadModules =

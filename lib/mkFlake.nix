@@ -40,10 +40,7 @@ let
           "darwin"
           "shared"
         ];
-        home = [
-          "home"
-          "shared"
-        ];
+        home = [ "home" ];
       },
       extraModules ? { },
       checksDir ? null,
