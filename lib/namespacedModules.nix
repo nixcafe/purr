@@ -1,4 +1,3 @@
-_:
 let
   wrapModule =
     namespace: module: args:
