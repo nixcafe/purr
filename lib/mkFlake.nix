@@ -70,7 +70,7 @@ let
 
       extra = builtins.mapAttrs (_: listModules) extraModules;
 
-      importedPurrLib = if libDir != null then import (src + "/${libDir}") { inherit lib; } else null;
+      importedPurrLib = if libDir' != null then import (src + "/${libDir'}") { inherit lib; } else null;
 
       purrLib =
         if namespace != null && importedPurrLib != null then
@@ -121,6 +121,7 @@ let
       overlaysDir' = resolve overlaysDir [ "overlays" ];
       packagesDir' = resolve packagesDir [ "packages" ];
       appsDir' = resolve appsDir [ "apps" ];
+      libDir' = resolve libDir [ "lib" ];
 
       pkgs = forAllSystems (
         system:
