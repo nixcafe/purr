@@ -51,6 +51,7 @@ let
       packagesDir ? null,
       appsDir ? null,
       templatesDir ? null,
+      templatesRecursive ? false,
       ...
     }:
     let
@@ -201,7 +202,11 @@ let
       templates =
         if templatesDir' != null then
           let
-            templateModules = modules.findModules src templatesDir';
+            templateModules =
+              if templatesRecursive then
+                modules.findModules src templatesDir'
+              else
+                modules.findModulesFlat src templatesDir';
           in
           builtins.mapAttrs (_: import) templateModules
         else

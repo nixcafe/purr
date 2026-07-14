@@ -147,6 +147,17 @@ in
         Each `default.nix` under subdirectories becomes a template.
       '';
     };
+
+    templatesRecursive = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether to scan `templates/` recursively.
+        When `false` (default), only immediate subdirectories
+        with a `default.nix` are discovered. Set to `true` to
+        enable nested directory discovery.
+      '';
+    };
   };
 
   config = mkIf cfg.enable (
@@ -231,7 +242,13 @@ in
         if packagesDir' != null then modulesLib.findModules cfg.src packagesDir' else { };
 
       discoveredTemplates =
-        if templatesDir' != null then modulesLib.findModules cfg.src templatesDir' else { };
+        if templatesDir' != null then
+          let
+            scan = if cfg.templatesRecursive then modulesLib.findModules else modulesLib.findModulesFlat;
+          in
+          scan cfg.src templatesDir'
+        else
+          { };
     in
     {
       flake = {

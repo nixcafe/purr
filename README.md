@@ -96,7 +96,7 @@ src/
 │       └── default.nix               #   → overlays.custom
 │
 ├── templates/                        # Flake templates (auto-detect: "templates")
-│   └── rust/
+│   └── rust/                         #   non-recursive by default
 │       └── default.nix               #   → templates.rust
 │
 └── apps/                             # Per-system apps (auto-detect: "apps")
@@ -216,6 +216,7 @@ extraModules = {
 | `packagesDir` | nullOr str | `null` | auto-detects `packages/` |
 | `appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `templatesDir` | nullOr str | `null` | auto-detects `templates/` |
+| `templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
 
 ### flake-parts Options
 
@@ -232,6 +233,7 @@ extraModules = {
 | `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
 | `purr.templatesDir` | nullOr str | `null` | auto-detects `templates/` |
+| `purr.templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
 
 ```nix
 inputs.purr.lib.defaultSystems  # ["x86_64-linux" "aarch64-linux" "aarch64-darwin"]
