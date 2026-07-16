@@ -1,6 +1,6 @@
 # purr
 
-purr — Nix flake framework with automatic discovery and module system
+purr - Nix flake framework with automatic discovery and module system
 
 <!--
 Sitemap:
