@@ -1,0 +1,5 @@
+# purr
+
+purr — Nix flake framework with automatic discovery and module system
+
+- [purr](/index): Nix flake framework with automatic discovery and module system
