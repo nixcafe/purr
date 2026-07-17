@@ -58,6 +58,7 @@ let
       discoveredSystems,
       discoveredHomes,
       inputs,
+      nixpkgsConfig ? { },
     }:
     let
       hasHomeManager = inputs ? home-manager;
@@ -113,7 +114,10 @@ let
                   }
                 else
                   [ ];
-              baseModules = [ sysModule ] ++ homeModules;
+              systemModules = lib.optional (nixpkgsConfig != { }) {
+                nixpkgs.config = mkDefault nixpkgsConfig;
+              };
+              baseModules = systemModules ++ [ sysModule ] ++ homeModules;
             in
             if format == "linux" then
               inputs.nixpkgs.lib.nixosSystem {
@@ -151,7 +155,7 @@ let
     {
       discoveredHomes,
       inputs,
-      channelsConfig,
+      nixpkgsConfig,
     }:
     if inputs ? home-manager then
       builtins.listToAttrs (
@@ -162,7 +166,7 @@ let
             system = if parsed.format == "darwin" then "${parsed.arch}-darwin" else "${parsed.arch}-linux";
             pkgs = import inputs.nixpkgs {
               inherit system;
-              config = channelsConfig;
+              config = nixpkgsConfig;
               overlays = [ ];
             };
           in
