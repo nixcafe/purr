@@ -81,11 +81,18 @@ let
           let
             rootModule =
               if builtins.pathExists (src + "/${libDir'}/default.nix") then
-                import (src + "/${libDir'}/default.nix") { inherit lib; }
+                import (src + "/${libDir'}/default.nix") {
+                  inherit lib inputs namespace;
+                }
               else
                 { };
             subModules = modules.findModules src libDir';
-            importedSubModules = namespacedModules.deepMapAttrs (path: import path { inherit lib; }) subModules;
+            importedSubModules = namespacedModules.deepMapAttrs (
+              path:
+              import path {
+                inherit lib inputs namespace;
+              }
+            ) subModules;
           in
           rootModule // importedSubModules
         else

@@ -69,7 +69,7 @@ All directories are auto-detected under `src`:
 ```
 src/
 ├── lib/                              # Project library (auto-detect: "lib")
-│   ├── default.nix                   #   import { lib }: returns attrset
+│   ├── default.nix                   #   import { lib, inputs, namespace }: returns attrset
 │   ├── keys/
 │   │   └── default.nix               #   → lib.<namespace>.keys
 │   └── utils/
@@ -114,7 +114,7 @@ Each auto-discovered module receives different arguments:
 
 | Directory | Arguments |
 |---|---|
-| `lib/` | `{ lib }` |
+| `lib/` | `{ lib, inputs, namespace }` |
 | `modules/` | `{ config, options, lib, pkgs, namespace, ... }` |
 | `packages/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `shells/` | `{ inputs, system, namespace, lib, pkgs }` |
@@ -157,10 +157,10 @@ Create a `lib/` directory under `src` to share functions across all modules:
 
 ```nix
 # lib/default.nix
-{ lib }:
+{ lib, inputs, namespace }:
 {
-  keys = import ./keys.nix { inherit lib; };
-  utils = import ./utils.nix { inherit lib; };
+  keys = import ./keys.nix { inherit lib inputs namespace; };
+  utils = import ./utils.nix { inherit lib inputs namespace; };
 }
 ```
 
