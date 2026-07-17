@@ -236,6 +236,22 @@ in
         are automatically linked when home-manager is available.
       '';
     };
+
+    nixpkgsConfig = mkOption {
+      type = types.attrs;
+      default = { };
+      description = ''
+        nixpkgs config attributes such as `allowUnfree` and
+        `permittedInsecurePackages`. This is passed to:
+        - nixpkgs imports for per-system packages, shells, and checks
+        - `buildHomeConfigs` for home-manager nixpkgs import
+        - `buildSystemConfigs` (injected as
+          `nixpkgs.config = lib.mkDefault nixpkgsConfig`
+          into each system module)
+        Settings can be overridden per-system via
+        `nixpkgs.config` in the host/home module.
+      '';
+    };
   };
 
   config = mkIf cfg.enable (
@@ -384,6 +400,7 @@ in
               discoveredHomes
               inputs
               ;
+            inherit (cfg) nixpkgsConfig;
           }
         else
           { };
@@ -395,7 +412,7 @@ in
               discoveredHomes
               inputs
               ;
-            channelsConfig = { };
+            inherit (cfg) nixpkgsConfig;
           }
         else
           { };
@@ -428,8 +445,13 @@ in
       };
 
       perSystem = flake-parts-lib.mkPerSystemOption (
-        { pkgs, ... }:
+        { system, ... }:
         let
+          pkgs = import inputs.nixpkgs {
+            inherit system;
+            config = cfg.nixpkgsConfig;
+            overlays = [ ];
+          };
           mod = autoModules pkgs;
 
           checksModules = mod checksDir';

@@ -31,7 +31,7 @@ let
       namespace ? null,
       libDir ? null,
       systems ? defaultSystems,
-      channelsConfig ? { },
+      nixpkgsConfig ? { },
       outputsBuilder ? (_: { }),
       modulesDir ? "modules",
       moduleTypes ? {
@@ -173,7 +173,7 @@ let
         system:
         import inputs.nixpkgs {
           inherit system;
-          config = channelsConfig;
+          config = nixpkgsConfig;
           overlays = [ ];
         }
       );
@@ -181,8 +181,13 @@ let
       perSystem = forAllSystems (
         system:
         outputsBuilder {
-          inherit system;
+          inherit
+            system
+            inputs
+            namespace
+            ;
           pkgs = pkgs.${system};
+          lib = purrLib;
         }
       );
 
@@ -266,6 +271,7 @@ let
               discoveredSystems
               discoveredHomes
               inputs
+              nixpkgsConfig
               ;
           }
         else
@@ -277,7 +283,7 @@ let
             inherit
               discoveredHomes
               inputs
-              channelsConfig
+              nixpkgsConfig
               ;
           }
         else

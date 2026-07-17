@@ -17,7 +17,7 @@ in
             "x86_64-linux"._ = null;
           };
           inputs = { };
-          channelsConfig = { };
+          nixpkgsConfig = { };
         };
         expected = { };
       };
@@ -26,7 +26,7 @@ in
         expr = buildHomeConfigs {
           discoveredHomes = { };
           inputs = { };
-          channelsConfig = { };
+          nixpkgsConfig = { };
         };
         expected = { };
       };
@@ -51,7 +51,7 @@ in
             result = buildHomeConfigs {
               discoveredHomes = homes;
               inputs = fakeInputs;
-              channelsConfig = { };
+              nixpkgsConfig = { };
             };
           in
           result."alice@myhost";
@@ -83,7 +83,7 @@ in
             result = buildHomeConfigs {
               discoveredHomes = homes;
               inputs = fakeInputs;
-              channelsConfig = { };
+              nixpkgsConfig = { };
             };
           in
           result."root@myserver";
@@ -282,6 +282,58 @@ in
           "alice"
           "bob"
         ];
+      };
+
+      "injects nixpkgsConfig as nixpkgs.config module" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem = { modules, system }: {
+                inherit modules system;
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+              nixpkgsConfig = {
+                allowUnfree = true;
+                permittedInsecurePackages = [ "bad-1.0" ];
+              };
+            };
+            cfg = result.nixosConfigurations.myhost;
+            firstModule = builtins.head cfg.modules;
+          in
+          firstModule.nixpkgs.config;
+        expected = {
+          allowUnfree = true;
+          permittedInsecurePackages = [ "bad-1.0" ];
+        };
+      };
+
+      "returns {} as config when nixpkgsConfig is empty" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem = { modules, system }: {
+                inherit modules system;
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+              nixpkgsConfig = { };
+            };
+            cfg = result.nixosConfigurations.myhost;
+            firstModule = builtins.head cfg.modules;
+          in
+          firstModule;
+        expected = /tmp;
       };
     };
   };

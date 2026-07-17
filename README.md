@@ -315,8 +315,8 @@ purr = {
 | `namespace` | nullOr str | `null` | Module option namespace, also used as lib key (`lib.<namespace>`) |
 | `libDir` | nullOr str | `null` | Lib directory (relative to `src`), auto-detects `lib/` |
 | `systems` | list | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` | Systems to generate for |
-| `channelsConfig` | attrs | `{}` | nixpkgs config (allowUnfree, etc.) |
-| `outputsBuilder` | fn | `({ pkgs, system }: {})` | Per-system extra flake outputs (formatter, packages, etc.) |
+| `nixpkgsConfig` | attrs | `{}` | nixpkgs config (allowUnfree, etc.) |
+| `outputsBuilder` | fn | `({ pkgs, system, inputs, namespace, lib }: {})` | Per-system extra flake outputs (formatter, packages, etc.) |
 | `modulesDir` | str | `"modules"` | Module directory name under src |
 | `moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | Subdirectory mapping per output |
 | `extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` — raw module injection |
@@ -346,6 +346,7 @@ purr = {
 | `purr.shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
+| `purr.appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `purr.templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 | `purr.templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
 | `purr.extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` |
@@ -353,6 +354,7 @@ purr = {
 | `purr.bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
 | `purr.systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `purr.homesDir` | nullOr str | `null` | auto-detects `homes/` |
+| `purr.nixpkgsConfig` | attrs | `{}` | nixpkgs config (allowUnfree, etc.) |
 
 ```nix
 inputs.purr.lib.defaultSystems  # ["x86_64-linux" "aarch64-linux" "aarch64-darwin"]
