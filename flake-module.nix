@@ -264,11 +264,20 @@ in
           let
             rootModule =
               if builtins.pathExists (cfg.src + "/${libDir'}/default.nix") then
-                import (cfg.src + "/${libDir'}/default.nix") { inherit lib; }
+                import (cfg.src + "/${libDir'}/default.nix") {
+                  inherit lib inputs;
+                  inherit (cfg) namespace;
+                }
               else
                 { };
             subModules = modulesLib.findModules cfg.src libDir';
-            importedSubModules = namespacedModules.deepMapAttrs (path: import path { inherit lib; }) subModules;
+            importedSubModules = namespacedModules.deepMapAttrs (
+              path:
+              import path {
+                inherit lib inputs;
+                inherit (cfg) namespace;
+              }
+            ) subModules;
           in
           rootModule // importedSubModules
         else
