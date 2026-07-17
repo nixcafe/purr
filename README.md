@@ -255,7 +255,7 @@ src/
 ### Home auto-linking
 
 Homes named `<user>@<host>` are automatically injected into matching hosts.
-When `home-manager` is available as an input, building `nixosConfigurations.server`
+When `home-manager` (or `homeManager`) is available as an input, building `nixosConfigurations.server`
 will include all homes with `@server` suffix:
 
 ```nix
@@ -310,7 +310,7 @@ purr = {
 
 | Parameter | Type | Default | |
 |-----------|------|---------|---|
-| `inputs` | attrs | *required* | Flake inputs (must include nixpkgs) |
+| `inputs` | attrs | *required* | Flake inputs. Required: `nixpkgs`. Optional: `home-manager` (or `homeManager`) for home-manager support, `nix-darwin` (or `darwin`) for darwin support |
 | `src` | path | *required* | Project root directory |
 | `namespace` | nullOr str | `null` | Module option namespace, also used as lib key (`lib.<namespace>`) |
 | `libDir` | nullOr str | `null` | Lib directory (relative to `src`), auto-detects `lib/` |
