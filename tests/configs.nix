@@ -94,6 +94,38 @@ in
           };
         };
       };
+
+      "accepts homeManager as alias for home-manager" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs = { };
+              homeManager = {
+                lib.homeManagerConfiguration =
+                  {
+                    extraSpecialArgs ? { },
+                    ...
+                  }:
+                  extraSpecialArgs;
+              };
+            };
+            homes = {
+              "x86_64-linux"."alice@myhost" = /tmp;
+            };
+            result = buildHomeConfigs {
+              discoveredHomes = homes;
+              inputs = fakeInputs;
+              nixpkgsConfig = { };
+            };
+          in
+          result."alice@myhost";
+        expected = {
+          purr = {
+            user = "alice";
+            host = "myhost";
+          };
+        };
+      };
     };
   };
 
@@ -138,6 +170,56 @@ in
           in
           builtins.attrNames result;
         expected = [ "darwinConfigurations" ];
+      };
+
+      "accepts darwin as alias for nix-darwin" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib = { };
+              darwin.lib.darwinSystem = { modules, system }: {
+                inherit modules system;
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "aarch64-darwin"."mac1" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+            };
+          in
+          builtins.attrNames result;
+        expected = [ "darwinConfigurations" ];
+      };
+
+      "accepts homeManager alias for home-manager in system configs" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem = { modules, system }: {
+                inherit modules system;
+              };
+              homeManager = {
+                nixosModules.home-manager = "hm-mod";
+                darwinModules.home-manager = "hm-darwin";
+              };
+            };
+            homes = {
+              "x86_64-linux"."alice@myhost" = /tmp;
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = homes;
+              inputs = fakeInputs;
+            };
+            cfg = result.nixosConfigurations.myhost;
+            hmMods = builtins.filter (m: builtins.isAttrs m && m ? home-manager) cfg.modules;
+          in
+          builtins.attrNames (builtins.head hmMods).home-manager.users;
+        expected = [ "alice" ];
       };
 
       "auto-creates users.users for linked non-root homes" = {

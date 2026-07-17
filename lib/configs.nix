@@ -61,8 +61,10 @@ let
       nixpkgsConfig ? { },
     }:
     let
-      hasHomeManager = inputs ? home-manager;
-      hasNixDarwin = inputs ? nix-darwin;
+      hm = inputs.home-manager or inputs.homeManager or null;
+      nd = inputs.nix-darwin or inputs.darwin or null;
+      hasHomeManager = hm != null;
+      hasNixDarwin = nd != null;
 
       allEntries = concatMap (
         archFormat:
@@ -80,10 +82,7 @@ let
               sysModule = discoveredSystems.${archFormat}.${systemName};
               matchingHomes = if hasHomeManager then findMatchingHomes discoveredHomes systemName else [ ];
               hmModule =
-                if format == "darwin" then
-                  inputs.home-manager.darwinModules.home-manager
-                else
-                  inputs.home-manager.nixosModules.home-manager;
+                if format == "darwin" then hm.darwinModules.home-manager else hm.nixosModules.home-manager;
               nonRootHomes = builtins.filter (h: h.user != "root") matchingHomes;
               homeModules =
                 if matchingHomes != [ ] then
@@ -125,7 +124,7 @@ let
                 modules = baseModules;
               }
             else if format == "darwin" && hasNixDarwin then
-              inputs.nix-darwin.lib.darwinSystem {
+              nd.lib.darwinSystem {
                 inherit system;
                 modules = baseModules;
               }
@@ -157,7 +156,10 @@ let
       inputs,
       nixpkgsConfig,
     }:
-    if inputs ? home-manager then
+    let
+      hm = inputs.home-manager or inputs.homeManager or null;
+    in
+    if hm != null then
       builtins.listToAttrs (
         concatMap (
           archFormat:
@@ -176,7 +178,7 @@ let
               let
                 parsed = parseUserHost userHost;
               in
-              inputs.home-manager.lib.homeManagerConfiguration {
+              hm.lib.homeManagerConfiguration {
                 inherit pkgs;
                 modules = [ discoveredHomes.${archFormat}.${userHost} ];
                 extraSpecialArgs = {
