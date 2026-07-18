@@ -59,6 +59,7 @@ let
       discoveredHomes,
       inputs,
       nixpkgsConfig ? { },
+      extraModules ? { },
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
@@ -116,7 +117,8 @@ let
               systemModules = lib.optional (nixpkgsConfig != { }) {
                 nixpkgs.config = mkDefault nixpkgsConfig;
               };
-              baseModules = systemModules ++ [ sysModule ] ++ homeModules;
+              extraSystemModules = extraModules.${if format == "darwin" then "darwin" else "nixos"} or [ ];
+              baseModules = systemModules ++ extraSystemModules ++ [ sysModule ] ++ homeModules;
             in
             if format == "linux" then
               inputs.nixpkgs.lib.nixosSystem {
@@ -155,6 +157,7 @@ let
       discoveredHomes,
       inputs,
       nixpkgsConfig,
+      extraModules ? { },
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
@@ -180,7 +183,7 @@ let
               in
               hm.lib.homeManagerConfiguration {
                 inherit pkgs;
-                modules = [ discoveredHomes.${archFormat}.${userHost} ];
+                modules = extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
                 extraSpecialArgs = {
                   purr = {
                     inherit (parsed) user host;
