@@ -106,6 +106,12 @@ let
                 }) matchingHomes;
               };
 
+              pkgsSystem = import inputs.nixpkgs {
+                inherit system;
+                config = nixpkgsConfig;
+                overlays = [ ];
+              };
+
               systemLib = builtins.foldl' (acc: input: acc // (input.lib or { })) lib (
                 builtins.attrValues inputs
               );
@@ -151,8 +157,19 @@ let
                 networking.hostName = mkDefault systemName;
               };
 
+              readOnlyPkgsModule =
+                if pkgsSystem != null then
+                  (inputs.nixpkgs.nixosModules or inputs.nixpkgs.nixosModules or { }).readOnlyPkgs or null
+                else
+                  null;
+
               baseModules =
-                autoInjectModules ++ systemModules ++ extraSystemModules ++ [ sysModule ] ++ homeModules;
+                lib.optional (readOnlyPkgsModule != null) readOnlyPkgsModule
+                ++ autoInjectModules
+                ++ systemModules
+                ++ extraSystemModules
+                ++ [ sysModule ]
+                ++ homeModules;
             in
             if format == "linux" then
               inputs.nixpkgs.lib.nixosSystem {
@@ -166,6 +183,7 @@ let
                     ;
                   host = systemName;
                   lib = systemLib;
+                  pkgs = pkgsSystem;
                 };
               }
             else if format == "darwin" && hasNixDarwin then
@@ -180,6 +198,7 @@ let
                     ;
                   host = systemName;
                   lib = systemLib;
+                  pkgs = pkgsSystem;
                 };
               }
             else
@@ -196,6 +215,7 @@ let
                     ;
                   host = systemName;
                   lib = systemLib;
+                  pkgs = pkgsSystem;
                 };
               };
         }) (builtins.attrNames systems)

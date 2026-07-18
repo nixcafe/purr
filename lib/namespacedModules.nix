@@ -1,16 +1,10 @@
 let
   wrapModule =
-    namespace: module:
-    {
-      pkgs,
-      ...
-    }@args:
+    namespace: module: args:
     let
       original = if builtins.isPath module then import module else module;
     in
-    # The `false && pkgs != null` is only to reference `pkgs` so deadnix
-    # doesn't flag the destructured parameter as unused.
-    (if false && pkgs != null then null else original) (args // { inherit namespace; });
+    original (args // { inherit namespace; });
 
   deepMapAttrs =
     f: value:
