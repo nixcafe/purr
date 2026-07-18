@@ -71,9 +71,10 @@ src/
 ├── lib/                              # Project library (auto-detect: "lib")
 │   ├── default.nix                   #   import { lib, inputs, namespace }: returns attrset
 │   ├── keys/
-│   │   └── default.nix               #   → lib.<namespace>.keys
+│   │   └── default.nix               #   nested → lib.<namespace>.keys
 │   └── utils/
-│       └── default.nix               #   → lib.<namespace>.utils
+│       └── default.nix               #   nested → lib.<namespace>.utils
+│                                     #   flattenLib = true → lib.<namespace>
 │
 ├── modules/                          # NixOS/darwin/home modules
 │   ├── nixos/                        #   → nixosModules
@@ -165,7 +166,9 @@ Create a `lib/` directory under `src` to share functions across all modules:
 ```
 
 Functions are accessible as `lib.<namespace>.*` in all modules, packages,
-shells, and checks:
+shells, and checks. Subdirectories nest by default
+(`lib.<namespace>.keys.foo`). Set `flattenLib = true` to merge all
+submodules directly under the namespace (`lib.<namespace>.foo`).
 
 ```nix
 # packages/known-hosts/default.nix
@@ -314,6 +317,7 @@ purr = {
 | `src` | path | *required* | Project root directory |
 | `namespace` | nullOr str | `null` | Module option namespace, also used as lib key (`lib.<namespace>`) |
 | `libDir` | nullOr str | `null` | Lib directory (relative to `src`), auto-detects `lib/` |
+| `flattenLib` | bool | `false` | Flatten lib subdirectories into root (no dir nesting) |
 | `systems` | list | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` | Systems to generate for |
 | `nixpkgsConfig` | attrs | `{}` | nixpkgs config (allowUnfree, etc.) |
 | `outputsBuilder` | fn | `({ pkgs, system, inputs, namespace, lib }: {})` | Per-system extra flake outputs (formatter, packages, etc.) |
@@ -340,6 +344,7 @@ purr = {
 | `purr.src` | path | *required* | Project root |
 | `purr.namespace` | nullOr str | `null` | |
 | `purr.libDir` | nullOr str | `null` | auto-detects `lib/` |
+| `purr.flattenLib` | bool | `false` | Flatten lib subdirectories into root |
 | `purr.modulesDir` | str | `"modules"` | |
 | `purr.moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | |
 | `purr.checksDir` | nullOr str | `null` | auto-detects `checks/` |

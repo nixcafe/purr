@@ -63,6 +63,19 @@ in
       example = "lib";
     };
 
+    flattenLib = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether to flatten the lib directory hierarchy. When `false`
+        (default), `lib/foo/default.nix` is accessible as
+        `lib.<namespace>.foo.someFunc`. When `true`, all subdirectory
+        modules are merged directly into `lib.<namespace>`, so
+        `lib/foo/default.nix` functions become
+        `lib.<namespace>.someFunc`.
+      '';
+    };
+
     modulesDir = mkOption {
       type = types.str;
       default = "modules";
@@ -278,8 +291,24 @@ in
                 inherit (cfg) namespace;
               }
             ) subModules;
+            nested = rootModule // importedSubModules;
+            flatMerge =
+              let
+                collectLeaf =
+                  v:
+                  if builtins.isAttrs v then
+                    let
+                      direct = v."default.nix" or null;
+                      rest = builtins.removeAttrs v [ "default.nix" ];
+                      sub = lib.concatMap collectLeaf (builtins.attrValues rest);
+                    in
+                    (if direct != null then [ direct ] else [ ]) ++ sub
+                  else
+                    [ ];
+              in
+              lib.foldl' (a: b: a // b) rootModule (collectLeaf importedSubModules);
           in
-          rootModule // importedSubModules
+          if cfg.flattenLib then flatMerge else nested
         else
           null;
 

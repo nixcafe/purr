@@ -30,6 +30,7 @@ let
       src,
       namespace ? null,
       libDir ? null,
+      flattenLib ? false,
       systems ? defaultSystems,
       nixpkgsConfig ? { },
       outputsBuilder ? (_: { }),
@@ -93,8 +94,24 @@ let
                 inherit lib inputs namespace;
               }
             ) subModules;
+            nested = rootModule // importedSubModules;
+            flatMerge =
+              let
+                collectLeaf =
+                  v:
+                  if builtins.isAttrs v then
+                    let
+                      direct = v."default.nix" or null;
+                      rest = builtins.removeAttrs v [ "default.nix" ];
+                      sub = lib.concatMap collectLeaf (builtins.attrValues rest);
+                    in
+                    (if direct != null then [ direct ] else [ ]) ++ sub
+                  else
+                    [ ];
+              in
+              lib.foldl' (a: b: a // b) rootModule (collectLeaf importedSubModules);
           in
-          rootModule // importedSubModules
+          if flattenLib then flatMerge else nested
         else
           null;
 
