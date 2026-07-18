@@ -31,7 +31,7 @@ in
         expected = { };
       };
 
-      "injects purr.user and purr.host via extraSpecialArgs" = {
+      "injects purr metadata via extraSpecialArgs" = {
         expr =
           let
             fakeInputs = {
@@ -59,6 +59,9 @@ in
           purr = {
             user = "alice";
             host = "myhost";
+            arch = "x86_64";
+            format = "linux";
+            archFormat = "x86_64-linux";
           };
         };
       };
@@ -91,6 +94,9 @@ in
           purr = {
             user = "root";
             host = "myserver";
+            arch = "x86_64";
+            format = "linux";
+            archFormat = "x86_64-linux";
           };
         };
       };
@@ -123,8 +129,96 @@ in
           purr = {
             user = "alice";
             host = "myhost";
+            arch = "x86_64";
+            format = "linux";
+            archFormat = "x86_64-linux";
           };
         };
+      };
+
+      "auto-injects home.username and home.homeDirectory" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs = { };
+              home-manager = {
+                lib.homeManagerConfiguration =
+                  {
+                    modules ? [ ],
+                    ...
+                  }:
+                  builtins.head modules;
+              };
+            };
+            result = buildHomeConfigs {
+              discoveredHomes = {
+                "x86_64-linux"."alice@myhost" = /tmp;
+              };
+              inputs = fakeInputs;
+              nixpkgsConfig = { };
+            };
+          in
+          result."alice@myhost";
+        expected = {
+          home.username = "alice";
+          home.homeDirectory = "/home/alice";
+        };
+      };
+
+      "autoInjects home.homeDirectory for darwin" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs = { };
+              home-manager = {
+                lib.homeManagerConfiguration =
+                  {
+                    modules,
+                    ...
+                  }:
+                  builtins.head modules;
+              };
+            };
+            result = buildHomeConfigs {
+              discoveredHomes = {
+                "aarch64-darwin"."alice@mac1" = /tmp;
+              };
+              inputs = fakeInputs;
+              nixpkgsConfig = { };
+            };
+          in
+          result."alice@mac1";
+        expected = {
+          home.username = "alice";
+          home.homeDirectory = "/Users/alice";
+        };
+      };
+
+      "autoInject = false skips home injection" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs = { };
+              home-manager = {
+                lib.homeManagerConfiguration =
+                  {
+                    modules,
+                    ...
+                  }:
+                  builtins.length modules;
+              };
+            };
+            result = buildHomeConfigs {
+              discoveredHomes = {
+                "x86_64-linux"."alice@myhost" = /tmp;
+              };
+              inputs = fakeInputs;
+              nixpkgsConfig = { };
+              autoInject = false;
+            };
+          in
+          result."alice@myhost";
+        expected = 1;
       };
     };
   };
@@ -384,6 +478,7 @@ in
                 allowUnfree = true;
                 permittedInsecurePackages = [ "bad-1.0" ];
               };
+              autoInject = false;
             };
             cfg = result.nixosConfigurations.myhost;
             firstModule = builtins.head cfg.modules;
@@ -410,6 +505,7 @@ in
               discoveredHomes = { };
               inputs = fakeInputs;
               nixpkgsConfig = { };
+              autoInject = false;
             };
             cfg = result.nixosConfigurations.myhost;
             firstModule = builtins.head cfg.modules;
@@ -492,6 +588,190 @@ in
           in
           builtins.elem extraMod cfg.modules;
         expected = false;
+      };
+
+      "passes purr metadata as specialArgs (linux, no homes)" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem =
+                {
+                  specialArgs ? { },
+                  ...
+                }:
+                specialArgs;
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+            };
+          in
+          result.nixosConfigurations.myhost.purr;
+        expected = {
+          name = "myhost";
+          arch = "x86_64";
+          format = "linux";
+          archFormat = "x86_64-linux";
+          homes = [ ];
+        };
+      };
+
+      "purr.homes includes linked homes" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem =
+                {
+                  specialArgs ? { },
+                  ...
+                }:
+                specialArgs;
+              home-manager = {
+                nixosModules.home-manager = "hm-mod";
+                darwinModules.home-manager = "hm-darwin";
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = {
+                "x86_64-linux" = {
+                  "alice@myhost" = /tmp;
+                  "bob@myhost" = /tmp;
+                };
+              };
+              inputs = fakeInputs;
+            };
+          in
+          result.nixosConfigurations.myhost.purr.homes;
+        expected = [
+          {
+            user = "alice";
+            host = "myhost";
+          }
+          {
+            user = "bob";
+            host = "myhost";
+          }
+        ];
+      };
+
+      "passes purr metadata as specialArgs (darwin)" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib = { };
+              nix-darwin.lib.darwinSystem =
+                {
+                  specialArgs ? { },
+                  ...
+                }:
+                specialArgs;
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "aarch64-darwin"."mac1" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+            };
+          in
+          result.darwinConfigurations.mac1.purr;
+        expected = {
+          name = "mac1";
+          arch = "aarch64";
+          format = "darwin";
+          archFormat = "aarch64-darwin";
+          homes = [ ];
+        };
+      };
+
+      "cross-archformat homes show in purr.homes" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem =
+                {
+                  specialArgs ? { },
+                  ...
+                }:
+                specialArgs;
+              home-manager = {
+                nixosModules.home-manager = "hm-mod";
+                darwinModules.home-manager = "hm-darwin";
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = {
+                "x86_64-linux"."alice@myhost" = /tmp;
+                "aarch64-linux"."bob@myhost" = /tmp;
+              };
+              inputs = fakeInputs;
+            };
+          in
+          builtins.sort (a: b: a.user < b.user) result.nixosConfigurations.myhost.purr.homes;
+        expected = [
+          {
+            user = "alice";
+            host = "myhost";
+          }
+          {
+            user = "bob";
+            host = "myhost";
+          }
+        ];
+      };
+
+      "auto-injects networking.hostName" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem = { modules, system }: {
+                inherit modules system;
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+            };
+            cfg = result.nixosConfigurations.myhost;
+            hostNameMod = builtins.head cfg.modules;
+          in
+          hostNameMod.networking.hostName;
+        expected = "myhost";
+      };
+
+      "autoInject = false skips hostName injection" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem = { modules, system }: {
+                inherit modules system;
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+              autoInject = false;
+            };
+            cfg = result.nixosConfigurations.myhost;
+            firstModule = builtins.head cfg.modules;
+          in
+          firstModule;
+        expected = /tmp;
       };
     };
   };

@@ -58,6 +58,7 @@ let
       templatesRecursive ? false,
       systemsDir ? null,
       homesDir ? null,
+      autoInject ? true,
       ...
     }:
     let
@@ -286,6 +287,7 @@ let
         if discoveredSystems != { } then
           configs.buildSystemConfigs {
             inherit
+              autoInject
               discoveredSystems
               discoveredHomes
               inputs
@@ -300,6 +302,7 @@ let
         if discoveredHomes != { } then
           configs.buildHomeConfigs {
             inherit
+              autoInject
               discoveredHomes
               inputs
               nixpkgsConfig

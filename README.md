@@ -114,7 +114,7 @@ src/
 Each auto-discovered module receives different arguments:
 
 | Directory | Arguments |
-|---|---|
+|---|---|---|
 | `lib/` | `{ lib, inputs, namespace }` |
 | `modules/` | `{ config, options, lib, pkgs, namespace, ... }` |
 | `packages/` | `{ inputs, system, namespace, lib, pkgs }` |
@@ -123,9 +123,13 @@ Each auto-discovered module receives different arguments:
 | `apps/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `overlays/` | `final: prev:` (Nix overlay convention) |
 | `templates/` | `{ inputs, namespace, lib }` |
+| `systems/` | `{ config, options, lib, pkgs, purr, ... }` |
+| `homes/` | `{ config, options, lib, pkgs, purr, ... }` |
 
 > **Note:** `lib` in `packages/`, `shells/`, `checks/`, and `apps/` includes the
 > project's custom lib under `lib.<namespace>.*`, merged via `purrLib`.
+> `systems/` and `homes/` receive a `purr` attrset with metadata about the
+> current configuration context via `specialArgs` / `extraSpecialArgs`.
 
 ## Module Discovery
 
@@ -285,6 +289,56 @@ the variant:
 }
 ```
 
+### `purr` Metadata
+
+Each system and home module receives a `purr` attrset with metadata about the
+current configuration. This is passed via `specialArgs` (systems) and
+`extraSpecialArgs` (homes).
+
+**System modules** (`specialArgs.purr`):
+
+| Field | Example | Description |
+|---|---|---|
+| `name` | `"server"` | System/host name |
+| `arch` | `"x86_64"` | Architecture |
+| `format` | `"linux"` | linux, darwin, iso, ... |
+| `archFormat` | `"x86_64-linux"` | Full arch-format string |
+| `homes` | `[{user="alice";host="server";}]` | Linked home configs |
+
+**Home modules** (`extraSpecialArgs.purr`):
+
+| Field | Example | Description |
+|---|---|---|
+| `user` | `"alice"` | Username |
+| `host` | `"server"` | Host name |
+| `arch` | `"x86_64"` | Architecture |
+| `format` | `"linux"` | linux, darwin, ... |
+| `archFormat` | `"x86_64-linux"` | Full arch-format string |
+
+Example:
+
+```nix
+# systems/x86_64-linux/server/default.nix
+{ config, pkgs, lib, purr, ... }:
+{
+  networking.hostName = purr.name;  # "server"
+  nixpkgs.hostPlatform = purr.arch; # "x86_64"
+}
+```
+
+### Auto-injection
+
+By default (`autoInject = true`), Purr auto-injects basic configuration using
+`lib.mkDefault` — user modules can always override:
+
+| Context | Injected config |
+|---|---|
+| System config | `networking.hostName = <purr.name>` |
+| Home config (linux) | `home.username`, `home.homeDirectory = "/home/<user>"` |
+| Home config (darwin) | `home.username`, `home.homeDirectory = "/Users/<user>"` |
+
+Disable with `autoInject = false`.
+
 ### Example usage
 
 **mkFlake:**
@@ -335,6 +389,7 @@ purr = {
 | `templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
 | `systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `homesDir` | nullOr str | `null` | auto-detects `homes/` |
+| `autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
 
 ### flake-parts Options
 
@@ -360,6 +415,7 @@ purr = {
 | `purr.systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `purr.homesDir` | nullOr str | `null` | auto-detects `homes/` |
 | `purr.nixpkgsConfig` | attrs | `{}` | nixpkgs config (allowUnfree, etc.) |
+| `purr.autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
 
 ```nix
 inputs.purr.lib.defaultSystems  # ["x86_64-linux" "aarch64-linux" "aarch64-darwin"]
