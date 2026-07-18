@@ -1,18 +1,10 @@
 let
   wrapModule =
-    namespace: module:
-    { config, ... }@args:
+    namespace: module: args:
     let
       original = if builtins.isPath module then import module else module;
-      enhancedLib = config._module.args.lib or args.lib;
     in
-    original (
-      args
-      // {
-        inherit namespace;
-        lib = enhancedLib;
-      }
-    );
+    original (args // { inherit namespace; });
 
   deepMapAttrs =
     f: value:

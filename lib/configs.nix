@@ -73,6 +73,7 @@ let
       nixpkgsConfig ? { },
       extraModules ? { },
       autoInject ? true,
+      lib ? lib,
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
@@ -110,6 +111,10 @@ let
                 config = nixpkgsConfig;
                 overlays = [ ];
               };
+
+              systemLib = builtins.foldl' (acc: input: acc // (input.lib or { })) lib (
+                builtins.attrValues inputs
+              );
 
               hmModule =
                 if format == "darwin" then hm.darwinModules.home-manager else hm.nixosModules.home-manager;
@@ -167,6 +172,7 @@ let
                     ;
                   host = systemName;
                   pkgs = pkgsSystem;
+                  lib = systemLib;
                 };
               }
             else if format == "darwin" && hasNixDarwin then
@@ -181,6 +187,7 @@ let
                     ;
                   host = systemName;
                   pkgs = pkgsSystem;
+                  lib = systemLib;
                 };
               }
             else
@@ -197,6 +204,7 @@ let
                     ;
                   host = systemName;
                   pkgs = pkgsSystem;
+                  lib = systemLib;
                 };
               };
         }) (builtins.attrNames systems)
