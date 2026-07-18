@@ -226,7 +226,7 @@ let
     {
       discoveredHomes,
       inputs,
-      nixpkgsConfig,
+      nixpkgsConfig ? { },
       extraModules ? { },
       autoInject ? true,
     }:
