@@ -136,32 +136,26 @@ let
           modules;
 
       makeModuleSet =
-        name:
-        lib.recursiveUpdate (wrapWithLib (
-          namespacedModules.wrapModuleSet namespace (allModules.${name} or { })
-        )) (extra.${name} or { });
+        name: wrapWithLib (namespacedModules.wrapModuleSet namespace (allModules.${name} or { }));
 
       makeBundled =
         name:
         let
-          merged = makeModuleSet name;
+          authored = makeModuleSet name;
+          everything = lib.recursiveUpdate authored (extra.${name} or { });
         in
-        if bundleModules && !(merged ? "default") then
+        if bundleModules then
           let
-            toBundle =
-              if bundleExtraModules then
-                merged
-              else
-                wrapWithLib (namespacedModules.wrapModuleSet namespace (allModules.${name} or { }));
+            toBundle = if bundleExtraModules then everything else authored;
           in
-          merged
-          // {
+          authored
+          // lib.optionalAttrs (!(everything ? "default")) {
             default = {
               imports = modules.collectModules toBundle;
             };
           }
         else
-          merged;
+          authored;
 
       nixosModules = makeBundled "nixos";
       darwinModules = makeBundled "darwin";
