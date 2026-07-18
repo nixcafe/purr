@@ -138,7 +138,7 @@ in
         };
       };
 
-      "auto-injects home.username and home.homeDirectory" = {
+      "auto-injects home.username" = {
         expr =
           let
             fakeInputs = {
@@ -163,11 +163,10 @@ in
           result."alice@myhost";
         expected = {
           home.username = "alice";
-          home.homeDirectory = "/home/alice";
         };
       };
 
-      "autoInjects home.homeDirectory for darwin" = {
+      "auto-injects home.username for darwin" = {
         expr =
           let
             fakeInputs = {
@@ -192,7 +191,6 @@ in
           result."alice@mac1";
         expected = {
           home.username = "alice";
-          home.homeDirectory = "/Users/alice";
         };
       };
 

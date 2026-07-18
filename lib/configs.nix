@@ -280,9 +280,6 @@ let
                 hostParsed = parseUserHost userHost;
                 autoInjectModules = lib.optional autoInject {
                   home.username = mkDefault hostParsed.user;
-                  home.homeDirectory = mkDefault (
-                    if format == "darwin" then "/Users/${hostParsed.user}" else "/home/${hostParsed.user}"
-                  );
                 };
               in
               hm.lib.homeManagerConfiguration {
