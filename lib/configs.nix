@@ -131,6 +131,15 @@ let
                     {
                       home-manager.useGlobalPkgs = mkDefault true;
                       home-manager.useUserPackages = mkDefault true;
+                      home-manager.extraSpecialArgs = {
+                        inherit
+                          inputs
+                          namespace
+                          purr
+                          system
+                          ;
+                        host = systemName;
+                      };
                       home-manager.users = builtins.listToAttrs (
                         builtins.map (h: {
                           name = h.user;
@@ -261,13 +270,6 @@ let
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
-      homeLib = builtins.foldl' (
-        acc: input:
-        let
-          inputLib = input.lib or { };
-        in
-        if inputLib ? types then acc else acc // inputLib
-      ) lib (builtins.attrValues inputs);
     in
     if hm != null then
       builtins.listToAttrs (
@@ -297,8 +299,7 @@ let
                 modules =
                   autoInjectModules ++ extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
                 extraSpecialArgs = {
-                  inherit namespace;
-                  lib = homeLib;
+                  inherit inputs namespace;
                   purr = {
                     inherit (hostParsed) user host;
                     inherit arch archFormat format;
