@@ -33,6 +33,8 @@ let
     ++ (runGroup "collectModules" collectModules.basic)
     ++ (runGroup "buildHomeConfigs" configs.buildHomeConfigs)
     ++ (runGroup "buildSystemConfigs" configs.buildSystemConfigs)
-    ++ (runGroup "buildHomeConfigsExtra" configs.buildHomeConfigsExtra);
+    ++ (runGroup "buildHomeConfigsExtra" configs.buildHomeConfigsExtra)
+    ++ (runGroup "parseArchFormat" configs.parseArchFormat)
+    ++ (runGroup "parseUserHost" configs.parseUserHost);
 in
 failures

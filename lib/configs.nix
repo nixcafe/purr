@@ -15,20 +15,32 @@ let
     let
       parts = builtins.match "([^-]+)-(.*)" archFormat;
     in
-    {
-      arch = builtins.head parts;
-      format = builtins.elemAt parts 1;
-    };
+    if parts == null then
+      {
+        arch = null;
+        format = null;
+      }
+    else
+      {
+        arch = builtins.head parts;
+        format = builtins.elemAt parts 1;
+      };
 
   parseUserHost =
     userHost:
     let
       parts = builtins.match "([^@]+)@(.*)" userHost;
     in
-    {
-      user = builtins.head parts;
-      host = builtins.elemAt parts 1;
-    };
+    if parts == null then
+      {
+        user = null;
+        host = null;
+      }
+    else
+      {
+        user = builtins.head parts;
+        host = builtins.elemAt parts 1;
+      };
 
   formatOutputKey =
     format:
@@ -230,5 +242,7 @@ in
   inherit
     buildHomeConfigs
     buildSystemConfigs
+    parseArchFormat
+    parseUserHost
     ;
 }
