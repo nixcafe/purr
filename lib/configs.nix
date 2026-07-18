@@ -140,6 +140,7 @@ let
                           ;
                         host = systemName;
                       };
+                      home-manager.sharedModules = extraModules.home or [ ];
                       home-manager.users = builtins.listToAttrs (
                         builtins.map (h: {
                           name = h.user;
