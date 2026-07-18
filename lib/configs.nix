@@ -105,6 +105,12 @@ let
                 }) matchingHomes;
               };
 
+              pkgsSystem = import inputs.nixpkgs {
+                inherit system;
+                config = nixpkgsConfig;
+                overlays = [ ];
+              };
+
               hmModule =
                 if format == "darwin" then hm.darwinModules.home-manager else hm.nixosModules.home-manager;
               nonRootHomes = builtins.filter (h: h.user != "root") matchingHomes;
@@ -160,6 +166,7 @@ let
                     system
                     ;
                   host = systemName;
+                  pkgs = pkgsSystem;
                 };
               }
             else if format == "darwin" && hasNixDarwin then
@@ -173,6 +180,7 @@ let
                     system
                     ;
                   host = systemName;
+                  pkgs = pkgsSystem;
                 };
               }
             else
@@ -188,6 +196,7 @@ let
                     system
                     ;
                   host = systemName;
+                  pkgs = pkgsSystem;
                 };
               };
         }) (builtins.attrNames systems)
