@@ -265,6 +265,19 @@ in
         `nixpkgs.config` in the host/home module.
       '';
     };
+
+    autoInject = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Whether to auto-inject configuration from purr metadata.
+        When enabled:
+        - system configs get `networking.hostName = <name>`
+        - home configs get `home.username` and `home.homeDirectory`
+        All injected with `lib.mkDefault`, so explicit settings
+        in your modules will override.
+      '';
+    };
   };
 
   config = mkIf cfg.enable (
@@ -436,7 +449,7 @@ in
               discoveredHomes
               inputs
               ;
-            inherit (cfg) nixpkgsConfig extraModules;
+            inherit (cfg) autoInject nixpkgsConfig extraModules;
           }
         else
           { };
@@ -448,7 +461,7 @@ in
               discoveredHomes
               inputs
               ;
-            inherit (cfg) nixpkgsConfig extraModules;
+            inherit (cfg) autoInject nixpkgsConfig extraModules;
           }
         else
           { };
@@ -461,7 +474,7 @@ in
           builtins.mapAttrs (
             _: module:
             import module {
-              inherit pkgs;
+              inherit inputs pkgs;
               inherit (cfg) namespace;
               inherit (pkgs) system;
               lib = purrLib;

@@ -60,6 +60,7 @@ let
       inputs,
       nixpkgsConfig ? { },
       extraModules ? { },
+      autoInject ? true,
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
@@ -82,6 +83,16 @@ let
             let
               sysModule = discoveredSystems.${archFormat}.${systemName};
               matchingHomes = if hasHomeManager then findMatchingHomes discoveredHomes systemName else [ ];
+
+              purr = {
+                name = systemName;
+                inherit arch archFormat format;
+                homes = builtins.map (h: {
+                  inherit (h) user;
+                  host = systemName;
+                }) matchingHomes;
+              };
+
               hmModule =
                 if format == "darwin" then hm.darwinModules.home-manager else hm.nixosModules.home-manager;
               nonRootHomes = builtins.filter (h: h.user != "root") matchingHomes;
@@ -118,17 +129,25 @@ let
                 nixpkgs.config = mkDefault nixpkgsConfig;
               };
               extraSystemModules = extraModules.${if format == "darwin" then "darwin" else "nixos"} or [ ];
-              baseModules = systemModules ++ extraSystemModules ++ [ sysModule ] ++ homeModules;
+
+              autoInjectModules = lib.optional autoInject {
+                networking.hostName = mkDefault systemName;
+              };
+
+              baseModules =
+                autoInjectModules ++ systemModules ++ extraSystemModules ++ [ sysModule ] ++ homeModules;
             in
             if format == "linux" then
               inputs.nixpkgs.lib.nixosSystem {
                 inherit system;
                 modules = baseModules;
+                specialArgs = { inherit purr; };
               }
             else if format == "darwin" && hasNixDarwin then
               nd.lib.darwinSystem {
                 inherit system;
                 modules = baseModules;
+                specialArgs = { inherit purr; };
               }
             else
               inputs.nixpkgs.lib.nixosSystem {
@@ -136,6 +155,7 @@ let
                 modules = baseModules ++ [
                   { image.variant = format; }
                 ];
+                specialArgs = { inherit purr; };
               };
         }) (builtins.attrNames systems)
       ) (builtins.attrNames discoveredSystems);
@@ -158,6 +178,7 @@ let
       inputs,
       nixpkgsConfig,
       extraModules ? { },
+      autoInject ? true,
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
@@ -168,7 +189,8 @@ let
           archFormat:
           let
             parsed = parseArchFormat archFormat;
-            system = if parsed.format == "darwin" then "${parsed.arch}-darwin" else "${parsed.arch}-linux";
+            inherit (parsed) arch format;
+            system = if format == "darwin" then "${arch}-darwin" else "${arch}-linux";
             pkgs = import inputs.nixpkgs {
               inherit system;
               config = nixpkgsConfig;
@@ -179,14 +201,22 @@ let
             name = userHost;
             value =
               let
-                parsed = parseUserHost userHost;
+                hostParsed = parseUserHost userHost;
+                autoInjectModules = lib.optional autoInject {
+                  home.username = mkDefault hostParsed.user;
+                  home.homeDirectory = mkDefault (
+                    if format == "darwin" then "/Users/${hostParsed.user}" else "/home/${hostParsed.user}"
+                  );
+                };
               in
               hm.lib.homeManagerConfiguration {
                 inherit pkgs;
-                modules = extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
+                modules =
+                  autoInjectModules ++ extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
                 extraSpecialArgs = {
                   purr = {
-                    inherit (parsed) user host;
+                    inherit (hostParsed) user host;
+                    inherit arch archFormat format;
                   };
                 };
               };
