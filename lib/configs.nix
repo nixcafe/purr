@@ -153,13 +153,23 @@ let
               inputs.nixpkgs.lib.nixosSystem {
                 inherit system;
                 modules = baseModules;
-                specialArgs = { inherit purr; };
+                specialArgs = {
+                  inherit
+                    inputs
+                    purr
+                    ;
+                };
               }
             else if format == "darwin" && hasNixDarwin then
               nd.lib.darwinSystem {
                 inherit system;
                 modules = baseModules;
-                specialArgs = { inherit purr; };
+                specialArgs = {
+                  inherit
+                    inputs
+                    purr
+                    ;
+                };
               }
             else
               inputs.nixpkgs.lib.nixosSystem {
@@ -167,7 +177,12 @@ let
                 modules = baseModules ++ [
                   { image.variant = format; }
                 ];
-                specialArgs = { inherit purr; };
+                specialArgs = {
+                  inherit
+                    inputs
+                    purr
+                    ;
+                };
               };
         }) (builtins.attrNames systems)
       ) (builtins.attrNames discoveredSystems);
