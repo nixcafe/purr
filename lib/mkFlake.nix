@@ -122,7 +122,13 @@ let
             namespaced =
               if namespace != null then lib // { ${namespace} = importedPurrLib; } else lib // importedPurrLib;
           in
-          namespaced // (inputs.nixpkgs.lib or { })
+          builtins.foldl' (
+            acc: input:
+            let
+              inputLib = input.lib or { };
+            in
+            if inputLib ? types then acc else acc // inputLib
+          ) namespaced (builtins.attrValues inputs)
         else
           lib;
 

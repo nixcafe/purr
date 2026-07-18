@@ -113,7 +113,13 @@ let
                 overlays = [ ];
               };
 
-              systemLib = lib // (inputs.nixpkgs.lib or { });
+              systemLib = builtins.foldl' (
+                acc: input:
+                let
+                  inputLib = input.lib or { };
+                in
+                if inputLib ? types then acc else acc // inputLib
+              ) lib (builtins.attrValues inputs);
 
               hmModule =
                 if format == "darwin" then hm.darwinModules.home-manager else hm.nixosModules.home-manager;
@@ -255,7 +261,13 @@ let
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
-      homeLib = lib // (inputs.nixpkgs.lib or { });
+      homeLib = builtins.foldl' (
+        acc: input:
+        let
+          inputLib = input.lib or { };
+        in
+        if inputLib ? types then acc else acc // inputLib
+      ) lib (builtins.attrValues inputs);
     in
     if hm != null then
       builtins.listToAttrs (
