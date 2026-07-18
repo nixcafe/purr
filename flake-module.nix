@@ -438,7 +438,7 @@ in
               discoveredHomes
               inputs
               ;
-            inherit (cfg) nixpkgsConfig;
+            inherit (cfg) nixpkgsConfig extraModules;
           }
         else
           { };
@@ -450,7 +450,7 @@ in
               discoveredHomes
               inputs
               ;
-            inherit (cfg) nixpkgsConfig;
+            inherit (cfg) nixpkgsConfig extraModules;
           }
         else
           { };

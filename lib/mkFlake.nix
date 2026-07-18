@@ -296,6 +296,7 @@ let
               discoveredHomes
               inputs
               nixpkgsConfig
+              extraModules
               ;
           }
         else
@@ -308,6 +309,7 @@ let
               discoveredHomes
               inputs
               nixpkgsConfig
+              extraModules
               ;
           }
         else

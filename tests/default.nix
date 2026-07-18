@@ -32,6 +32,7 @@ let
     ++ (runGroup "wrapModuleSet" namespacedModules.wrapModuleSet)
     ++ (runGroup "collectModules" collectModules.basic)
     ++ (runGroup "buildHomeConfigs" configs.buildHomeConfigs)
-    ++ (runGroup "buildSystemConfigs" configs.buildSystemConfigs);
+    ++ (runGroup "buildSystemConfigs" configs.buildSystemConfigs)
+    ++ (runGroup "buildHomeConfigsExtra" configs.buildHomeConfigsExtra);
 in
 failures

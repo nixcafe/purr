@@ -417,6 +417,117 @@ in
           firstModule;
         expected = /tmp;
       };
+
+      "injects extraModules.nixos into linux system configs" = {
+        expr =
+          let
+            extraMod = {
+              services.extra = true;
+            };
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem = { modules, system }: {
+                inherit modules system;
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+              extraModules.nixos = [ extraMod ];
+            };
+            cfg = result.nixosConfigurations.myhost;
+          in
+          builtins.elem extraMod cfg.modules;
+        expected = true;
+      };
+
+      "injects extraModules.darwin into darwin system configs" = {
+        expr =
+          let
+            extraMod = {
+              services.extra = true;
+            };
+            fakeInputs = {
+              nixpkgs.lib = { };
+              darwin.lib.darwinSystem = { modules, system }: {
+                inherit modules system;
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "aarch64-darwin"."mac1" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+              extraModules.darwin = [ extraMod ];
+            };
+            cfg = result.darwinConfigurations.mac1;
+          in
+          builtins.elem extraMod cfg.modules;
+        expected = true;
+      };
+
+      "does not inject darwin extras into linux configs" = {
+        expr =
+          let
+            extraMod = {
+              services.extra = true;
+            };
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem = { modules, system }: {
+                inherit modules system;
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+              extraModules.darwin = [ extraMod ];
+            };
+            cfg = result.nixosConfigurations.myhost;
+          in
+          builtins.elem extraMod cfg.modules;
+        expected = false;
+      };
+    };
+  };
+
+  buildHomeConfigsExtra = {
+    tests = {
+      "injects extraModules.home into home configs" = {
+        expr =
+          let
+            extraMod = {
+              home.extra = true;
+            };
+            fakeInputs = {
+              nixpkgs = { };
+              home-manager = {
+                lib.homeManagerConfiguration =
+                  {
+                    modules ? [ ],
+                    ...
+                  }:
+                  modules;
+              };
+            };
+            homes = {
+              "x86_64-linux"."alice@myhost" = /tmp;
+            };
+            result = buildHomeConfigs {
+              discoveredHomes = homes;
+              inputs = fakeInputs;
+              nixpkgsConfig = { };
+              extraModules.home = [ extraMod ];
+            };
+          in
+          builtins.elem extraMod (result."alice@myhost" or [ ]);
+        expected = true;
+      };
     };
   };
 }
