@@ -113,9 +113,7 @@ let
                 overlays = [ ];
               };
 
-              systemLib = builtins.foldl' (acc: input: acc // (input.lib or { })) lib (
-                builtins.attrValues inputs
-              );
+              systemLib = lib // (inputs.nixpkgs.lib or { });
 
               hmModule =
                 if format == "darwin" then hm.darwinModules.home-manager else hm.nixosModules.home-manager;
@@ -257,7 +255,7 @@ let
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
-      homeLib = builtins.foldl' (acc: input: acc // (input.lib or { })) lib (builtins.attrValues inputs);
+      homeLib = lib // (inputs.nixpkgs.lib or { });
     in
     if hm != null then
       builtins.listToAttrs (
