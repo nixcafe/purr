@@ -290,10 +290,11 @@ let
               autoInject
               discoveredSystems
               discoveredHomes
+              extraModules
               inputs
               nixpkgsConfig
-              extraModules
               ;
+            lib = purrLib;
           }
         else
           { };

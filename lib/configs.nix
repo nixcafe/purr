@@ -73,6 +73,7 @@ let
       nixpkgsConfig ? { },
       extraModules ? { },
       autoInject ? true,
+      lib ? lib,
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
@@ -162,6 +163,7 @@ let
                 specialArgs = {
                   inherit
                     inputs
+                    lib
                     purr
                     system
                     ;
@@ -176,6 +178,7 @@ let
                 specialArgs = {
                   inherit
                     inputs
+                    lib
                     purr
                     system
                     ;
@@ -192,6 +195,7 @@ let
                 specialArgs = {
                   inherit
                     inputs
+                    lib
                     purr
                     system
                     ;
