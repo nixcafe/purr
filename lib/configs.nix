@@ -158,10 +158,7 @@ let
               };
 
               readOnlyPkgsModule =
-                if pkgsSystem != null then
-                  (inputs.nixpkgs.nixosModules or inputs.nixpkgs.nixosModules or { }).readOnlyPkgs or null
-                else
-                  null;
+                if pkgsSystem != null then (inputs.nixpkgs.nixosModules or { }).readOnlyPkgs or null else null;
 
               baseModules =
                 lib.optional (readOnlyPkgsModule != null) readOnlyPkgsModule
