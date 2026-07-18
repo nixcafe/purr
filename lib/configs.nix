@@ -151,13 +151,14 @@ let
                   [ ];
               systemModules = [
                 {
-                  # readOnlyPkgs disables the standard nixpkgs module which
-                  # defines nixpkgs.system, but eval-config.nix still sets it.
                   options.nixpkgs.system = lib.mkOption {
                     type = lib.types.str;
                     internal = true;
                     visible = false;
                   };
+                }
+                {
+                  nixpkgs.pkgs = lib.mkDefault pkgsSystem;
                 }
               ]
               ++ lib.optional (nixpkgsConfig != { }) {
@@ -193,7 +194,6 @@ let
                     ;
                   host = systemName;
                   lib = systemLib;
-                  pkgs = pkgsSystem;
                 };
               }
             else if format == "darwin" && hasNixDarwin then
@@ -209,7 +209,6 @@ let
                     ;
                   host = systemName;
                   lib = systemLib;
-                  pkgs = pkgsSystem;
                 };
               }
             else
@@ -227,7 +226,6 @@ let
                     ;
                   host = systemName;
                   lib = systemLib;
-                  pkgs = pkgsSystem;
                 };
               };
         }) (builtins.attrNames systems)
