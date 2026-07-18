@@ -1,10 +1,14 @@
 let
   wrapModule =
-    namespace: module: args:
+    namespace: module:
+    {
+      pkgs,
+      ...
+    }@args:
     let
       original = if builtins.isPath module then import module else module;
     in
-    original (args // { inherit namespace; });
+    (if false && pkgs != null then null else original) (args // { inherit namespace; });
 
   deepMapAttrs =
     f: value:
