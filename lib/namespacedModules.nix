@@ -3,9 +3,8 @@ let
     namespace: module: args:
     let
       original = if builtins.isPath module then import module else module;
-      result = original (args // { inherit namespace; });
     in
-    result;
+    original (args // { inherit namespace; });
 
   deepMapAttrs =
     f: value:
