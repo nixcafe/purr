@@ -6,6 +6,8 @@ let
   inherit (import ../lib/configs.nix { inherit lib; })
     buildHomeConfigs
     buildSystemConfigs
+    parseArchFormat
+    parseUserHost
     ;
 in
 {
@@ -807,6 +809,65 @@ in
           in
           builtins.elem extraMod (result."alice@myhost" or [ ]);
         expected = true;
+      };
+    };
+  };
+
+  parseArchFormat = {
+    tests = {
+      "parses x86_64-linux" = {
+        expr = parseArchFormat "x86_64-linux";
+        expected = {
+          arch = "x86_64";
+          format = "linux";
+        };
+      };
+      "parses aarch64-darwin" = {
+        expr = parseArchFormat "aarch64-darwin";
+        expected = {
+          arch = "aarch64";
+          format = "darwin";
+        };
+      };
+      "parses x86_64-iso" = {
+        expr = parseArchFormat "x86_64-iso";
+        expected = {
+          arch = "x86_64";
+          format = "iso";
+        };
+      };
+      "malformed name returns nulls" = {
+        expr = parseArchFormat "x86_64";
+        expected = {
+          arch = null;
+          format = null;
+        };
+      };
+    };
+  };
+
+  parseUserHost = {
+    tests = {
+      "parses alice@server" = {
+        expr = parseUserHost "alice@server";
+        expected = {
+          user = "alice";
+          host = "server";
+        };
+      };
+      "parses root@host" = {
+        expr = parseUserHost "root@host";
+        expected = {
+          user = "root";
+          host = "host";
+        };
+      };
+      "malformed name returns nulls" = {
+        expr = parseUserHost "alice";
+        expected = {
+          user = null;
+          host = null;
+        };
       };
     };
   };
