@@ -450,7 +450,6 @@ in
               inputs
               ;
             inherit (cfg) autoInject nixpkgsConfig extraModules;
-            lib = purrLib;
           }
         else
           { };
