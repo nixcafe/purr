@@ -157,7 +157,9 @@ let
                   inherit
                     inputs
                     purr
+                    system
                     ;
+                  host = systemName;
                 };
               }
             else if format == "darwin" && hasNixDarwin then
@@ -168,7 +170,9 @@ let
                   inherit
                     inputs
                     purr
+                    system
                     ;
+                  host = systemName;
                 };
               }
             else
@@ -181,7 +185,9 @@ let
                   inherit
                     inputs
                     purr
+                    system
                     ;
+                  host = systemName;
                 };
               };
         }) (builtins.attrNames systems)
