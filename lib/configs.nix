@@ -70,6 +70,7 @@ let
       discoveredSystems,
       discoveredHomes,
       inputs,
+      namespace ? null,
       nixpkgsConfig ? { },
       extraModules ? { },
       autoInject ? true,
@@ -148,7 +149,18 @@ let
                   }
                 else
                   [ ];
-              systemModules = lib.optional (nixpkgsConfig != { }) {
+              systemModules = [
+                {
+                  # readOnlyPkgs disables the standard nixpkgs module which
+                  # defines nixpkgs.system, but eval-config.nix still sets it.
+                  options.nixpkgs.system = lib.mkOption {
+                    type = lib.types.str;
+                    internal = true;
+                    visible = false;
+                  };
+                }
+              ]
+              ++ lib.optional (nixpkgsConfig != { }) {
                 nixpkgs.config = mkDefault nixpkgsConfig;
               };
               extraSystemModules = extraModules.${if format == "darwin" then "darwin" else "nixos"} or [ ];
@@ -175,6 +187,7 @@ let
                 specialArgs = {
                   inherit
                     inputs
+                    namespace
                     purr
                     system
                     ;
@@ -190,6 +203,7 @@ let
                 specialArgs = {
                   inherit
                     inputs
+                    namespace
                     purr
                     system
                     ;
@@ -207,6 +221,7 @@ let
                 specialArgs = {
                   inherit
                     inputs
+                    namespace
                     purr
                     system
                     ;
@@ -234,12 +249,15 @@ let
     {
       discoveredHomes,
       inputs,
+      namespace ? null,
       nixpkgsConfig ? { },
       extraModules ? { },
       autoInject ? true,
+      lib ? lib,
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
+      homeLib = builtins.foldl' (acc: input: acc // (input.lib or { })) lib (builtins.attrValues inputs);
     in
     if hm != null then
       builtins.listToAttrs (
@@ -272,6 +290,8 @@ let
                 modules =
                   autoInjectModules ++ extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
                 extraSpecialArgs = {
+                  inherit namespace;
+                  lib = homeLib;
                   purr = {
                     inherit (hostParsed) user host;
                     inherit arch archFormat format;
