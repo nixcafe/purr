@@ -106,12 +106,6 @@ let
                 }) matchingHomes;
               };
 
-              pkgsSystem = import inputs.nixpkgs {
-                inherit system;
-                config = nixpkgsConfig;
-                overlays = [ ];
-              };
-
               systemLib = builtins.foldl' (acc: input: acc // (input.lib or { })) lib (
                 builtins.attrValues inputs
               );
@@ -171,7 +165,6 @@ let
                     system
                     ;
                   host = systemName;
-                  pkgs = pkgsSystem;
                   lib = systemLib;
                 };
               }
@@ -186,7 +179,6 @@ let
                     system
                     ;
                   host = systemName;
-                  pkgs = pkgsSystem;
                   lib = systemLib;
                 };
               }
@@ -203,7 +195,6 @@ let
                     system
                     ;
                   host = systemName;
-                  pkgs = pkgsSystem;
                   lib = systemLib;
                 };
               };

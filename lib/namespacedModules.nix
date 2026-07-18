@@ -3,8 +3,15 @@ let
     namespace: module: args:
     let
       original = if builtins.isPath module then import module else module;
+      resolvedPkgs = args.config._module.args.pkgs;
     in
-    original (args // { inherit namespace; });
+    original (
+      args
+      // {
+        inherit namespace;
+        pkgs = resolvedPkgs;
+      }
+    );
 
   deepMapAttrs =
     f: value:
