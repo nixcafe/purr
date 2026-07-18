@@ -139,6 +139,7 @@ let
                           system
                           ;
                         host = systemName;
+                        pkgs = pkgsSystem;
                       };
                       home-manager.users = builtins.listToAttrs (
                         builtins.map (h: {
