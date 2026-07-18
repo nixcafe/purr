@@ -350,28 +350,26 @@ in
 
       extra = builtins.mapAttrs (_: listExtraModules) cfg.extraModules;
 
-      makeModuleSet =
-        name:
-        lib.recursiveUpdate (wrapWithLib (wrap (discoveredModules.${name} or { }))) (extra.${name} or { });
+      makeModuleSet = name: wrapWithLib (wrap (discoveredModules.${name} or { }));
 
       makeBundled =
         name:
         let
-          merged = makeModuleSet name;
+          authored = makeModuleSet name;
+          everything = lib.recursiveUpdate authored (extra.${name} or { });
         in
-        if cfg.bundleModules && !(merged ? "default") then
+        if cfg.bundleModules then
           let
-            toBundle =
-              if cfg.bundleExtraModules then merged else wrapWithLib (wrap (discoveredModules.${name} or { }));
+            toBundle = if cfg.bundleExtraModules then everything else authored;
           in
-          merged
-          // {
+          authored
+          // lib.optionalAttrs (!(everything ? "default")) {
             default = {
               imports = modulesLib.collectModules toBundle;
             };
           }
         else
-          merged;
+          authored;
 
       resolve =
         dir: candidates:
