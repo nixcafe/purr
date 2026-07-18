@@ -296,7 +296,7 @@ in
                 }
               else
                 { };
-            subModules = modulesLib.findModules cfg.src libDir';
+            subModules = modulesLib.findModulesLib cfg.src libDir';
             importedSubModules = namespacedModules.deepMapAttrs (
               path:
               import path {
@@ -413,7 +413,7 @@ in
       discoveredOverlays =
         if overlaysDir' != null then
           let
-            overlayModules = modulesLib.findModules cfg.src overlaysDir';
+            overlayModules = modulesLib.findModulesLib cfg.src overlaysDir';
           in
           builtins.mapAttrs (_: import) overlayModules
         else
@@ -422,7 +422,7 @@ in
       discoveredTemplates =
         if templatesDir' != null then
           let
-            scan = if cfg.templatesRecursive then modulesLib.findModules else modulesLib.findModulesFlat;
+            scan = if cfg.templatesRecursive then modulesLib.findModulesLib else modulesLib.findModulesFlat;
             modules = scan cfg.src templatesDir';
           in
           builtins.mapAttrs (
@@ -470,7 +470,7 @@ in
         pkgs: dir:
         if dir != null then
           let
-            mods = modulesLib.findModules cfg.src dir;
+            mods = modulesLib.findModulesLib cfg.src dir;
           in
           builtins.mapAttrs (
             _: module:

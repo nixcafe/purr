@@ -88,7 +88,7 @@ let
                 }
               else
                 { };
-            subModules = modules.findModules src libDir';
+            subModules = modules.findModulesLib src libDir';
             importedSubModules = namespacedModules.deepMapAttrs (
               path:
               import path {
@@ -118,7 +118,11 @@ let
 
       purrLib =
         if importedPurrLib != null then
-          if namespace != null then lib // { ${namespace} = importedPurrLib; } else lib // importedPurrLib
+          let
+            namespaced =
+              if namespace != null then lib // { ${namespace} = importedPurrLib; } else lib // importedPurrLib;
+          in
+          builtins.foldl' (acc: input: acc // (input.lib or { })) namespaced (builtins.attrValues inputs)
         else
           lib;
 
@@ -145,22 +149,25 @@ let
           authored = makeModuleSet name;
           everything = lib.recursiveUpdate authored (extra.${name} or { });
         in
-        if bundleModules then
-          let
-            toBundle = if bundleExtraModules then everything else authored;
-          in
-          authored
-          // lib.optionalAttrs (!(everything ? "default")) {
-            default = {
-              imports = modules.collectModules toBundle;
-            };
-          }
-        else
-          authored;
+        authored
+        // lib.optionalAttrs (!(everything ? "default")) {
+          default = {
+            imports = modules.collectModules (
+              if bundleModules then if bundleExtraModules then everything else authored else authored
+            );
+          };
+        };
 
       nixosModules = makeBundled "nixos";
       darwinModules = makeBundled "darwin";
       homeModules = makeBundled "home";
+
+      extraModulesWithLocal = {
+        nixos = extraModules.nixos or [ ] ++ lib.optional (nixosModules ? "default") nixosModules.default;
+        darwin =
+          extraModules.darwin or [ ] ++ lib.optional (darwinModules ? "default") darwinModules.default;
+        home = extraModules.home or [ ] ++ lib.optional (homeModules ? "default") homeModules.default;
+      };
 
       resolve =
         dir: candidates:
@@ -225,7 +232,7 @@ let
         system: dir:
         if dir != null then
           let
-            mods = modules.findModules src dir;
+            mods = modules.findModulesLib src dir;
           in
           builtins.mapAttrs (
             _: module:
@@ -249,7 +256,7 @@ let
       overlays =
         if overlaysDir' != null then
           let
-            overlayModules = modules.findModules src overlaysDir';
+            overlayModules = modules.findModulesLib src overlaysDir';
           in
           builtins.mapAttrs (_: import) overlayModules
         else
@@ -260,7 +267,7 @@ let
           let
             templateModules =
               if templatesRecursive then
-                modules.findModules src templatesDir'
+                modules.findModulesLib src templatesDir'
               else
                 modules.findModulesFlat src templatesDir';
           in
@@ -290,10 +297,11 @@ let
               autoInject
               discoveredSystems
               discoveredHomes
-              extraModules
               inputs
+              namespace
               nixpkgsConfig
               ;
+            extraModules = extraModulesWithLocal;
             lib = purrLib;
           }
         else
@@ -306,9 +314,11 @@ let
               autoInject
               discoveredHomes
               inputs
+              namespace
               nixpkgsConfig
-              extraModules
               ;
+            extraModules = extraModulesWithLocal;
+            lib = purrLib;
           }
         else
           { };

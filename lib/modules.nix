@@ -5,7 +5,6 @@ let
     filterAttrs
     hasSuffix
     head
-    recursiveUpdate
     removePrefix
     removeSuffix
     splitString
@@ -16,7 +15,77 @@ let
     getDefaultNixFiles
     ;
 
+  readDirModules =
+    dir:
+    let
+      entries = builtins.readDir dir;
+      entryNames = builtins.attrNames entries;
+      hasDefault = builtins.elem "default.nix" entryNames;
+
+      subDirs = builtins.filter (n: builtins.elem entries.${n} [ "directory" ]) entryNames;
+      subResults = builtins.listToAttrs (
+        builtins.map (d: {
+          name = d;
+          value = readDirModules (dir + "/${d}");
+        }) subDirs
+      );
+    in
+    if hasDefault then
+      subResults
+      // {
+        _module = dir + "/default.nix";
+      }
+    else
+      subResults;
+
+  mergeModuleTree =
+    lhs: rhs:
+    lhs
+    // builtins.mapAttrs (
+      k: vRhs:
+      if k == "_module" && lhs ? "_module" then
+        let
+          extractPaths = v: if builtins.isPath v then [ v ] else v.imports or [ v ];
+          paths = extractPaths lhs._module ++ extractPaths vRhs;
+        in
+        {
+          imports = paths;
+        }
+      else if !(lhs ? ${k}) then
+        vRhs
+      else
+        let
+          vLhs = lhs.${k};
+        in
+        if builtins.isAttrs vLhs && builtins.isAttrs vRhs then
+          mergeModuleTree vLhs vRhs
+        else if !builtins.isAttrs vLhs && builtins.isAttrs vRhs then
+          vRhs
+          // {
+            _module = {
+              imports = [ vLhs ];
+            };
+          }
+        else if builtins.isAttrs vLhs && !builtins.isAttrs vRhs then
+          vLhs
+          // {
+            _module = {
+              imports = [ vRhs ];
+            };
+          }
+        else
+          vRhs
+    ) rhs;
+
   findModules =
+    parentDir: type:
+    let
+      dir = parentDir + "/${type}";
+      dirExists = builtins.pathExists dir;
+    in
+    if dirExists then readDirModules dir else { };
+
+  findModulesLib =
     parentDir: type:
     let
       dir = parentDir + "/${type}";
@@ -25,16 +94,15 @@ let
     if dirExists then
       let
         files = getDefaultNixFiles dir;
-        fileList = builtins.map (file: {
-          pathParts = splitString "/" (
-            removePrefix (toString dir + "/") (removeSuffix "/default.nix" (toString file.path))
-          );
-          value = file.path;
-        }) files;
         setNested =
           parts: val: if parts == [ ] then val else { ${head parts} = setNested (tail parts) val; };
+        entryFromFile =
+          file:
+          setNested (splitString "/" (
+            removePrefix (toString dir + "/") (removeSuffix "/default.nix" (toString file.path))
+          )) file.path;
       in
-      builtins.foldl' (acc: item: recursiveUpdate acc (setNested item.pathParts item.value)) { } fileList
+      builtins.foldl' (acc: item: acc // entryFromFile item) { } files
     else
       { };
 
@@ -62,7 +130,7 @@ let
   discoverModules =
     modulesDir: dirMap:
     let
-      collect = types: builtins.foldl' (acc: t: recursiveUpdate acc (findModules modulesDir t)) { } types;
+      collect = types: builtins.foldl' (acc: t: mergeModuleTree acc (findModules modulesDir t)) { } types;
     in
     builtins.mapAttrs (_: collect) dirMap;
 
@@ -163,6 +231,7 @@ in
     discoverSystems
     findModules
     findModulesFlat
+    findModulesLib
     loadModules
     ;
 }
