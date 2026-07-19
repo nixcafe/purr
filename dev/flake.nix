@@ -23,7 +23,10 @@
           pre-commit-check = inputs.pre-commit-hooks.lib.${system}.run {
             src = root;
             hooks = {
-              deadnix.enable = true;
+              deadnix = {
+                enable = true;
+                entry = "${pkgs.deadnix}/bin/deadnix -L";
+              };
               nixfmt.enable = true;
               statix.enable = true;
             };
