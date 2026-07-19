@@ -116,26 +116,23 @@ let
         else
           null;
 
-      makeLibExtension =
-        if namespace != null && importedPurrLib != null then
-          { _module.args.${namespace} = importedPurrLib; }
+      purrLib =
+        if importedPurrLib != null then
+          let
+            namespaced =
+              if namespace != null then lib // { ${namespace} = importedPurrLib; } else lib // importedPurrLib;
+          in
+          builtins.foldl' (
+            acc: input:
+            let
+              inputLib = input.lib or { };
+            in
+            if inputLib ? types then acc else acc // inputLib
+          ) namespaced (builtins.attrValues inputs)
         else
-          null;
+          lib;
 
-      wrapWithLib =
-        modules:
-        if makeLibExtension != null then
-          namespacedModules.deepMapAttrs (module: {
-            imports = [
-              makeLibExtension
-              module
-            ];
-          }) modules
-        else
-          modules;
-
-      makeModuleSet =
-        name: wrapWithLib (namespacedModules.wrapModuleSet namespace (allModules.${name} or { }));
+      makeModuleSet = name: namespacedModules.wrapModuleSet namespace (allModules.${name} or { });
 
       makeBundled =
         name:
@@ -202,11 +199,11 @@ let
         system:
         outputsBuilder {
           inherit
-            lib
             system
             inputs
             namespace
             ;
+          lib = purrLib;
           pkgs = pkgs.${system};
         }
       );
@@ -232,11 +229,11 @@ let
             _: module:
             import module {
               inherit
-                lib
                 inputs
                 system
                 namespace
                 ;
+              lib = purrLib;
               pkgs = pkgs.${system};
             }
           ) mods
@@ -268,7 +265,8 @@ let
           builtins.mapAttrs (
             _name: module:
             import module {
-              inherit lib inputs namespace;
+              inherit inputs namespace;
+              lib = purrLib;
             }
           ) templateModules
         else
@@ -293,9 +291,9 @@ let
               inputs
               namespace
               nixpkgsConfig
-              lib
               ;
             extraModules = extraModulesWithLocal;
+            lib = purrLib;
           }
         else
           { };
@@ -309,9 +307,9 @@ let
               inputs
               namespace
               nixpkgsConfig
-              lib
               ;
             extraModules = extraModulesWithLocal;
+            lib = purrLib;
           }
         else
           { };

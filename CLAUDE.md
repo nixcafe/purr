@@ -30,23 +30,23 @@
 
 ## Architecture
 
-### Namespace Isolation
+### Namespace Lib Merging
 
-Each flake using `mkFlake` injects its namespace lib via a unique `_module.args` key
-(`_module.args.${namespace}`). A shared bridge module (`nsBridge`) merges all
-non-built-in `_module.args` keys into `lib` at module evaluation time, so modules
-can access `lib.${namespace}.xxx` without conflicts between flake instances.
+`purrLib` is built at flake evaluation time by merging the flake's own namespace lib
+with libs from other inputs. Inputs whose `lib` contains `types` (full nixpkgs-style
+libraries like nixpkgs, nixpkgs-stable, home-manager) are **skipped** to avoid
+overwriting the active `lib.types`.
 
+The merged `purrLib` is passed via `specialArgs.lib` to `nixosSystem` and
+`home-manager.extraSpecialArgs.lib`, providing `lib.${namespace}.xxx` to all modules.
+
+```nix
+purrLib = lib                   # standard nixpkgs lib
+  // { ${namespace} = ownLib }  # flake's own namespace lib
+  // merged-input-libs          # cattery, purr, etc. (no types)
 ```
-_module.args.cattery   → nsBridge → lib.cattery
-_module.args.lovelycat → nsBridge → lib.lovelycat
-```
 
-- `makeLibExtension` in `lib/mkFlake.nix` sets `_module.args.${namespace}` per flake.
-- `nsBridge` in `lib/configs.nix` reads all `_module.args` keys (except `lib`) and
-  merges them into `lib` via `_module.args.lib`.
-- `lib` from `nixpkgs` is the standard module system `lib`; no custom `lib` override
-  is passed via `specialArgs`.
+Modules use `lib.${namespace}.xxx` as before. No `_module.args.lib` overrides.
 
 ## Testing
 
