@@ -28,6 +28,26 @@
   - Prefer `inherit (x) y;` over `y = x.y;`.
   - Multi-line `&&` / `||` chains — one condition per line.
 
+## Architecture
+
+### Namespace Isolation
+
+Each flake using `mkFlake` injects its namespace lib via a unique `_module.args` key
+(`_module.args.${namespace}`). A shared bridge module (`nsBridge`) merges all
+non-built-in `_module.args` keys into `lib` at module evaluation time, so modules
+can access `lib.${namespace}.xxx` without conflicts between flake instances.
+
+```
+_module.args.cattery   → nsBridge → lib.cattery
+_module.args.lovelycat → nsBridge → lib.lovelycat
+```
+
+- `makeLibExtension` in `lib/mkFlake.nix` sets `_module.args.${namespace}` per flake.
+- `nsBridge` in `lib/configs.nix` reads all `_module.args` keys (except `lib`) and
+  merges them into `lib` via `_module.args.lib`.
+- `lib` from `nixpkgs` is the standard module system `lib`; no custom `lib` override
+  is passed via `specialArgs`.
+
 ## Testing
 
 **When adding a feature or fix, you MUST write tests.** Run `nix flake check` to verify.
