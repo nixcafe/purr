@@ -75,6 +75,7 @@ let
       extraModules ? { },
       autoInject ? true,
       lib ? lib,
+      extraOverlays ? { },
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
@@ -110,7 +111,7 @@ let
               pkgsSystem = import inputs.nixpkgs {
                 inherit system;
                 config = nixpkgsConfig;
-                overlays = [ ];
+                overlays = builtins.attrValues extraOverlays;
               };
 
               hmModule =
@@ -126,11 +127,11 @@ let
                       home-manager.extraSpecialArgs = {
                         inherit
                           inputs
-                          lib
                           namespace
                           purr
                           system
                           ;
+                        purrLib = lib;
                         host = systemName;
                         pkgs = pkgsSystem;
                       };
@@ -158,34 +159,24 @@ let
                   [ ];
               systemModules = [
                 {
-                  # readOnlyPkgs disables the standard nixpkgs module which
-                  # defines nixpkgs.system, but eval-config.nix still sets it.
                   options.nixpkgs.system = lib.mkOption {
                     type = lib.types.str;
                     internal = true;
                     visible = false;
                   };
                 }
-              ]
-              ++ lib.optional (nixpkgsConfig != { }) {
-                nixpkgs.config = mkDefault nixpkgsConfig;
-              };
+                {
+                  nixpkgs.pkgs = lib.mkForce pkgsSystem;
+                }
+              ];
               extraSystemModules = extraModules.${if format == "darwin" then "darwin" else "nixos"} or [ ];
 
               autoInjectModules = lib.optional autoInject {
                 networking.hostName = mkDefault systemName;
               };
 
-              readOnlyPkgsModule =
-                if pkgsSystem != null then (inputs.nixpkgs.nixosModules or { }).readOnlyPkgs or null else null;
-
               baseModules =
-                lib.optional (readOnlyPkgsModule != null) readOnlyPkgsModule
-                ++ autoInjectModules
-                ++ systemModules
-                ++ extraSystemModules
-                ++ [ sysModule ]
-                ++ homeModules;
+                autoInjectModules ++ systemModules ++ extraSystemModules ++ [ sysModule ] ++ homeModules;
             in
             if format == "linux" then
               inputs.nixpkgs.lib.nixosSystem {
@@ -293,7 +284,13 @@ let
                 modules =
                   autoInjectModules ++ extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
                 extraSpecialArgs = {
-                  inherit inputs namespace;
+                  inherit
+                    inputs
+                    namespace
+                    system
+                    ;
+                  inherit (hostParsed) host user;
+                  purrLib = lib;
                   purr = {
                     inherit (hostParsed) user host;
                     inherit arch archFormat format;

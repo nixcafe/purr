@@ -1,10 +1,37 @@
 let
   wrapPath =
-    namespace: path: args:
+    namespace: path:
+    {
+      config,
+      lib,
+      options,
+      pkgs,
+      inputs,
+      system,
+      ...
+    }@args:
     let
       original = if builtins.isPath path then import path else path;
+      purrLib = args.purrLib or null;
+      libWithNs =
+        if namespace != null && purrLib != null && purrLib ? ${namespace} then
+          lib // { ${namespace} = purrLib.${namespace}; }
+        else
+          lib;
+      result =
+        if builtins.isFunction original then
+          original (
+            args
+            // {
+              inherit namespace;
+              lib = libWithNs;
+            }
+          )
+        else
+          original;
+      _file = if builtins.isPath path then toString path else null;
     in
-    original (args // { inherit namespace; });
+    if builtins.isAttrs result && _file != null then result // { inherit _file; } else result;
 
   wrapModule =
     namespace: module:
