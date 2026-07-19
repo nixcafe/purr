@@ -158,15 +158,13 @@ let
                 else
                   [ ];
               systemModules = [
+                inputs.nixpkgs.nixosModules.readOnlyPkgs
                 {
                   options.nixpkgs.system = lib.mkOption {
                     type = lib.types.str;
                     internal = true;
                     visible = false;
                   };
-                }
-                {
-                  nixpkgs.pkgs = lib.mkForce pkgsSystem;
                 }
               ];
               extraSystemModules = extraModules.${if format == "darwin" then "darwin" else "nixos"} or [ ];
