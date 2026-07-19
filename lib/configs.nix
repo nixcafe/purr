@@ -77,16 +77,6 @@ let
       lib ? lib,
     }:
     let
-      nsBridge =
-        { config, lib, ... }:
-        {
-          _module.args.lib =
-            lib
-            // (builtins.removeAttrs config._module.args [
-              "lib"
-            ]);
-        };
-
       hm = inputs.home-manager or inputs.homeManager or null;
       nd = inputs.nix-darwin or inputs.darwin or null;
       hasHomeManager = hm != null;
@@ -136,6 +126,7 @@ let
                       home-manager.extraSpecialArgs = {
                         inherit
                           inputs
+                          lib
                           namespace
                           purr
                           system
@@ -147,7 +138,7 @@ let
                         builtins.map (h: {
                           name = h.user;
                           value = {
-                            imports = [ nsBridge ] ++ extraModules.home or [ ] ++ [ h.path ];
+                            imports = extraModules.home or [ ] ++ [ h.path ];
                           };
                         }) matchingHomes
                       );
@@ -188,15 +179,13 @@ let
               readOnlyPkgsModule =
                 if pkgsSystem != null then (inputs.nixpkgs.nixosModules or { }).readOnlyPkgs or null else null;
 
-              baseModules = [
-                nsBridge
-              ]
-              ++ lib.optional (readOnlyPkgsModule != null) readOnlyPkgsModule
-              ++ autoInjectModules
-              ++ systemModules
-              ++ extraSystemModules
-              ++ [ sysModule ]
-              ++ homeModules;
+              baseModules =
+                lib.optional (readOnlyPkgsModule != null) readOnlyPkgsModule
+                ++ autoInjectModules
+                ++ systemModules
+                ++ extraSystemModules
+                ++ [ sysModule ]
+                ++ homeModules;
             in
             if format == "linux" then
               inputs.nixpkgs.lib.nixosSystem {
@@ -205,6 +194,7 @@ let
                 specialArgs = {
                   inherit
                     inputs
+                    lib
                     namespace
                     purr
                     system
@@ -220,6 +210,7 @@ let
                 specialArgs = {
                   inherit
                     inputs
+                    lib
                     namespace
                     purr
                     system
@@ -237,6 +228,7 @@ let
                 specialArgs = {
                   inherit
                     inputs
+                    lib
                     namespace
                     purr
                     system
@@ -271,16 +263,6 @@ let
       lib ? lib,
     }:
     let
-      nsBridge =
-        { config, lib, ... }:
-        {
-          _module.args.lib =
-            lib
-            // (builtins.removeAttrs config._module.args [
-              "lib"
-            ]);
-        };
-
       hm = inputs.home-manager or inputs.homeManager or null;
     in
     if hm != null then
@@ -308,12 +290,8 @@ let
               in
               hm.lib.homeManagerConfiguration {
                 inherit pkgs;
-                modules = [
-                  nsBridge
-                ]
-                ++ autoInjectModules
-                ++ extraModules.home or [ ]
-                ++ [ discoveredHomes.${archFormat}.${userHost} ];
+                modules =
+                  autoInjectModules ++ extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
                 extraSpecialArgs = {
                   inherit inputs namespace;
                   purr = {
