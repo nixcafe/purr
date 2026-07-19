@@ -77,6 +77,16 @@ let
       lib ? lib,
     }:
     let
+      nsBridge =
+        { config, lib, ... }:
+        {
+          _module.args.lib =
+            lib
+            // (builtins.removeAttrs config._module.args [
+              "lib"
+            ]);
+        };
+
       hm = inputs.home-manager or inputs.homeManager or null;
       nd = inputs.nix-darwin or inputs.darwin or null;
       hasHomeManager = hm != null;
@@ -113,14 +123,6 @@ let
                 overlays = [ ];
               };
 
-              systemLib = builtins.foldl' (
-                acc: input:
-                let
-                  inputLib = input.lib or { };
-                in
-                if inputLib ? types then acc else acc // inputLib
-              ) lib (builtins.attrValues inputs);
-
               hmModule =
                 if format == "darwin" then hm.darwinModules.home-manager else hm.nixosModules.home-manager;
               nonRootHomes = builtins.filter (h: h.user != "root") matchingHomes;
@@ -145,7 +147,7 @@ let
                         builtins.map (h: {
                           name = h.user;
                           value = {
-                            imports = extraModules.home or [ ] ++ [ h.path ];
+                            imports = [ nsBridge ] ++ extraModules.home or [ ] ++ [ h.path ];
                           };
                         }) matchingHomes
                       );
@@ -186,13 +188,15 @@ let
               readOnlyPkgsModule =
                 if pkgsSystem != null then (inputs.nixpkgs.nixosModules or { }).readOnlyPkgs or null else null;
 
-              baseModules =
-                lib.optional (readOnlyPkgsModule != null) readOnlyPkgsModule
-                ++ autoInjectModules
-                ++ systemModules
-                ++ extraSystemModules
-                ++ [ sysModule ]
-                ++ homeModules;
+              baseModules = [
+                nsBridge
+              ]
+              ++ lib.optional (readOnlyPkgsModule != null) readOnlyPkgsModule
+              ++ autoInjectModules
+              ++ systemModules
+              ++ extraSystemModules
+              ++ [ sysModule ]
+              ++ homeModules;
             in
             if format == "linux" then
               inputs.nixpkgs.lib.nixosSystem {
@@ -206,7 +210,6 @@ let
                     system
                     ;
                   host = systemName;
-                  lib = systemLib;
                   pkgs = pkgsSystem;
                 };
               }
@@ -222,7 +225,6 @@ let
                     system
                     ;
                   host = systemName;
-                  lib = systemLib;
                   pkgs = pkgsSystem;
                 };
               }
@@ -240,7 +242,6 @@ let
                     system
                     ;
                   host = systemName;
-                  lib = systemLib;
                   pkgs = pkgsSystem;
                 };
               };
@@ -270,6 +271,16 @@ let
       lib ? lib,
     }:
     let
+      nsBridge =
+        { config, lib, ... }:
+        {
+          _module.args.lib =
+            lib
+            // (builtins.removeAttrs config._module.args [
+              "lib"
+            ]);
+        };
+
       hm = inputs.home-manager or inputs.homeManager or null;
     in
     if hm != null then
@@ -297,8 +308,12 @@ let
               in
               hm.lib.homeManagerConfiguration {
                 inherit pkgs;
-                modules =
-                  autoInjectModules ++ extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
+                modules = [
+                  nsBridge
+                ]
+                ++ autoInjectModules
+                ++ extraModules.home or [ ]
+                ++ [ discoveredHomes.${archFormat}.${userHost} ];
                 extraSpecialArgs = {
                   inherit inputs namespace;
                   purr = {

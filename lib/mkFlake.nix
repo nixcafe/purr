@@ -116,23 +116,11 @@ let
         else
           null;
 
-      purrLib =
-        if importedPurrLib != null then
-          let
-            namespaced =
-              if namespace != null then lib // { ${namespace} = importedPurrLib; } else lib // importedPurrLib;
-          in
-          builtins.foldl' (
-            acc: input:
-            let
-              inputLib = input.lib or { };
-            in
-            if inputLib ? types then acc else acc // inputLib
-          ) namespaced (builtins.attrValues inputs)
+      makeLibExtension =
+        if namespace != null && importedPurrLib != null then
+          { _module.args.${namespace} = importedPurrLib; }
         else
-          lib;
-
-      makeLibExtension = if importedPurrLib != null then { _module.args.lib = purrLib; } else null;
+          null;
 
       wrapWithLib =
         modules:
@@ -214,12 +202,12 @@ let
         system:
         outputsBuilder {
           inherit
+            lib
             system
             inputs
             namespace
             ;
           pkgs = pkgs.${system};
-          lib = purrLib;
         }
       );
 
@@ -244,11 +232,11 @@ let
             _: module:
             import module {
               inherit
+                lib
                 inputs
                 system
                 namespace
                 ;
-              lib = purrLib;
               pkgs = pkgs.${system};
             }
           ) mods
@@ -280,8 +268,7 @@ let
           builtins.mapAttrs (
             _name: module:
             import module {
-              inherit inputs namespace;
-              lib = purrLib;
+              inherit lib inputs namespace;
             }
           ) templateModules
         else
@@ -306,9 +293,9 @@ let
               inputs
               namespace
               nixpkgsConfig
+              lib
               ;
             extraModules = extraModulesWithLocal;
-            lib = purrLib;
           }
         else
           { };
@@ -322,9 +309,9 @@ let
               inputs
               namespace
               nixpkgsConfig
+              lib
               ;
             extraModules = extraModulesWithLocal;
-            lib = purrLib;
           }
         else
           { };
