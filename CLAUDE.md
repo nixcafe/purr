@@ -80,4 +80,20 @@ Tests use `lib.debug.runTests` (from nixpkgs-lib). Each test is `{ expr; expecte
    ```
 3. `git add tests/<name>.nix && nix flake check`
 
-For module-arg tests, use `lib.evalModules` with `specialArgs = { pkgs = { ... }; }` to simulate module evaluation. `builtins.tryEval` catches thrown asserts — use `assert` for arg validation.
+### Integration testing with the demo
+
+The `tests/demo/` directory is a standalone flake that exercises all
+purr features end-to-end (modules, lib, packages, shells, checks,
+overlays, templates, apps, systems, homes, namespace bridge).
+
+```bash
+cd tests/demo && nix flake check
+```
+
+### Fixtures
+
+`tests/fixtures/` provides minimal directory trees for module-discovery
+unit tests.  Each `default.nix` contains only `{ }`.  Keep fixtures this
+small — they are Git-tracked for reproducibility.
+
+For module-arg tests, use `lib.evalModules` with `specialArgs = { pkgs = { ... }; }` to simulate module evaluation. For mkFlake integration tests, mock `nixosSystem` / `homeManagerConfiguration` to avoid full nixpkgs evaluation — see `tests/mkFlake-systems.nix` for examples.
