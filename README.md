@@ -123,8 +123,8 @@ Each auto-discovered module receives different arguments:
 | `apps/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `overlays/` | `final: prev:` (Nix overlay convention) |
 | `templates/` | `{ inputs, namespace, lib }` |
-| `systems/` | `{ config, options, lib, pkgs, purr, ... }` |
-| `homes/` | `{ config, options, lib, pkgs, purr, ... }` |
+| `systems/` | `{ config, options, lib, pkgs, purr, host, namespace, system, inputs, ... }` |
+| `homes/` | `{ config, options, lib, pkgs, purr, purrLib, host, namespace, system, inputs, ... }` |
 
 > **Note:** `lib` in `packages/`, `shells/`, `checks/`, and `apps/` includes the
 > project's custom lib under `lib.<namespace>.*`, merged via `purrLib`.
@@ -289,6 +289,38 @@ the variant:
 }
 ```
 
+### Namespace Bridge (system → home config forwarding)
+
+When a namespace is set (e.g. `namespace = "demo"`), Purr defines
+`options.<ns>.users` and forwards `<ns>.users.<name>.homeConfig` to
+`home-manager.users.<name>`.  This lets you inject home-manager config
+directly from any NixOS system module:
+
+```nix
+# systems/x86_64-linux/server/default.nix
+{ config, pkgs, lib, namespace, purr, ... }:
+{
+  # system config ...
+  networking.hostName = purr.name;
+
+  # inject home-manager config via namespace bridge
+  ${namespace}.users.alice.homeConfig = {
+    home.packages = [ pkgs.cowsay ];
+    programs.git.userName = "Alice";
+  };
+}
+```
+
+Keys inside `homeConfig` map directly to home-manager option paths
+(`home.packages`, `programs.*`, `services.*`, etc.).  The bridge
+provides low-priority defaults — the user's home module
+(`homes/x86_64-linux/alice@server/default.nix`) always takes priority.
+
+Priority order (lowest to highest):
+1. `<ns>.users.<name>.homeConfig` (bridge)
+2. `home-manager.users.<name>` set directly in any NixOS module
+3. The home module file (`homes/.../default.nix`)
+
 ### `purr` Metadata
 
 Each system and home module receives a `purr` attrset with metadata about the
@@ -321,8 +353,8 @@ Example:
 # systems/x86_64-linux/server/default.nix
 { config, pkgs, lib, purr, ... }:
 {
-  networking.hostName = purr.name;  # "server"
-  nixpkgs.hostPlatform = purr.arch; # "x86_64"
+  networking.hostName = purr.name;         # "server"
+  nixpkgs.hostPlatform = purr.archFormat;  # "x86_64-linux"
 }
 ```
 
