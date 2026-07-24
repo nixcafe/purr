@@ -16,6 +16,10 @@ let
 
   configs = import ./configs.nix { inherit lib; };
 
+  modulesLib = import ./modules-lib.nix { inherit lib; };
+
+  mkFlakeSystems = import ./mkFlake-systems.nix { inherit lib; };
+
   runGroup = name: tests: runTests { "${name}" = tests; };
 
   failures =
@@ -31,10 +35,22 @@ let
     ++ (runGroup "deepMapAttrs" namespacedModules.deepMapAttrs)
     ++ (runGroup "wrapModuleSet" namespacedModules.wrapModuleSet)
     ++ (runGroup "collectModules" collectModules.basic)
+    ++ (runGroup "getDefaultNixFiles" modulesLib.getDefaultNixFiles)
+    ++ (runGroup "findModulesFlat" modulesLib.findModulesFlat)
+    ++ (runGroup "findModules" modulesLib.findModules)
+    ++ (runGroup "findModulesLib" modulesLib.findModulesLib)
+    ++ (runGroup "loadModules" modulesLib.loadModules)
+    ++ (runGroup "discoverModules" modulesLib.discoverModules)
+    ++ (runGroup "discoverSystems" modulesLib.discoverSystems)
+    ++ (runGroup "discoverHomes" modulesLib.discoverHomes)
     ++ (runGroup "buildHomeConfigs" configs.buildHomeConfigs)
     ++ (runGroup "buildSystemConfigs" configs.buildSystemConfigs)
     ++ (runGroup "buildHomeConfigsExtra" configs.buildHomeConfigsExtra)
     ++ (runGroup "parseArchFormat" configs.parseArchFormat)
-    ++ (runGroup "parseUserHost" configs.parseUserHost);
+    ++ (runGroup "parseUserHost" configs.parseUserHost)
+    ++ (runGroup "mkFlake.systemsOnly" mkFlakeSystems.systemsOnly)
+    ++ (runGroup "mkFlake.homesOnly" mkFlakeSystems.homesOnly)
+    ++ (runGroup "mkFlake.systemsAndHomes" mkFlakeSystems.systemsAndHomes)
+    ++ (runGroup "mkFlake.fullPipeline" mkFlakeSystems.fullPipeline);
 in
 failures

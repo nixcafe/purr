@@ -119,31 +119,63 @@ let
               nonRootHomes = builtins.filter (h: h.user != "root") matchingHomes;
               homeModules =
                 if matchingHomes != [ ] then
-                  [
+                  (lib.optional (namespace != null) {
+                    options.${namespace}.users = lib.mkOption {
+                      type = lib.types.attrs;
+                      default = { };
+                      description = ''
+                        Per-user home-manager config forwarded via namespace bridge.
+                        Set `<ns>.users.<name>.homeConfig = { ... }` from any
+                        NixOS module to inject home-manager settings for that
+                        user.  Keys inside `homeConfig` map directly to
+                        home-manager option paths (home.packages, programs.*,
+                        services.*, etc.).
+                      '';
+                    };
+                  })
+                  ++ [
                     hmModule
-                    {
-                      home-manager.useGlobalPkgs = mkDefault true;
-                      home-manager.useUserPackages = mkDefault true;
-                      home-manager.extraSpecialArgs = {
-                        inherit
-                          inputs
-                          namespace
-                          purr
-                          system
-                          ;
-                        purrLib = lib;
-                        host = systemName;
-                        pkgs = pkgsSystem;
-                      };
-                      home-manager.users = builtins.listToAttrs (
-                        builtins.map (h: {
-                          name = h.user;
-                          value = {
-                            imports = extraModules.home or [ ] ++ [ h.path ];
-                          };
-                        }) matchingHomes
-                      );
-                    }
+                    (
+                      {
+                        config,
+                        lib,
+                        ...
+                      }:
+                      let
+                        nsUsers = config.${namespace}.users or { };
+                      in
+                      {
+                        home-manager.useGlobalPkgs = mkDefault true;
+                        home-manager.useUserPackages = mkDefault true;
+                        home-manager.extraSpecialArgs = {
+                          inherit
+                            inputs
+                            namespace
+                            purr
+                            system
+                            ;
+                          purrLib = lib;
+                          host = systemName;
+                          pkgs = pkgsSystem;
+                        };
+                        home-manager.users = builtins.listToAttrs (
+                          builtins.map (h: {
+                            name = h.user;
+                            value = {
+                              imports = extraModules.home or [ ] ++ [
+                                # Bridge: forward <ns>.users.<name>.homeConfig as
+                                # home-manager defaults.  Placed before h.path
+                                # so the home module takes priority.
+                                {
+                                  config = nsUsers.${h.user}.homeConfig or { };
+                                }
+                                h.path
+                              ];
+                            };
+                          }) matchingHomes
+                        );
+                      }
+                    )
                   ]
                   ++ lib.optional (nonRootHomes != [ ]) {
                     users.users = builtins.listToAttrs (
@@ -165,6 +197,7 @@ let
                     internal = true;
                     visible = false;
                   };
+                  config.nixpkgs.pkgs = lib.mkDefault pkgsSystem;
                 }
               ];
               extraSystemModules = extraModules.${if format == "darwin" then "darwin" else "nixos"} or [ ];
@@ -189,7 +222,6 @@ let
                     system
                     ;
                   host = systemName;
-                  pkgs = pkgsSystem;
                 };
               }
             else if format == "darwin" && hasNixDarwin then
@@ -205,7 +237,6 @@ let
                     system
                     ;
                   host = systemName;
-                  pkgs = pkgsSystem;
                 };
               }
             else
@@ -223,7 +254,6 @@ let
                     system
                     ;
                   host = systemName;
-                  pkgs = pkgsSystem;
                 };
               };
         }) (builtins.attrNames systems)
@@ -275,6 +305,9 @@ let
                 hostParsed = parseUserHost userHost;
                 autoInjectModules = lib.optional autoInject {
                   home.username = mkDefault hostParsed.user;
+                  home.homeDirectory = mkDefault (
+                    if format == "darwin" then "/Users/${hostParsed.user}" else "/home/${hostParsed.user}"
+                  );
                 };
               in
               hm.lib.homeManagerConfiguration {
