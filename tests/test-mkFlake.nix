@@ -1,30 +1,51 @@
-# Tests for mkFlake with systems, homes, lib — end-to-end integration
-# Verifies no circular dependencies between module discovery, lib building,
-# system config creation, and home config creation.
-{
-  lib,
-}:
+# Tests for lib/mkFlake.nix — end-to-end integration
+{ lib }:
 let
-  mkFlakeLib = import ../lib/mkFlake.nix {
-    attrs = import ../lib/attrs.nix;
-    configs = import ../lib/configs.nix { inherit lib; };
-    systems = import ../lib/systems.nix;
-    inherit lib;
-    modules = import ../lib/modules.nix {
-      fs = import ../lib/fs.nix;
-      inherit lib;
-    };
-    namespacedModules = import ../lib/namespacedModules.nix;
-  };
-
-  inherit (mkFlakeLib) mkFlake;
   inherit (lib)
     attrNames
-    attrValues
     elem
     filter
     length
     ;
+
+  attrsMod = import ../lib/attrs.nix;
+  systemsMod = import ../lib/systems.nix;
+  fs = import ../lib/fs.nix;
+  mods = import ../lib/modules.nix {
+    inherit fs lib;
+  };
+  confs = import ../lib/configs.nix {
+    inherit lib;
+  };
+  nsm = import ../lib/namespacedModules.nix;
+  resolver = import ../lib/resolveDir.nix {
+    inherit lib;
+  };
+  libBuilder = import ../lib/purrLib.nix {
+    inherit lib;
+    attrs = attrsMod;
+    modules = mods;
+    namespacedModules = nsm;
+  };
+  autoMods = import ../lib/autoModules.nix {
+    modules = mods;
+  };
+
+  mkFlakeLib = import ../lib/mkFlake.nix {
+    inherit
+      lib
+      autoMods
+      ;
+    attrs = attrsMod;
+    confs = confs;
+    mods = mods;
+    nsm = nsm;
+    purrLib = libBuilder;
+    resolveDir = resolver;
+    systems = systemsMod;
+  };
+
+  inherit (mkFlakeLib) mkFlake;
 
   fixturesDir = ./fixtures;
 
@@ -75,6 +96,7 @@ let
   };
 in
 {
+  # ---- systems discovery ----
   systemsOnly = {
     tests = {
       "discovers and builds system configs" = {
@@ -98,7 +120,6 @@ in
           "nixosModules"
         ];
       };
-
       "returns empty when no systems dir" = {
         expr =
           let
@@ -112,10 +133,9 @@ in
               namespace = null;
             };
           in
-          builtins.elem "nixosConfigurations" (attrNames result);
+          elem "nixosConfigurations" (attrNames result);
         expected = false;
       };
-
       "nixosConfigurations contains discovered hosts" = {
         expr =
           let
@@ -129,12 +149,10 @@ in
               namespace = null;
               autoInject = false;
             };
-            nixos = result.nixosConfigurations or { };
           in
-          attrNames nixos;
+          attrNames (result.nixosConfigurations or { });
         expected = [ "myhost" ];
       };
-
       "darwinConfigurations contains macbook" = {
         expr =
           let
@@ -149,12 +167,10 @@ in
               namespace = null;
               autoInject = false;
             };
-            darwinCfgs = result.darwinConfigurations or { };
           in
-          attrNames darwinCfgs;
+          attrNames (result.darwinConfigurations or { });
         expected = [ "macbook" ];
       };
-
       "system specialArgs contains purr metadata" = {
         expr =
           let
@@ -168,13 +184,11 @@ in
               namespace = null;
               autoInject = false;
             };
-            cfg = result.nixosConfigurations.myhost;
-            md = cfg.specialArgs.purr or null;
+            md = result.nixosConfigurations.myhost.specialArgs.purr or null;
           in
           (md != null) && (md.name == "myhost") && (md.arch == "x86_64") && (md.format == "linux");
         expected = true;
       };
-
       "system specialArgs contains lib" = {
         expr =
           let
@@ -188,13 +202,10 @@ in
               namespace = "demo-ns";
               autoInject = false;
             };
-            cfg = result.nixosConfigurations.myhost;
-            hasLib = cfg.specialArgs ? lib;
           in
-          hasLib;
+          result.nixosConfigurations.myhost.specialArgs ? lib;
         expected = true;
       };
-
       "system specialArgs contains namespace" = {
         expr =
           let
@@ -208,14 +219,14 @@ in
               namespace = "demo-ns";
               autoInject = false;
             };
-            cfg = result.nixosConfigurations.myhost;
           in
-          cfg.specialArgs.namespace;
+          result.nixosConfigurations.myhost.specialArgs.namespace;
         expected = "demo-ns";
       };
     };
   };
 
+  # ---- homes discovery ----
   homesOnly = {
     tests = {
       "builds home configs when home-manager present" = {
@@ -236,7 +247,6 @@ in
           attrNames (result.homeConfigurations or { });
         expected = [ "alice@myhost" ];
       };
-
       "returns empty when no home-manager" = {
         expr =
           let
@@ -254,7 +264,6 @@ in
           result.homeConfigurations or { };
         expected = { };
       };
-
       "home extraSpecialArgs contains purr metadata" = {
         expr =
           let
@@ -269,14 +278,12 @@ in
               namespace = null;
               autoInject = false;
             };
-            cfg = result.homeConfigurations."alice@myhost";
-            md = cfg.extraSpecialArgs.purr or null;
+            md = result.homeConfigurations."alice@myhost".extraSpecialArgs.purr or null;
           in
           (md != null) && (md.user == "alice") && (md.host == "myhost");
         expected = true;
       };
-
-      "home extraSpecialArgs contains lib as purrLib" = {
+      "home extraSpecialArgs contains purrLib" = {
         expr =
           let
             inputs = {
@@ -290,14 +297,14 @@ in
               namespace = "demo-ns";
               autoInject = false;
             };
-            cfg = result.homeConfigurations."alice@myhost";
           in
-          cfg.extraSpecialArgs ? purrLib;
+          result.homeConfigurations."alice@myhost".extraSpecialArgs ? purrLib;
         expected = true;
       };
     };
   };
 
+  # ---- systems + homes integration ----
   systemsAndHomes = {
     tests = {
       "linked homes are injected into matching system" = {
@@ -321,7 +328,6 @@ in
           length hmMods > 0;
         expected = true;
       };
-
       "home-manager users includes linked user" = {
         expr =
           let
@@ -339,13 +345,10 @@ in
             };
             cfg = result.nixosConfigurations.myhost;
             hmMods = filter (m: builtins.isAttrs m && m ? "home-manager") cfg.modules;
-            hmMod = builtins.head hmMods;
-            users = attrNames (hmMod."home-manager".users or { });
           in
-          users;
+          attrNames ((builtins.head hmMods)."home-manager".users or { });
         expected = [ "alice" ];
       };
-
       "purr.homes metadata reflects linked homes" = {
         expr =
           let
@@ -361,9 +364,8 @@ in
               namespace = null;
               autoInject = false;
             };
-            cfg = result.nixosConfigurations.myhost;
           in
-          (cfg.specialArgs.purr or { }).homes;
+          (result.nixosConfigurations.myhost.specialArgs.purr or { }).homes;
         expected = [
           {
             user = "alice";
@@ -371,7 +373,6 @@ in
           }
         ];
       };
-
       "homeConfigurations also built standalone" = {
         expr =
           let
@@ -391,7 +392,6 @@ in
           attrNames (result.homeConfigurations or { });
         expected = [ "alice@myhost" ];
       };
-
       "autoInject hostName into system" = {
         expr =
           let
@@ -404,14 +404,11 @@ in
               systemsDir = "systems";
               namespace = null;
             };
-            cfg = result.nixosConfigurations.myhost;
-            firstModule = builtins.head cfg.modules;
-            hn = firstModule.networking or { };
+            hn = (builtins.head result.nixosConfigurations.myhost.modules).networking or { };
           in
           hn.hostName or null;
         expected = "myhost";
       };
-
       "autoInject = false skips hostName" = {
         expr =
           let
@@ -425,13 +422,10 @@ in
               namespace = null;
               autoInject = false;
             };
-            cfg = result.nixosConfigurations.myhost;
-            firstModule = builtins.head cfg.modules;
           in
-          builtins.isPath firstModule;
+          builtins.isPath (builtins.head result.nixosConfigurations.myhost.modules);
         expected = true;
       };
-
       "autoInject home.username" = {
         expr =
           let
@@ -445,15 +439,12 @@ in
               homesDir = "homes";
               namespace = null;
             };
-            cfg = result.homeConfigurations."alice@myhost";
-            firstModule = builtins.head cfg.modules;
           in
-          firstModule.home or { };
+          (builtins.head result.homeConfigurations."alice@myhost".modules).home or { };
         expected = {
           username = "alice";
         };
       };
-
       "injects extraModules.nixos into all system configs" = {
         expr =
           let
@@ -471,12 +462,10 @@ in
               autoInject = false;
               extraModules.nixos = [ extraMod ];
             };
-            cfg = result.nixosConfigurations.myhost;
           in
-          elem extraMod cfg.modules;
+          elem extraMod result.nixosConfigurations.myhost.modules;
         expected = true;
       };
-
       "injects extraModules.home into home configs" = {
         expr =
           let
@@ -495,17 +484,17 @@ in
               autoInject = false;
               extraModules.home = [ extraMod ];
             };
-            cfg = result.homeConfigurations."alice@myhost";
           in
-          elem extraMod cfg.modules;
+          elem extraMod result.homeConfigurations."alice@myhost".modules;
         expected = true;
       };
     };
   };
 
+  # ---- full pipeline ----
   fullPipeline = {
     tests = {
-      "full pipeline with lib + modules + systems + homes" = {
+      "full pipeline output keys" = {
         expr =
           let
             inputs = {
@@ -523,9 +512,8 @@ in
               autoInject = false;
               bundleModules = true;
             };
-            outputs = attrNames result;
           in
-          outputs;
+          attrNames result;
         expected = [
           "darwinModules"
           "homeConfigurations"
@@ -535,8 +523,7 @@ in
           "nixosModules"
         ];
       };
-
-      "full pipeline lib namespace is accessible" = {
+      "lib namespace is accessible" = {
         expr =
           let
             inputs = {
@@ -550,57 +537,199 @@ in
               libDir = "lib";
               systemsDir = "systems";
               homesDir = "homes";
+              autoInject = false;
+            };
+          in
+          result.lib.demo or null != null;
+        expected = true;
+      };
+      "system specialArgs has namespaced lib" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+              home-manager = mkHomeManager;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              namespace = "demo";
+              libDir = "lib";
+              systemsDir = "systems";
+              homesDir = "homes";
+              autoInject = false;
+            };
+          in
+          (result.nixosConfigurations.myhost.specialArgs.lib or { }) ? "demo";
+        expected = true;
+      };
+      "home extraSpecialArgs has purrLib" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+              home-manager = mkHomeManager;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              namespace = "demo";
+              libDir = "lib";
+              systemsDir = "systems";
+              homesDir = "homes";
+              autoInject = false;
+            };
+          in
+          result.homeConfigurations."alice@myhost".extraSpecialArgs.purrLib or null != null;
+        expected = true;
+      };
+    };
+  };
+
+  # ---- mkFlake options ----
+  flattenLib = {
+    tests = {
+      "flattenLib true produces flat lib structure" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              namespace = "demo";
+              libDir = "lib";
+              flattenLib = true;
               autoInject = false;
             };
             nsLib = result.lib.demo or null;
           in
-          nsLib != null;
-        expected = true;
+          if nsLib != null then builtins.sort (a: b: a < b) (attrNames nsLib) else [ ];
+        expected = [
+          "helperUtil"
+          "utilFunc"
+        ];
       };
+    };
+  };
 
-      "full pipeline system specialArgs has namespaced lib" = {
+  bundleExtraModules = {
+    tests = {
+      "bundleExtraModules = false excludes extra from default bundle" = {
         expr =
           let
+            extraMod = {
+              services.extra = true;
+            };
             inputs = {
               nixpkgs = mkNixpkgs mkNixpkgsLib;
-              home-manager = mkHomeManager;
             };
             result = mkFlake {
               inherit inputs;
               src = fixturesDir;
-              namespace = "demo";
-              libDir = "lib";
-              systemsDir = "systems";
-              homesDir = "homes";
+              modulesDir = "modules";
+              bundleModules = true;
+              bundleExtraModules = false;
+              extraModules.nixos = [ extraMod ];
+              namespace = null;
               autoInject = false;
             };
-            cfg = result.nixosConfigurations.myhost;
-            sargs = cfg.specialArgs;
+            dflt = result.nixosModules.default or null;
+            imports = if dflt != null then dflt.imports or [ ] else [ ];
           in
-          (sargs.lib or { }) ? "demo";
-        expected = true;
+          elem extraMod imports;
+        expected = false;
       };
+    };
+  };
 
-      "full pipeline home extraSpecialArgs has purrLib" = {
+  customModuleTypes = {
+    tests = {
+      "custom moduleTypes are honored" = {
         expr =
           let
             inputs = {
               nixpkgs = mkNixpkgs mkNixpkgsLib;
-              home-manager = mkHomeManager;
             };
             result = mkFlake {
               inherit inputs;
               src = fixturesDir;
-              namespace = "demo";
-              libDir = "lib";
-              systemsDir = "systems";
-              homesDir = "homes";
+              modulesDir = "modules";
+              moduleTypes = {
+                nixos = [ "home" ];
+              };
+              namespace = null;
               autoInject = false;
             };
-            cfg = result.homeConfigurations."alice@myhost";
           in
-          cfg.extraSpecialArgs.purrLib or null != null;
+          attrNames (result.nixosModules or { });
+        expected = [ "desktop" ];
+      };
+    };
+  };
+
+  customSystems = {
+    tests = {
+      "custom systems parameter works" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              systems = [ "x86_64-linux" ];
+              namespace = null;
+              autoInject = false;
+            };
+          in
+          attrNames (result.darwinModules or { });
+        expected = [ ];
+      };
+    };
+  };
+
+  outputsBuilder = {
+    tests = {
+      "outputsBuilder produces custom output" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              namespace = null;
+              autoInject = false;
+              outputsBuilder = { system, ... }: { specialOutput = "hello-${system}"; };
+            };
+          in
+          elem "specialOutput" (attrNames result);
         expected = true;
+      };
+      "outputsBuilder pivots per-system to per-key" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              namespace = null;
+              autoInject = false;
+              outputsBuilder = { system, ... }: { ping = "pong-${system}"; };
+            };
+          in
+          attrNames (result.ping or { });
+        expected = [
+          "aarch64-darwin"
+          "aarch64-linux"
+          "x86_64-linux"
+        ];
       };
     };
   };

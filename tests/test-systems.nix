@@ -1,27 +1,9 @@
-# Tests for lib/systems.nix and lib/attrs.nix
-{
-  lib,
-}:
+# Tests for lib/systems.nix
+{ lib }:
 let
-  attrs = import ../lib/attrs.nix;
   systems = import ../lib/systems.nix;
 in
 {
-  optionalAttrs = {
-    tests = {
-      "true returns attrs" = {
-        expr = attrs.optionalAttrs true { a = 1; };
-        expected = {
-          a = 1;
-        };
-      };
-      "false returns empty" = {
-        expr = attrs.optionalAttrs false { a = 1; };
-        expected = { };
-      };
-    };
-  };
-
   eachSystem = {
     tests = {
       "maps single system" = {

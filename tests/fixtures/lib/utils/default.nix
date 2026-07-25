@@ -1,1 +1,3 @@
-{ }
+_: {
+  utilFunc = "util";
+}

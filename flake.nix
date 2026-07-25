@@ -28,6 +28,20 @@
       flakeModules = {
         default = ./flake-module.nix;
       };
+      templates = {
+        default = {
+          path = ./template/default;
+          description = ''
+            A minimal flake using purr standalone (mkFlake).
+          '';
+        };
+        flake-parts = {
+          path = ./template/flake-parts;
+          description = ''
+            A minimal flake using purr with flake-parts.
+          '';
+        };
+      };
       devShells = dev.devShells or { };
       checks = dev.checks or { };
     };

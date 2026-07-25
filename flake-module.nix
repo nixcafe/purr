@@ -15,17 +15,37 @@ let
 
   cfg = config.purr;
 
+  nsm = import ./lib/namespacedModules.nix;
+
   fs = import ./lib/fs.nix;
 
-  modulesLib = import ./lib/modules.nix {
+  mods = import ./lib/modules.nix {
     inherit fs lib;
   };
 
-  namespacedModules = import ./lib/namespacedModules.nix;
-
-  configsLib = import ./lib/configs.nix {
+  confs = import ./lib/configs.nix {
     inherit lib;
   };
+
+  attrs = import ./lib/attrs.nix;
+
+  resolver = import ./lib/resolveDir.nix {
+    inherit lib;
+  };
+
+  libBuilder = import ./lib/purrLib.nix {
+    inherit lib attrs;
+    modules = mods;
+    namespacedModules = nsm;
+  };
+
+  autoMods = import ./lib/autoModules.nix {
+    modules = mods;
+  };
+
+  inherit (resolver) resolveDirs;
+  inherit (libBuilder) buildImportedPurrLib mergePurrLib;
+  inherit (autoMods) autoModules overlayModules templateModules;
 in
 {
   options.purr = {
@@ -102,10 +122,6 @@ in
         Mapping of flake output module type to subdirectory names
         under {option}`purr.modulesDir`. Modules from all listed
         directories are merged into the corresponding flake output.
-
-        For example, `nixos = ["nixos" "shared" "container"]` will
-        scan `modules/nixos/`, `modules/shared/`, and `modules/container/`
-        and merge them all into `flake.nixosModules`.
       '';
       example = lib.literalExpression ''
         {
@@ -282,71 +298,41 @@ in
 
   config = mkIf cfg.enable (
     let
+      resolved = resolveDirs cfg.src {
+        inherit (cfg)
+          checksDir
+          shellsDir
+          overlaysDir
+          packagesDir
+          appsDir
+          templatesDir
+          systemsDir
+          homesDir
+          libDir
+          ;
+      };
+
       modulesPath = cfg.src + "/${cfg.modulesDir}";
-      discoveredModules = modulesLib.discoverModules modulesPath cfg.moduleTypes;
+      discoveredModules = mods.discoverModules modulesPath cfg.moduleTypes;
 
-      importedPurrLib =
-        if libDir' != null then
-          let
-            rootModule =
-              if builtins.pathExists (cfg.src + "/${libDir'}/default.nix") then
-                import (cfg.src + "/${libDir'}/default.nix") {
-                  inherit lib inputs;
-                  inherit (cfg) namespace;
-                }
-              else
-                { };
-            subModules = modulesLib.findModulesLib cfg.src libDir';
-            importedSubModules = namespacedModules.deepMapAttrs (
-              path:
-              import path {
-                inherit lib inputs;
-                inherit (cfg) namespace;
-              }
-            ) subModules;
-            nested = rootModule // importedSubModules;
-            flatMerge =
-              let
-                collectLeaf =
-                  v:
-                  if builtins.isAttrs v then
-                    let
-                      direct = v."default.nix" or null;
-                      rest = builtins.removeAttrs v [ "default.nix" ];
-                      sub = lib.concatMap collectLeaf (builtins.attrValues rest);
-                    in
-                    (if direct != null then [ direct ] else [ ]) ++ sub
-                  else
-                    [ ];
-              in
-              lib.foldl' (a: b: a // b) rootModule (collectLeaf importedSubModules);
-          in
-          if cfg.flattenLib then flatMerge else nested
-        else
-          null;
+      importedPurrLib = buildImportedPurrLib {
+        inherit inputs;
+        inherit (cfg) src namespace flattenLib;
+        inherit (resolved) libDir;
+      };
 
-      purrLib =
-        if importedPurrLib != null then
-          if cfg.namespace != null then
-            lib // { ${cfg.namespace} = importedPurrLib; }
-          else
-            lib // importedPurrLib
-        else
-          lib;
+      mergedLib = mergePurrLib lib importedPurrLib cfg.namespace;
 
       wrap =
         modules:
-        if cfg.namespace != null then
-          namespacedModules.wrapModuleSet cfg.namespace importedPurrLib modules
-        else
-          modules;
+        if cfg.namespace != null then nsm.wrapModuleSet cfg.namespace importedPurrLib modules else modules;
 
-      makeLibExtension = if importedPurrLib != null then { _module.args.lib = purrLib; } else null;
+      makeLibExtension = if importedPurrLib != null then { _module.args.lib = mergedLib; } else null;
 
       wrapWithLib =
         modules:
         if makeLibExtension != null then
-          namespacedModules.deepMapAttrs (module: {
+          nsm.deepMapAttrs (module: {
             imports = [
               makeLibExtension
               module
@@ -381,75 +367,30 @@ in
           authored
           // lib.optionalAttrs (!(everything ? "default")) {
             default = {
-              imports = modulesLib.collectModules toBundle;
+              imports = mods.collectModules toBundle;
             };
           }
         else
           authored;
 
-      resolve =
-        dir: candidates:
-        if dir != null then
-          dir
-        else
-          let
-            found = builtins.filter (d: builtins.pathExists (cfg.src + "/${d}")) candidates;
-          in
-          if found != [ ] then builtins.head found else null;
-
-      checksDir' = resolve cfg.checksDir [ "checks" ];
-      shellsDir' = resolve cfg.shellsDir [
-        "shells"
-        "devShells"
-      ];
-      overlaysDir' = resolve cfg.overlaysDir [ "overlays" ];
-      packagesDir' = resolve cfg.packagesDir [ "packages" ];
-      appsDir' = resolve cfg.appsDir [ "apps" ];
-      templatesDir' = resolve cfg.templatesDir [ "templates" ];
-      systemsDir' = resolve cfg.systemsDir [
-        "systems"
-        "hosts"
-      ];
-      homesDir' = resolve cfg.homesDir [ "homes" ];
-      libDir' = resolve cfg.libDir [ "lib" ];
-
-      discoveredOverlays =
-        if overlaysDir' != null then
-          let
-            overlayModules = modulesLib.findModulesLib cfg.src overlaysDir';
-          in
-          builtins.mapAttrs (_: import) overlayModules
-        else
-          { };
+      discoveredOverlays = overlayModules cfg.src resolved.overlaysDir;
 
       discoveredTemplates =
-        if templatesDir' != null then
-          let
-            scan = if cfg.templatesRecursive then modulesLib.findModulesLib else modulesLib.findModulesFlat;
-            modules = scan cfg.src templatesDir';
-          in
-          builtins.mapAttrs (
-            _: module:
-            import module {
-              inherit (cfg) namespace;
-              inherit inputs;
-              lib = purrLib;
-            }
-          ) modules
-        else
-          { };
+        templateModules cfg.src resolved.templatesDir cfg.templatesRecursive mergedLib cfg.namespace
+          inputs;
 
       discoveredSystems =
-        if systemsDir' != null then modulesLib.discoverSystems cfg.src systemsDir' else { };
+        if resolved.systemsDir != null then mods.discoverSystems cfg.src resolved.systemsDir else { };
 
-      discoveredHomes = if homesDir' != null then modulesLib.discoverHomes cfg.src homesDir' else { };
+      discoveredHomes =
+        if resolved.homesDir != null then mods.discoverHomes cfg.src resolved.homesDir else { };
 
       buildSystemConfigs =
         if discoveredSystems != { } then
-          configsLib.buildSystemConfigs {
+          confs.buildSystemConfigs {
             inherit
-              discoveredSystems
               discoveredHomes
+              discoveredSystems
               inputs
               ;
             inherit (cfg)
@@ -458,7 +399,7 @@ in
               nixpkgsConfig
               extraModules
               ;
-            lib = purrLib;
+            lib = mergedLib;
             sharedOverlays = builtins.attrValues discoveredOverlays;
           }
         else
@@ -466,11 +407,8 @@ in
 
       buildHomeConfigs =
         if discoveredHomes != { } then
-          configsLib.buildHomeConfigs {
-            inherit
-              discoveredHomes
-              inputs
-              ;
+          confs.buildHomeConfigs {
+            inherit discoveredHomes inputs;
             inherit (cfg)
               autoInject
               namespace
@@ -479,23 +417,6 @@ in
               ;
             sharedOverlays = builtins.attrValues discoveredOverlays;
           }
-        else
-          { };
-      autoModules =
-        pkgs: dir:
-        if dir != null then
-          let
-            mods = modulesLib.findModulesLib cfg.src dir;
-          in
-          builtins.mapAttrs (
-            _: module:
-            import module {
-              inherit inputs pkgs;
-              inherit (cfg) namespace;
-              inherit (pkgs) system;
-              lib = purrLib;
-            }
-          ) mods
         else
           { };
     in
@@ -517,12 +438,12 @@ in
             config = cfg.nixpkgsConfig;
             overlays = builtins.attrValues discoveredOverlays;
           };
-          mod = autoModules pkgs;
+          mod = autoModules cfg.src pkgs mergedLib cfg.namespace inputs;
 
-          checksModules = mod checksDir';
-          shellsModules = mod shellsDir';
-          packagesModules = mod packagesDir';
-          appsModules = mod appsDir';
+          checksModules = mod resolved.checksDir;
+          shellsModules = mod resolved.shellsDir;
+          packagesModules = mod resolved.packagesDir;
+          appsModules = mod resolved.appsDir;
         in
         {
           _file = ./flake-module.nix;

@@ -1,15 +1,20 @@
-# Tests for all functions in lib/modules.nix and lib/fs.nix
-# Covers: getDefaultNixFiles, findModules, findModulesFlat, findModulesLib,
-#         loadModules, discoverModules, discoverSystems, discoverHomes
-{
-  lib,
-}:
+# Tests for lib/modules.nix — module discovery and collectModules
+{ lib }:
 let
+  inherit (lib)
+    attrNames
+    elem
+    hasSuffix
+    length
+    ;
+
   fs = import ../lib/fs.nix;
-  modulesLib = import ../lib/modules.nix {
+  mods = import ../lib/modules.nix {
     inherit fs lib;
   };
-  inherit (modulesLib)
+
+  inherit (mods)
+    collectModules
     discoverHomes
     discoverModules
     discoverSystems
@@ -18,71 +23,15 @@ let
     findModulesLib
     loadModules
     ;
-  inherit (fs)
-    getDefaultNixFiles
-    ;
-  inherit (lib)
-    attrNames
-    elem
-    hasSuffix
-    length
-    map
-    removePrefix
-    removeSuffix
-    ;
 
   fixturesDir = ./fixtures;
   modulesFixtures = fixturesDir + "/modules";
   systemsFixtures = fixturesDir + "/systems";
   homesFixtures = fixturesDir + "/homes";
   libFixtures = fixturesDir + "/lib";
-
-  relativePath = p: removePrefix (toString fixturesDir + "/") (toString p);
 in
 {
-  getDefaultNixFiles = {
-    tests = {
-      "finds default.nix in immediate subdirs" = {
-        expr = map (f: relativePath f.relPath) (getDefaultNixFiles libFixtures);
-        expected = [
-          "lib/helpers"
-          "lib/utils"
-        ];
-      };
-
-      "returns empty for nonexistent dir" = {
-        expr = getDefaultNixFiles (fixturesDir + "/nonexistent");
-        expected = [ ];
-      };
-
-      "each result has path and relPath" = {
-        expr =
-          let
-            files = getDefaultNixFiles libFixtures;
-            first = builtins.head files;
-          in
-          (builtins.isPath first.path) && (builtins.isString first.relPath or false);
-        expected = true;
-      };
-
-      "recursively scans nested directories" = {
-        expr =
-          let
-            files = getDefaultNixFiles modulesFixtures;
-            relPaths = map (f: relativePath f.relPath) files;
-            sorted = builtins.sort (a: b: a < b) relPaths;
-          in
-          sorted;
-        expected = [
-          "modules/home/desktop"
-          "modules/nixos/common"
-          "modules/nixos/my-service"
-          "modules/shared/common"
-        ];
-      };
-    };
-  };
-
+  # ---- findModulesFlat ----
   findModulesFlat = {
     tests = {
       "returns flat map of immediate modules" = {
@@ -90,37 +39,32 @@ in
           let
             result = findModulesFlat modulesFixtures "nixos";
           in
-          builtins.attrNames result;
+          attrNames result;
         expected = [
           "common"
           "my-service"
         ];
       };
-
       "returns {} for nonexistent dir" = {
         expr = findModulesFlat modulesFixtures "nonexistent";
         expected = { };
       };
-
       "values are paths ending with default.nix" = {
         expr =
           let
             result = findModulesFlat modulesFixtures "nixos";
-            val = result."my-service";
           in
-          hasSuffix "default.nix" (toString val);
+          hasSuffix "default.nix" (toString result."my-service");
         expected = true;
       };
-
-      "each key maps to a path" = {
+      "finds home modules" = {
         expr =
           let
             result = findModulesFlat modulesFixtures "home";
           in
-          builtins.attrNames result;
+          attrNames result;
         expected = [ "desktop" ];
       };
-
       "skips subdirs without default.nix" = {
         expr = findModulesFlat modulesFixtures "shared";
         expected = {
@@ -130,6 +74,7 @@ in
     };
   };
 
+  # ---- findModules ----
   findModules = {
     tests = {
       "returns module tree with _module keys" = {
@@ -141,12 +86,10 @@ in
           builtins.isAttrs mod && (mod ? _module);
         expected = true;
       };
-
       "returns {} for nonexistent dir" = {
         expr = findModules modulesFixtures "nonexistent";
         expected = { };
       };
-
       "discovers all submodules under a type" = {
         expr =
           let
@@ -158,8 +101,7 @@ in
           "my-service"
         ];
       };
-
-      "finds default.nix in the purr modules/user directory" = {
+      "finds purr's own modules/user directory" = {
         expr =
           let
             result = findModules ../modules "user";
@@ -167,7 +109,6 @@ in
           result ? _module;
         expected = true;
       };
-
       "_module value is the default.nix path" = {
         expr =
           let
@@ -177,7 +118,6 @@ in
           hasSuffix "default.nix" (toString mod._module);
         expected = true;
       };
-
       "non-default.nix regular files are ignored" = {
         expr =
           let
@@ -189,6 +129,7 @@ in
     };
   };
 
+  # ---- findModulesLib ----
   findModulesLib = {
     tests = {
       "returns nested tree of lib files" = {
@@ -200,36 +141,34 @@ in
           helpers != null && builtins.isPath helpers;
         expected = true;
       };
-
       "returns {} for nonexistent dir" = {
         expr = findModulesLib (fixturesDir + "/nonexistent") "";
         expected = { };
       };
-
       "discovers all lib default.nix files" = {
         expr =
           let
             result = findModulesLib fixturesDir "lib";
           in
-          builtins.attrNames result;
+          attrNames result;
         expected = [
           "helpers"
           "utils"
         ];
       };
-
       "discovers purr's own lib directory" = {
         expr =
           let
             result = findModulesLib ./.. "lib";
-            names = builtins.attrNames result;
+            names = attrNames result;
           in
-          builtins.elem "attrs" names && builtins.elem "systems" names;
+          elem "attrs" names && elem "systems" names;
         expected = true;
       };
     };
   };
 
+  # ---- loadModules ----
   loadModules = {
     tests = {
       "recursively finds all .nix files" = {
@@ -240,24 +179,22 @@ in
           length files;
         expected = 4;
       };
-
       "returns empty for nonexistent dir" = {
         expr = loadModules (fixturesDir + "/nonexistent");
         expected = [ ];
       };
-
       "all results are paths ending with .nix" = {
         expr =
           let
             files = loadModules modulesFixtures;
-            allNix = builtins.all (f: hasSuffix ".nix" (toString f)) files;
           in
-          allNix;
+          builtins.all (f: hasSuffix ".nix" (toString f)) files;
         expected = true;
       };
     };
   };
 
+  # ---- discoverModules ----
   discoverModules = {
     tests = {
       "discovers modules across multiple type directories" = {
@@ -270,13 +207,12 @@ in
               ];
             };
           in
-          builtins.attrNames result.nixos;
+          attrNames result.nixos;
         expected = [
           "common"
           "my-service"
         ];
       };
-
       "merges overlapping modules from different dirs" = {
         expr =
           let
@@ -294,16 +230,14 @@ in
           && (common._module ? imports);
         expected = true;
       };
-
       "discovers home modules" = {
         expr =
           let
             result = discoverModules modulesFixtures { home = [ "home" ]; };
           in
-          builtins.attrNames result.home;
+          attrNames result.home;
         expected = [ "desktop" ];
       };
-
       "multiple module types in one call" = {
         expr =
           let
@@ -312,14 +246,13 @@ in
               home = [ "home" ];
             };
           in
-          (builtins.attrNames result.nixos) ++ (builtins.attrNames result.home);
+          (attrNames result.nixos) ++ (attrNames result.home);
         expected = [
           "common"
           "my-service"
           "desktop"
         ];
       };
-
       "returns empty for missing type" = {
         expr =
           let
@@ -330,7 +263,6 @@ in
           result.nixos;
         expected = { };
       };
-
       "returns shallow empty for empty dirMap" = {
         expr = discoverModules modulesFixtures { };
         expected = { };
@@ -338,6 +270,7 @@ in
     };
   };
 
+  # ---- discoverSystems ----
   discoverSystems = {
     tests = {
       "discovers system configs by arch-format" = {
@@ -345,23 +278,20 @@ in
           let
             result = discoverSystems fixturesDir "systems";
           in
-          builtins.attrNames result;
+          attrNames result;
         expected = [
           "aarch64-darwin"
           "x86_64-linux"
         ];
       };
-
       "returns configs as nested attrset per system" = {
         expr =
           let
             result = discoverSystems fixturesDir "systems";
-            linux = result."x86_64-linux";
           in
-          builtins.attrNames linux;
+          attrNames result."x86_64-linux";
         expected = [ "myhost" ];
       };
-
       "system value is the default.nix path" = {
         expr =
           let
@@ -370,16 +300,14 @@ in
           hasSuffix "default.nix" (toString result."x86_64-linux".myhost);
         expected = true;
       };
-
       "discovers darwin configs" = {
         expr =
           let
             result = discoverSystems fixturesDir "systems";
           in
-          builtins.attrNames result."aarch64-darwin";
+          attrNames result."aarch64-darwin";
         expected = [ "macbook" ];
       };
-
       "returns {} for nonexistent dir" = {
         expr = discoverSystems (fixturesDir + "/nonexistent") "systems";
         expected = { };
@@ -387,6 +315,7 @@ in
     };
   };
 
+  # ---- discoverHomes ----
   discoverHomes = {
     tests = {
       "discovers home configs by arch and user@host" = {
@@ -394,19 +323,20 @@ in
           let
             result = discoverHomes fixturesDir "homes";
           in
-          builtins.attrNames result;
-        expected = [ "x86_64-linux" ];
+          attrNames result;
+        expected = [
+          "aarch64-darwin"
+          "x86_64-linux"
+        ];
       };
-
       "contains user@host keys" = {
         expr =
           let
             result = discoverHomes fixturesDir "homes";
           in
-          builtins.attrNames result."x86_64-linux";
+          attrNames result."x86_64-linux";
         expected = [ "alice@myhost" ];
       };
-
       "home value is the default.nix path" = {
         expr =
           let
@@ -415,10 +345,121 @@ in
           hasSuffix "default.nix" (toString result."x86_64-linux"."alice@myhost");
         expected = true;
       };
-
       "returns {} for nonexistent dir" = {
         expr = discoverHomes (fixturesDir + "/nonexistent") "homes";
         expected = { };
+      };
+      "discovers darwin homes" = {
+        expr =
+          let
+            result = discoverHomes fixturesDir "homes";
+            darwin = result."aarch64-darwin" or null;
+          in
+          darwin != null && darwin ? "alice@macbook";
+        expected = true;
+      };
+    };
+  };
+
+  # ---- collectModules ----
+  collectModules = {
+    tests = {
+      "flattens a flat attrset of modules" = {
+        expr = builtins.length (collectModules {
+          a = {
+            imports = [ ];
+          };
+          b = {
+            config.test = 1;
+          };
+        });
+        expected = 2;
+      };
+      "flattens nested attrs" = {
+        expr = builtins.length (collectModules {
+          a.b = {
+            imports = [ ];
+          };
+          a.c = {
+            config.test = 1;
+          };
+        });
+        expected = 2;
+      };
+      "handles empty attrs" = {
+        expr = builtins.length (collectModules { });
+        expected = 0;
+      };
+      "treats functions as leaf" = {
+        expr = builtins.length (collectModules {
+          a = x: x;
+        });
+        expected = 1;
+      };
+      "treats paths as leaf" = {
+        expr = builtins.length (collectModules {
+          a = ./default.nix;
+        });
+        expected = 1;
+      };
+      "treats attrsets with imports as leaf" = {
+        expr = builtins.length (collectModules {
+          a = {
+            imports = [ ./a.nix ];
+          };
+        });
+        expected = 1;
+      };
+      "treats attrsets with options as leaf" = {
+        expr = builtins.length (collectModules {
+          a = {
+            options.services = { };
+          };
+        });
+        expected = 1;
+      };
+      "treats attrsets with config as leaf" = {
+        expr = builtins.length (collectModules {
+          a = {
+            config.services = { };
+          };
+        });
+        expected = 1;
+      };
+      "single module at root" = {
+        expr = builtins.length (collectModules {
+          a = {
+            imports = [ ];
+          };
+        });
+        expected = 1;
+      };
+      "deeply nested 3+ levels" = {
+        expr = builtins.length (collectModules {
+          a.b.c = {
+            imports = [ ];
+          };
+        });
+        expected = 1;
+      };
+      "mixed types in same tree" = {
+        expr = builtins.length (collectModules {
+          a = x: x;
+          b = ./default.nix;
+          c.dir = {
+            imports = [ ];
+          };
+        });
+        expected = 3;
+      };
+      "empty nested attrset is skipped" = {
+        expr = builtins.length (collectModules {
+          a = { };
+          b = {
+            imports = [ ];
+          };
+        });
+        expected = 1;
       };
     };
   };
