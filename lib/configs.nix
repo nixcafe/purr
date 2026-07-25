@@ -75,7 +75,7 @@ let
       extraModules ? { },
       autoInject ? true,
       lib ? lib,
-      extraOverlays ? { },
+      sharedOverlays ? [ ],
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
@@ -106,12 +106,6 @@ let
                   inherit (h) user;
                   host = systemName;
                 }) matchingHomes;
-              };
-
-              pkgsSystem = import inputs.nixpkgs {
-                inherit system;
-                config = nixpkgsConfig;
-                overlays = builtins.attrValues extraOverlays;
               };
 
               hmModule =
@@ -156,7 +150,6 @@ let
                             ;
                           purrLib = lib;
                           host = systemName;
-                          pkgs = pkgsSystem;
                         };
                         home-manager.users = builtins.listToAttrs (
                           builtins.map (h: {
@@ -190,14 +183,16 @@ let
                 else
                   [ ];
               systemModules = [
-                inputs.nixpkgs.nixosModules.readOnlyPkgs
+                {
+                  nixpkgs.config = mkDefault nixpkgsConfig;
+                  nixpkgs.overlays = mkDefault sharedOverlays;
+                }
                 {
                   options.nixpkgs.system = lib.mkOption {
                     type = lib.types.str;
                     internal = true;
                     visible = false;
                   };
-                  config.nixpkgs.pkgs = lib.mkDefault pkgsSystem;
                 }
               ];
               extraSystemModules = extraModules.${if format == "darwin" then "darwin" else "nixos"} or [ ];
@@ -280,6 +275,7 @@ let
       extraModules ? { },
       autoInject ? true,
       lib ? lib,
+      sharedOverlays ? [ ],
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
@@ -295,7 +291,7 @@ let
             pkgs = import inputs.nixpkgs {
               inherit system;
               config = nixpkgsConfig;
-              overlays = [ ];
+              overlays = sharedOverlays;
             };
           in
           builtins.map (userHost: {
