@@ -199,14 +199,12 @@ let
 
       purrLib =
         if importedPurrLib != null then
-          if namespace != null then
-            mergedInputLibs // { ${namespace} = importedPurrLib; }
-          else
-            mergedInputLibs // importedPurrLib
+          if namespace != null then lib // { ${namespace} = importedPurrLib; } else lib // importedPurrLib
         else
-          mergedInputLibs;
+          lib;
 
-      makeModuleSet = name: namespacedModules.wrapModuleSet namespace (allModules.${name} or { });
+      makeModuleSet =
+        name: namespacedModules.wrapModuleSet namespace importedPurrLib (allModules.${name} or { });
 
       makeBundled =
         name:

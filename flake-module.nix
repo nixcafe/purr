@@ -336,7 +336,10 @@ in
 
       wrap =
         modules:
-        if cfg.namespace != null then namespacedModules.wrapModuleSet cfg.namespace modules else modules;
+        if cfg.namespace != null then
+          namespacedModules.wrapModuleSet cfg.namespace importedPurrLib modules
+        else
+          modules;
 
       makeLibExtension = if importedPurrLib != null then { _module.args.lib = purrLib; } else null;
 

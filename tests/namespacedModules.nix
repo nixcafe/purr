@@ -112,7 +112,7 @@ in
             modB = _: {
               config.b = true;
             };
-            wrapped = namespacedModules.wrapModuleSet "ns" {
+            wrapped = namespacedModules.wrapModuleSet "ns" null {
               group1.mod1 = modA;
               group1.mod2 = modB;
               group2.mod3 = modA;
@@ -132,7 +132,7 @@ in
         expr =
           let
             mod = _: { };
-            wrapped = namespacedModules.wrapModuleSet null {
+            wrapped = namespacedModules.wrapModuleSet null null {
               a.b = mod;
             };
           in
@@ -141,7 +141,7 @@ in
       };
 
       "empty attrs returns empty attrs" = {
-        expr = namespacedModules.wrapModuleSet "ns" { };
+        expr = namespacedModules.wrapModuleSet "ns" null { };
         expected = { };
       };
 
@@ -149,7 +149,7 @@ in
         expr =
           let
             mod = _: { };
-            wrapped = namespacedModules.wrapModuleSet "ns" { a = mod; };
+            wrapped = namespacedModules.wrapModuleSet "ns" null { a = mod; };
             result = lib.evalModules {
               modules = [ wrapped.a ];
             };
