@@ -1,104 +1,120 @@
 # purr
 
-> Nix flake framework with automatic discovery and module system
+purr turns your project directory structure into a fully wired Nix flake — **no boilerplate, no manual wiring**. Drop files into conventional directories and purr discovers everything: modules, packages, shells, checks, apps, overlays, templates, NixOS/darwin systems, home-manager homes, and a shared lib.
 
-purr is a Nix framework that turns your project structure into a fully configured flake — automatically. No boilerplate, no manual wiring.
+Compared to other flake auto-discovery tools, purr stays **minimal** — a single dependency (`nixpkgs-lib`, ~2 MB) and a small, focused API surface.
 
 ***
 
 ## Quick Start
 
+Scaffold a new purr project in seconds:
+
+```bash
+# Standalone (mkFlake)
+nix flake init -t github:nixcafe/purr
+
+# With flake-parts
+nix flake init -t github:nixcafe/purr#flake-parts
+```
+
+Or add purr to an existing flake:
+
 ```nix
 {
   inputs = {
-    nixpkgs.url = "...";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     purr.url = "https://flakehub.com/f/nixcafe/purr/0.1.*.tar.gz";
   };
 
   outputs = inputs:
     inputs.purr.lib.mkFlake {
       inherit inputs;
-      src = ./develop;
+      src = ./.;
+      namespace = "myproject";
     };
 }
 ```
 
-Just drop a `develop/` directory with `shells/`, `checks/`, and `packages/` — purr discovers everything and wires up your flake.
+## Why purr?
 
-***
+| | purr | Other frameworks |
+|---|---|---|
+| **Dependencies** | 1 (`nixpkgs-lib`, ~2 MB) | 3+ (flake-parts, flake-utils, ...) |
+| **API surface** | Single `mkFlake` call or one flake-parts module | Multiple nested imports |
+| **Option namespace** | Built-in `namespace` injection | Manual `config.<name>.` prefixing |
+| **Systems & homes** | Auto-discovered, auto-linked | Manual wiring |
+| **Custom lib** | `lib.<namespace>.*` propagated everywhere | Manual import passthrough |
 
-## Features
+## Core Concepts
 
-* **Automatic Discovery** — Organize your project by convention and purr handles the rest
-* **flake-parts Compatible** — Use as a flake-parts module alongside other frameworks
-* **Direct mkFlake** — Also works standalone with the simple `mkFlake` API
-* **Module System** — Compose shells, checks, packages, and more with reusable modules
-* **Pre-configured Batteries** — git-hooks.nix, dev shells, formatters all set up
+### Automatic Module Discovery
 
-***
+Drop modules into `modules/` — purr discovers them by subdirectory convention:
 
-## Installation
+```
+modules/
+├── nixos/services/openssh/default.nix  → nixosModules.services.openssh
+├── darwin/system/defaults/default.nix  → darwinModules.system.defaults
+├── home/programs/git/default.nix       → homeModules.programs.git
+└── shared/users/default.nix            → merged into nixos + darwin
+```
 
-Add purr to your flake inputs:
+### Namespace Support
+
+purr injects a `namespace` parameter into every module:
 
 ```nix
+{ config, lib, namespace, ... }:
+let
+  cfg = config.${namespace}.my-module;
+in
 {
-  inputs.purr.url = "https://flakehub.com/f/nixcafe/purr/0.1.*.tar.gz";
+  options.${namespace}.my-module.enable = lib.mkEnableOption "my module";
+  config = lib.mkIf cfg.enable { /* ... */ };
 }
 ```
 
-## Usage
+### Custom Lib (`lib.<namespace>.*`)
 
-### Via flake-parts
+Share functions across all modules via a `lib/` directory:
 
 ```nix
+# lib/default.nix
+{ lib, inputs, namespace }:
 {
-  inputs = {
-    nixpkgs.url = "...";
-    purr.url = "...";
-    flake-parts.url = "...";
-  };
-
-  outputs = inputs:
-    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
-      imports = [ inputs.purr.flakeModules.default ];
-    };
+  keys = import ./keys.nix { inherit lib inputs namespace; };
+  utils = import ./utils.nix { inherit lib inputs namespace; };
 }
 ```
 
-### Via mkFlake
+Access anywhere as `lib.<namespace>.keys`, `lib.<namespace>.utils`.
 
-```nix
-{
-  inputs = {
-    nixpkgs.url = "...";
-    purr.url = "...";
-  };
+### Systems & Homes
 
-  outputs = inputs:
-    inputs.purr.lib.mkFlake {
-      inherit inputs;
-      src = ./develop;
-    };
-}
+Auto-discover NixOS/darwin systems and home-manager homes:
+
+```
+systems/
+├── x86_64-linux/server/default.nix    → nixosConfigurations.server
+└── homes/
+    └── x86_64-linux/alice@server/     → homeConfigurations."alice@server"
+                                        (auto-linked to server)
 ```
 
-***
+See the [Systems & Homes](/systems-homes) page for the namespace bridge, metadata, and image formats.
+
+## Integration Modes
+
+purr works in two modes — pick whichever fits your stack:
+
+* **[flake-parts](/flake-parts)** — use as a flake-parts module alongside other frameworks
+* **[mkFlake](/mkflake)** — standalone, no flake-parts dependency needed
 
 ## Project Structure
 
-purr expects the following layout under your `src` directory:
+See the [Directory Structure](/directory-structure) page for the complete layout — purr auto-detects everything from modules to overlays, templates to apps.
 
-```
-develop/
-├── shells/
-│   └── default/
-│       └── default.nix     # Dev shell
-├── checks/
-│   └── git-hooks/
-│       └── default.nix     # Pre-commit hooks
-└── packages/
-    └── ...                 # Custom packages
-```
+## API Reference
 
-Each `.nix` file is auto-discovered and wired into the flake.
+The full library API (32 functions) is documented on the [API Reference](/api) page.

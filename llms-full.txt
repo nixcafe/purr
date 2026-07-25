@@ -5,109 +5,886 @@ purr - Nix flake framework with automatic discovery and module system
 <!--
 Sitemap:
 - [purr](/index): Nix flake framework with automatic discovery and module system
+- [flake-parts Integration](/flake-parts): Using purr as a flake-parts module
+- [mkFlake Usage](/mkflake): Using purr standalone with mkFlake
+- [Module System](/modules): Module discovery, namespace support, and custom lib
+- [Directory Structure](/directory-structure): Full directory layout auto-discovered by purr
+- [Systems & Homes](/systems-homes): Auto-discovering NixOS/darwin systems and home-manager homes
+- [API Reference](/api): Complete purr library API reference
 -->
 
 # purr
 
-> Nix flake framework with automatic discovery and module system
+purr turns your project directory structure into a fully wired Nix flake — **no boilerplate, no manual wiring**. Drop files into conventional directories and purr discovers everything: modules, packages, shells, checks, apps, overlays, templates, NixOS/darwin systems, home-manager homes, and a shared lib.
 
-purr is a Nix framework that turns your project structure into a fully configured flake — automatically. No boilerplate, no manual wiring.
+Compared to other flake auto-discovery tools, purr stays **minimal** — a single dependency (`nixpkgs-lib`, ~2 MB) and a small, focused API surface.
 
 ***
 
 ## Quick Start
 
+Scaffold a new purr project in seconds:
+
+```bash
+# Standalone (mkFlake)
+nix flake init -t github:nixcafe/purr
+
+# With flake-parts
+nix flake init -t github:nixcafe/purr#flake-parts
+```
+
+Or add purr to an existing flake:
+
 ```nix
 {
   inputs = {
-    nixpkgs.url = "...";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     purr.url = "https://flakehub.com/f/nixcafe/purr/0.1.*.tar.gz";
   };
 
   outputs = inputs:
     inputs.purr.lib.mkFlake {
       inherit inputs;
-      src = ./develop;
+      src = ./.;
+      namespace = "myproject";
     };
 }
 ```
 
-Just drop a `develop/` directory with `shells/`, `checks/`, and `packages/` — purr discovers everything and wires up your flake.
+## Why purr?
 
-***
+| | purr | Other frameworks |
+|---|---|---|
+| **Dependencies** | 1 (`nixpkgs-lib`, ~2 MB) | 3+ (flake-parts, flake-utils, ...) |
+| **API surface** | Single `mkFlake` call or one flake-parts module | Multiple nested imports |
+| **Option namespace** | Built-in `namespace` injection | Manual `config.<name>.` prefixing |
+| **Systems & homes** | Auto-discovered, auto-linked | Manual wiring |
+| **Custom lib** | `lib.<namespace>.*` propagated everywhere | Manual import passthrough |
 
-## Features
+## Core Concepts
 
-* **Automatic Discovery** — Organize your project by convention and purr handles the rest
-* **flake-parts Compatible** — Use as a flake-parts module alongside other frameworks
-* **Direct mkFlake** — Also works standalone with the simple `mkFlake` API
-* **Module System** — Compose shells, checks, packages, and more with reusable modules
-* **Pre-configured Batteries** — git-hooks.nix, dev shells, formatters all set up
+### Automatic Module Discovery
 
-***
+Drop modules into `modules/` — purr discovers them by subdirectory convention:
 
-## Installation
+```
+modules/
+├── nixos/services/openssh/default.nix  → nixosModules.services.openssh
+├── darwin/system/defaults/default.nix  → darwinModules.system.defaults
+├── home/programs/git/default.nix       → homeModules.programs.git
+└── shared/users/default.nix            → merged into nixos + darwin
+```
 
-Add purr to your flake inputs:
+### Namespace Support
+
+purr injects a `namespace` parameter into every module:
 
 ```nix
+{ config, lib, namespace, ... }:
+let
+  cfg = config.${namespace}.my-module;
+in
 {
-  inputs.purr.url = "https://flakehub.com/f/nixcafe/purr/0.1.*.tar.gz";
+  options.${namespace}.my-module.enable = lib.mkEnableOption "my module";
+  config = lib.mkIf cfg.enable { /* ... */ };
 }
 ```
 
-## Usage
+### Custom Lib (`lib.<namespace>.*`)
 
-### Via flake-parts
+Share functions across all modules via a `lib/` directory:
+
+```nix
+# lib/default.nix
+{ lib, inputs, namespace }:
+{
+  keys = import ./keys.nix { inherit lib inputs namespace; };
+  utils = import ./utils.nix { inherit lib inputs namespace; };
+}
+```
+
+Access anywhere as `lib.<namespace>.keys`, `lib.<namespace>.utils`.
+
+### Systems & Homes
+
+Auto-discover NixOS/darwin systems and home-manager homes:
+
+```
+systems/
+├── x86_64-linux/server/default.nix    → nixosConfigurations.server
+└── homes/
+    └── x86_64-linux/alice@server/     → homeConfigurations."alice@server"
+                                        (auto-linked to server)
+```
+
+See the [Systems & Homes](/systems-homes) page for the namespace bridge, metadata, and image formats.
+
+## Integration Modes
+
+purr works in two modes — pick whichever fits your stack:
+
+* **[flake-parts](/flake-parts)** — use as a flake-parts module alongside other frameworks
+* **[mkFlake](/mkflake)** — standalone, no flake-parts dependency needed
+
+## Project Structure
+
+See the [Directory Structure](/directory-structure) page for the complete layout — purr auto-detects everything from modules to overlays, templates to apps.
+
+## API Reference
+
+The full library API (32 functions) is documented on the [API Reference](/api) page.
+
+# flake-parts Integration
+
+purr works as a [flake-parts](https://github.com/hercules-ci/flake-parts) module, giving you access to all purr features alongside other flake-parts modules.
+
+## Setup
 
 ```nix
 {
   inputs = {
-    nixpkgs.url = "...";
-    purr.url = "...";
-    flake-parts.url = "...";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    purr.url = "github:nixcafe/purr";
+    my-extra-modules.url = "github:user/my-extra-modules";
   };
 
   outputs = inputs:
     inputs.flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [ inputs.purr.flakeModules.default ];
+      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
+      purr = {
+        enable = true;
+        src = ./.;
+        namespace = "cattery";
+        extraModules.nixos = [
+          inputs.my-extra-modules.nixosModules.default
+        ];
+      };
     };
 }
 ```
 
-### Via mkFlake
+## Options
+
+All options are under the `purr.*` namespace.
+
+### Core Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `purr.enable` | bool | `false` | Enable purr |
+| `purr.src` | path | *required* | Project root directory |
+| `purr.namespace` | nullOr str | `null` | Module option namespace |
+| `purr.libDir` | nullOr str | `null` | auto-detects `lib/` |
+| `purr.flattenLib` | bool | `false` | Flatten lib subdirectories into root |
+| `purr.modulesDir` | str | `"modules"` | Module directory name under src |
+| `purr.moduleTypes` | attrs | See below | Subdirectory mapping per output |
+| `purr.extraModules` | attrs | `{}` | `{ nixos = [...]; darwin = [...]; home = [...]; }` |
+| `purr.bundleModules` | bool | `false` | Bundle all modules into a `default` module |
+| `purr.bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
+
+Default `moduleTypes`:
+
+```nix
+{
+  nixos = ["nixos" "shared"];
+  darwin = ["darwin" "shared"];
+  home = ["home"];
+}
+```
+
+### Directory Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `purr.checksDir` | nullOr str | `null` | auto-detects `checks/` |
+| `purr.shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
+| `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
+| `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
+| `purr.appsDir` | nullOr str | `null` | auto-detects `apps/` |
+| `purr.templatesDir` | nullOr str | `null` | auto-detects `templates/` |
+| `purr.templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
+| `purr.systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
+| `purr.homesDir` | nullOr str | `null` | auto-detects `homes/` |
+
+### Other Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `purr.nixpkgsConfig` | attrs | `{}` | nixpkgs config (`allowUnfree`, etc.) |
+| `purr.autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
+
+## Custom Module Directories
+
+You can customize which subdirectories are scanned for each module type:
+
+```nix
+purr.moduleTypes = {
+  nixos = ["nixos" "shared" "container" "nixos-musl"];
+};
+```
+
+## Extra Modules from Other Flakes
+
+Inject external modules alongside auto-discovered ones:
+
+```nix
+purr.extraModules = {
+  nixos = [
+    inputs.cattery-modules.nixosModules.default
+    inputs.disko.nixosModules.default
+  ];
+};
+```
+
+## Default Module Bundle
+
+By default, sub-modules are exported individually. Enable `bundleModules = true` to auto-generate a `default` module that imports all sub-modules:
+
+```nix
+purr.bundleModules = true;
+```
+
+Users can then import with:
+
+```nix
+{ imports = [ inputs.myflake.nixosModules.default ]; }
+```
+
+Set `bundleExtraModules = false` to exclude extraModules from the default bundle (only auto-discovered modules will be included). If you define your own `default` module under `modules/`, the auto-generated bundle is skipped.
+
+# mkFlake Usage
+
+`mkFlake` is purr's standalone flake builder. Use it when you don't need or want flake-parts.
+
+## Basic Usage
 
 ```nix
 {
   inputs = {
-    nixpkgs.url = "...";
-    purr.url = "...";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    purr.url = "github:nixcafe/purr";
   };
 
   outputs = inputs:
     inputs.purr.lib.mkFlake {
       inherit inputs;
-      src = ./develop;
+      src = ./.;
+      namespace = "myproject";
+      outputsBuilder = { pkgs, ... }: {
+        formatter = pkgs.nixfmt;
+      };
     };
 }
 ```
 
-***
+## Full API Reference
 
-## Project Structure
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `inputs` | attrs | *required* | Flake inputs. Required: `nixpkgs`. Optional: `home-manager` (or `homeManager`) for home-manager support, `nix-darwin` (or `darwin`) for darwin support |
+| `src` | path | *required* | Project root directory |
+| `namespace` | nullOr str | `null` | Module option namespace, also used as lib key (`lib.<namespace>`) |
+| `libDir` | nullOr str | `null` | Lib directory (relative to `src`), auto-detects `lib/` |
+| `flattenLib` | bool | `false` | Flatten lib subdirectories into root (no dir nesting) |
+| `systems` | list | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` | Systems to generate for |
+| `nixpkgsConfig` | attrs | `{}` | nixpkgs config (`allowUnfree`, etc.) |
+| `outputsBuilder` | fn | `({ pkgs, system, inputs, namespace, lib }: {})` | Per-system extra flake outputs |
+| `modulesDir` | str | `"modules"` | Module directory name under src |
+| `moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | Subdirectory mapping per output |
+| `extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` — raw module injection |
+| `bundleModules` | bool | `false` | Bundle all modules into a `default` module |
+| `bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
+| `checksDir` | nullOr str | `null` | auto-detects `checks/` |
+| `shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
+| `overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
+| `packagesDir` | nullOr str | `null` | auto-detects `packages/` |
+| `appsDir` | nullOr str | `null` | auto-detects `apps/` |
+| `templatesDir` | nullOr str | `null` | auto-detects `templates/` |
+| `templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
+| `systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
+| `homesDir` | nullOr str | `null` | auto-detects `homes/` |
+| `autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
 
-purr expects the following layout under your `src` directory:
+## Customizing Systems
+
+```nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  systems = [ "x86_64-linux" "aarch64-linux" ];
+}
+```
+
+## Custom Module Directories
+
+```nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  moduleTypes = {
+    nixos = ["nixos" "shared" "container"];
+  };
+}
+```
+
+## Systems & Homes
+
+```nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  systemsDir = "systems";   # or "hosts", or null to auto-detect
+  homesDir = "homes";
+}
+```
+
+# Module System
+
+purr auto-discovers modules from your directory structure and wires them into your flake outputs.
+
+## Module Discovery
+
+Place modules under `modules/` and they're auto-discovered:
 
 ```
-develop/
-├── shells/
+modules/
+├── nixos/services/openssh/default.nix  → nixosModules.services.openssh
+├── darwin/system/defaults/default.nix  → darwinModules.system.defaults
+├── home/programs/git/default.nix       → homeModules.programs.git
+└── shared/users/default.nix            → nixos + darwin (shared)
+```
+
+### Module Types
+
+The default module type mapping determines which subdirectories go to which flake outputs:
+
+| Output | Directories |
+|--------|-------------|
+| `nixosModules` | `nixos/`, `shared/` |
+| `darwinModules` | `darwin/`, `shared/` |
+| `homeModules` | `home/` |
+
+Customize with `moduleTypes`:
+
+```nix
+moduleTypes = {
+  nixos = ["nixos" "shared" "container" "nixos-musl"];
+};
+```
+
+## Namespace
+
+Each module receives `namespace` as a parameter, keeping options scoped under `config.<namespace>.*`:
+
+```nix
+{ config, lib, namespace, ... }@args:
+let
+  cfg = config.${namespace}.my-module;
+in
+{
+  options.${namespace}.my-module.enable = lib.mkEnableOption "my module";
+  config = lib.mkIf cfg.enable { ... };
+}
+```
+
+## Module Arguments
+
+Each auto-discovered module receives different arguments depending on its directory:
+
+| Directory | Arguments |
+|-----------|-----------|
+| `lib/` | `{ lib, inputs, namespace }` |
+| `modules/` | `{ config, options, lib, pkgs, namespace, ... }` |
+| `packages/` | `{ inputs, system, namespace, lib, pkgs }` |
+| `shells/` | `{ inputs, system, namespace, lib, pkgs }` |
+| `checks/` | `{ inputs, system, namespace, lib, pkgs }` |
+| `apps/` | `{ inputs, system, namespace, lib, pkgs }` |
+| `overlays/` | `final: prev:` (Nix overlay convention) |
+| `templates/` | `{ inputs, namespace, lib }` |
+| `systems/` | `{ config, options, lib, pkgs, purr, host, namespace, system, inputs, ... }` |
+| `homes/` | `{ config, options, lib, pkgs, purr, purrLib, host, namespace, system, inputs, ... }` |
+
+> **Note:** `lib` in `packages/`, `shells/`, `checks/`, and `apps/` includes the project's custom lib under `lib.<namespace>.*`, merged via `purrLib`. `systems/` and `homes/` receive a `purr` attrset with metadata about the current configuration context via `specialArgs` / `extraSpecialArgs`.
+
+## Custom Lib
+
+Create a `lib/` directory under `src` to share functions across all modules:
+
+```nix
+# lib/default.nix
+{ lib, inputs, namespace }:
+{
+  keys = import ./keys.nix { inherit lib inputs namespace; };
+  utils = import ./utils.nix { inherit lib inputs namespace; };
+}
+```
+
+Functions are accessible as `lib.<namespace>.*` in all modules, packages, shells, and checks:
+
+```nix
+# packages/known-hosts/default.nix
+{ pkgs, lib, namespace, ... }:
+let
+  inherit (lib.${namespace}) keys;
+in
+pkgs.writeText "known-hosts" (keys.generate { ... })
+```
+
+Subdirectories nest by default (`lib.<namespace>.keys.foo`). Set `flattenLib = true` to merge all submodules directly under the namespace (`lib.<namespace>.foo`).
+
+The `lib/` directory supports both a root `default.nix` and recursive subdirectory discovery via `findModules` — both can coexist.
+
+## Default Module Bundle
+
+By default, sub-modules are exported individually. Enable `bundleModules = true` to auto-generate a `default` module that imports all sub-modules:
+
+```nix
+{ imports = [ inputs.myflake.nixosModules.default ]; }
+```
+
+Set `bundleExtraModules = false` to exclude extraModules from the default bundle (only auto-discovered modules will be included). If you define your own `default` module under `modules/`, the auto-generated bundle is skipped.
+
+## Extra Modules
+
+Inject modules from other flakes:
+
+```nix
+extraModules = {
+  nixos = [
+    inputs.cattery-modules.nixosModules.default
+    inputs.disko.nixosModules.default
+  ];
+};
+```
+
+# Directory Structure
+
+All directories are auto-detected under your `src` path:
+
+```
+src/
+├── lib/                              # Project library (auto-detect: "lib")
+│   ├── default.nix                   #   import { lib, inputs, namespace }: returns attrset
+│   ├── keys/
+│   │   └── default.nix               #   nested → lib.<namespace>.keys
+│   └── utils/
+│       └── default.nix               #   nested → lib.<namespace>.utils
+│                                     #   flattenLib = true → lib.<namespace>
+│
+├── modules/                          # NixOS/darwin/home modules
+│   ├── nixos/                        #   → nixosModules
+│   ├── darwin/                       #   → darwinModules
+│   ├── home/                         #   → homeModules
+│   └── shared/                       #   → merged into nixos + darwin
+│
+├── packages/                         # Per-system packages (auto-detect: "packages")
+│   ├── known-hosts/
+│   │   └── default.nix               #   → packages.<system>.known-hosts
+│   └── match-blocks/
+│       └── default.nix               #   → packages.<system>.match-blocks
+│
+├── shells/                           # Dev shells (auto-detect: "shells", "devShells")
 │   └── default/
-│       └── default.nix     # Dev shell
-├── checks/
-│   └── git-hooks/
-│       └── default.nix     # Pre-commit hooks
-└── packages/
-    └── ...                 # Custom packages
+│       └── default.nix               #   → devShells.<system>.default
+│
+├── checks/                           # Per-system checks (auto-detect: "checks")
+│   └── pre-commit/
+│       └── default.nix               #   → checks.<system>.pre-commit
+│
+├── overlays/                         # Overlays (auto-detect: "overlays")
+│   └── custom/
+│       └── default.nix               #   → overlays.custom
+│
+├── templates/                        # Flake templates (auto-detect: "templates")
+│   └── rust/                         #   non-recursive by default
+│       └── default.nix               #   → templates.rust
+│
+├── apps/                             # Per-system apps (auto-detect: "apps")
+│   └── serve/
+│       └── default.nix               #   → apps.<system>.serve
+│
+├── systems/                          # auto-detect: "systems", "hosts"
+│   └── x86_64-linux/
+│       └── server/default.nix        # → nixosConfigurations.server
+│
+└── homes/                            # auto-detect: "homes"
+    └── x86_64-linux/
+        └── alice@server/default.nix  # → homeConfigurations."alice@server"
 ```
 
-Each `.nix` file is auto-discovered and wired into the flake.
+## Directory Discovery
+
+Each directory is auto-detected when the option is `null` (default). The discovery order:
+
+| Output | Option | Auto-detect candidates |
+|--------|--------|------------------------|
+| Library | `libDir` | `lib/` |
+| Modules | `modulesDir` | `"modules"` (default) |
+| Checks | `checksDir` | `checks/` |
+| Shells | `shellsDir` | `shells/` → `devShells/` |
+| Overlays | `overlaysDir` | `overlays/` |
+| Packages | `packagesDir` | `packages/` |
+| Apps | `appsDir` | `apps/` |
+| Templates | `templatesDir` | `templates/` |
+| Systems | `systemsDir` | `systems/` → `hosts/` |
+| Homes | `homesDir` | `homes/` |
+
+You can override any directory with an explicit name:
+
+```nix
+# mkFlake
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  shellsDir = "myshells";
+  systemsDir = "hosts";
+}
+
+# flake-parts
+purr = {
+  enable = true;
+  src = ./.;
+  shellsDir = "myshells";
+  systemsDir = "hosts";
+};
+```
+
+# Systems & Homes
+
+purr auto-discovers NixOS/darwin systems, home-manager homes, and image formats using the `<arch>-<format>/<name>` convention (compatible with [Snowfall Lib](https://snowfall.org)).
+
+## Directory Structure
+
+```
+src/
+├── systems/                          # auto-detect: "systems", "hosts"
+│   ├── x86_64-linux/
+│   │   ├── server/default.nix        # → nixosConfigurations.server
+│   │   └── laptop/default.nix        # → nixosConfigurations.laptop
+│   ├── x86_64-iso/
+│   │   └── server/default.nix        # → isoConfigurations.server
+│   ├── x86_64-do/
+│   │   └── server/default.nix        # → doConfigurations.server
+│   └── aarch64-darwin/
+│       └── macbook/default.nix       # → darwinConfigurations.macbook
+│
+├── homes/                            # auto-detect: "homes"
+│   ├── x86_64-linux/
+│   │   ├── alice@server/default.nix  # → homeConfigurations."alice@server"
+│   │   └── bob@server/default.nix    # → homeConfigurations."bob@server"
+│   └── aarch64-darwin/
+│       └── alice@macbook/default.nix # → homeConfigurations."alice@macbook"
+```
+
+## System Output Mapping
+
+| Format in dir name | Flake output key | Builder |
+|---|---|---|
+| `linux` | `nixosConfigurations.<name>` | `nixosSystem` |
+| `darwin` | `darwinConfigurations.<name>` | `darwinSystem` |
+| `iso`, `do`, … | `<format>Configurations.<name>` | `nixosSystem` + `image.variant` |
+
+## Home Auto-Linking
+
+Homes named `<user>@<host>` are automatically injected into matching hosts. When `home-manager` (or `homeManager`) is available as an input, building `nixosConfigurations.server` will include all homes with `@server` suffix:
+
+```nix
+# homes/x86_64-linux/alice@server/default.nix
+{ pkgs, ... }: {
+  home.packages = [ pkgs.neovim ];
+  programs.git.enable = true;
+}
+```
+
+The home is auto-configured via `home-manager.users.alice` in the host's NixOS config. No additional wiring needed.
+
+## Image Formats (nixos-generators replacement)
+
+nixos-generators was merged into nixpkgs (25.05+). Set `image.variant` in the system config to build images. purr auto-detects format directories and adds the variant:
+
+```nix
+# systems/x86_64-iso/server/default.nix
+{ ... }: {
+  image.variant = "iso";  # implied, auto-set by purr
+}
+```
+
+## Namespace Bridge (system -> home config forwarding)
+
+When a namespace is set (e.g. `namespace = "demo"`), purr defines `options.<ns>.users` and forwards `<ns>.users.<name>.homeConfig` to `home-manager.users.<name>`. This lets you inject home-manager config directly from any NixOS system module:
+
+```nix
+# systems/x86_64-linux/server/default.nix
+{ config, pkgs, lib, namespace, purr, ... }:
+{
+  networking.hostName = purr.name;
+
+  ${namespace}.users.alice.homeConfig = {
+    home.packages = [ pkgs.cowsay ];
+    programs.git.userName = "Alice";
+  };
+}
+```
+
+Keys inside `homeConfig` map directly to home-manager option paths (`home.packages`, `programs.*`, `services.*`, etc.). The bridge provides low-priority defaults — the user's home module (`homes/x86_64-linux/alice@server/default.nix`) always takes priority.
+
+### Priority Order (lowest to highest)
+
+1. `<ns>.users.<name>.homeConfig` (bridge)
+2. `home-manager.users.<name>` set directly in any NixOS module
+3. The home module file (`homes/.../default.nix`)
+
+## `purr` Metadata
+
+Each system and home module receives a `purr` attrset with metadata about the current configuration. This is passed via `specialArgs` (systems) and `extraSpecialArgs` (homes).
+
+### System Modules (`specialArgs.purr`)
+
+| Field | Example | Description |
+|---|---|---|
+| `name` | `"server"` | System/host name |
+| `arch` | `"x86_64"` | Architecture |
+| `format` | `"linux"` | linux, darwin, iso, ... |
+| `archFormat` | `"x86_64-linux"` | Full arch-format string |
+| `isDarwin` | `false` | Whether the target is Darwin |
+| `isLinux` | `true` | Whether the target is Linux |
+| `homes` | `[{user="alice";host="server";}]` | Linked home configs |
+
+### Home Modules (`extraSpecialArgs.purr`)
+
+| Field | Example | Description |
+|---|---|---|
+| `user` | `"alice"` | Username |
+| `host` | `"server"` | Host name |
+| `arch` | `"x86_64"` | Architecture |
+| `format` | `"linux"` | linux, darwin, ... |
+| `archFormat` | `"x86_64-linux"` | Full arch-format string |
+| `isDarwin` | `false` | Whether the target is Darwin |
+| `isLinux` | `true` | Whether the target is Linux |
+
+> **Note:** The fields above apply to *standalone* homes (discovered from `homes/` but not linked to any system). When a home is auto-linked to a system (via `@host` matching), the home module receives the *system's* `purr` metadata instead.
+
+### Usage Example
+
+```nix
+# systems/x86_64-linux/server/default.nix
+{ config, pkgs, lib, purr, ... }:
+{
+  networking.hostName = purr.name;         # "server"
+  nixpkgs.hostPlatform = purr.archFormat;  # "x86_64-linux"
+}
+```
+
+## Auto-Injection
+
+By default (`autoInject = true`), purr auto-injects basic configuration using `lib.mkDefault` — user modules can always override:
+
+| Context | Injected config |
+|---|---|
+| System config | `networking.hostName = <purr.name>` |
+| Home config (linux) | `home.username`, `home.homeDirectory = "/home/<user>"` |
+| Home config (darwin) | `home.username`, `home.homeDirectory = "/Users/<user>"` |
+
+Disable with `autoInject = false`.
+
+## Usage in mkFlake
+
+```nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  systemsDir = "systems";   # or "hosts", or null to auto-detect
+  homesDir = "homes";
+}
+```
+
+## Usage in flake-parts
+
+```nix
+purr = {
+  enable = true;
+  src = ./.;
+  systemsDir = "systems";
+  homesDir = "homes";
+};
+```
+
+# API Reference
+
+All library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
+
+## Flake Builder
+
+### `mkFlake`
+
+Standalone flake builder. See the [mkFlake Usage](/mkflake) page for the full parameter table.
+
+**Signature:** `mkFlake :: { inputs, src, ... } -> attrs`
+
+## Attribute Utilities
+
+### `optionalAttrs`
+
+`optionalAttrs :: cond: attrs: if cond then attrs else {}`
+
+```nix
+optionalAttrs true { foo = "bar"; }  # => { foo = "bar"; }
+optionalAttrs false { foo = "bar"; } # => { }
+```
+
+## System Utilities
+
+### `defaultSystems`
+
+`defaultSystems :: [string]`
+
+```nix
+defaultSystems  # => ["x86_64-linux" "aarch64-linux" "aarch64-darwin"]
+```
+
+### `eachSystem`
+
+`eachSystem :: systems: f: { system = f system; }`
+
+Apply a function to each system, returning a system-keyed attrset.
+
+### `eachDefaultSystem`
+
+`eachDefaultSystem :: f: { system = f system; }`
+
+Same as `eachSystem defaultSystems`.
+
+## Filesystem
+
+### `getDefaultNixFiles`
+
+Recursively find all `default.nix` files under a path.
+
+## Module Discovery
+
+### `findModules`
+
+Discover nested module tree with `_module` keys. Recursively scans a directory for `.nix` files.
+
+### `findModulesFlat`
+
+Discover flat (non-recursive) modules. Returns only immediate children.
+
+### `findModulesLib`
+
+Discover lib-like modules (nested `default.nix` files).
+
+### `loadModules`
+
+Recursively load all `.nix` files from a directory.
+
+### `readDirModules`
+
+Read directory entries into a module tree structure.
+
+### `mergeModuleTree`
+
+Merge multiple module trees together.
+
+### `discoverModules`
+
+Multi-type module discovery from a modules directory. `modulesPath -> moduleTypes -> { nixos, darwin, home }`
+
+### `collectModules`
+
+Flatten a nested module attrset into a flat list for `imports`.
+
+### `discoverSystems`
+
+Discover system configs using `<arch>-<format>/<name>` convention.
+
+### `discoverHomes`
+
+Discover home configs using `<arch>/<user>@<host>` convention.
+
+## Namespace Wrapping
+
+### `deepMapAttrs`
+
+Map over nested attrs, treating modules as leaves (not recursing into module functions).
+
+### `wrapModule`
+
+Wrap a single module with namespace and/or lib injection.
+
+### `wrapModuleSet`
+
+Wrap a module tree (nested attrset of modules) with namespace/lib injection.
+
+## Configuration Builders
+
+### `buildHomeConfigs`
+
+Build home-manager configurations from discovered homes.
+
+### `buildSystemConfigs`
+
+Build nixos/darwin configurations from discovered systems.
+
+### `parseArchFormat`
+
+`parseArchFormat :: "x86_64-linux" -> { arch = "x86_64"; format = "linux"; }`
+
+### `parseUserHost`
+
+`parseUserHost :: "alice@server" -> { user = "alice"; host = "server"; }`
+
+### `findMatchingHomes`
+
+Find homes matching a host across all architectures.
+
+### `formatOutputKey`
+
+Map format string to flake output key (`"linux" -> "nixosConfigurations"`, `"iso" -> "isoConfigurations"`, etc.)
+
+## Directory Resolution
+
+### `resolveDir`
+
+`resolveDir :: src -> dirOption -> [candidates] -> pathOrNull`
+
+Resolve a directory from an explicit value or auto-detect from candidate paths.
+
+### `resolveDirs`
+
+`resolveDirs :: src -> dirOptions -> resolvedDirs`
+
+Resolve all standard purr directories at once. Used internally by both `mkFlake` and the flake-parts module.
+
+## Library Construction
+
+### `buildImportedPurrLib`
+
+Build the project's custom lib (with fix recursion). Imports a `lib/` directory recursively and provides `inputs`, `lib`, and `namespace` to each function.
+
+### `mergePurrLib`
+
+`mergePurrLib :: nixpkgsLib -> importedLib -> namespace -> mergedLib`
+
+Merge the project lib into nixpkgs lib under the namespace:
+
+```nix
+purrLib = lib                   # standard nixpkgs lib
+  // { ${namespace} = ownLib }  # flake's own namespace lib
+```
+
+## Auto-Discovery
+
+### `autoModules`
+
+Per-system auto-discovery for checks, shells, packages, and apps. Evaluates each `default.nix` with `pkgs` and `system`.
+
+### `overlayModules`
+
+Discover and normalize overlays from a directory.
+
+### `templateModules`
+
+Discover flake templates from a directory.

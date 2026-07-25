@@ -3,3 +3,9 @@
 purr - Nix flake framework with automatic discovery and module system
 
 - [purr](/index): Nix flake framework with automatic discovery and module system
+- [flake-parts Integration](/flake-parts): Using purr as a flake-parts module
+- [mkFlake Usage](/mkflake): Using purr standalone with mkFlake
+- [Module System](/modules): Module discovery, namespace support, and custom lib
+- [Directory Structure](/directory-structure): Full directory layout auto-discovered by purr
+- [Systems & Homes](/systems-homes): Auto-discovering NixOS/darwin systems and home-manager homes
+- [API Reference](/api): Complete purr library API reference
