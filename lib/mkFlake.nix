@@ -64,6 +64,7 @@ let
       systemsDir ? null,
       homesDir ? null,
       autoInject ? true,
+      packagesByName ? false,
       ...
     }:
     let
@@ -191,11 +192,11 @@ let
         );
 
       checks = forAllSystems (
-        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.checksDir
+        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.checksDir false
       );
 
       shells = forAllSystems (
-        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.shellsDir
+        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.shellsDir false
       );
 
       overlays = importedOverlays;
@@ -203,11 +204,12 @@ let
       templates = templateModules src resolved.templatesDir templatesRecursive mergedLib namespace inputs;
 
       packages = forAllSystems (
-        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.packagesDir
+        system:
+        autoModules src pkgs.${system} mergedLib namespace inputs resolved.packagesDir packagesByName
       );
 
       apps = forAllSystems (
-        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.appsDir
+        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.appsDir false
       );
 
       discoveredSystems =

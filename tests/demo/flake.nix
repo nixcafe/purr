@@ -16,6 +16,7 @@
       namespace = "demo";
       bundleModules = true;
       templatesRecursive = false;
+      packagesByName = true;
       outputsBuilder =
         {
           pkgs,

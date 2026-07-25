@@ -61,11 +61,13 @@ rec {
     discoverModules
     discoverSystems
     findModules
+    findModulesByName
     findModulesFlat
     findModulesLib
     loadModules
     readDirModules
     mergeModuleTree
+    validateByName
     ;
 
   # ---- namespace wrapping ----

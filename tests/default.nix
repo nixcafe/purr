@@ -40,6 +40,8 @@ let
     ++ (runGroup "discoverSystems" testModules.discoverSystems)
     ++ (runGroup "discoverHomes" testModules.discoverHomes)
     ++ (runGroup "collectModules" testModules.collectModules)
+    ++ (runGroup "findModulesByName" testModules.findModulesByName)
+    ++ (runGroup "validateByName" testModules.validateByName)
     ++ (runGroup "deepMapAttrs" testNamespacedModules.deepMapAttrs)
     ++ (runGroup "wrapModule" testNamespacedModules.wrapModule)
     ++ (runGroup "wrapWithLib" testNamespacedModules.wrapWithLib)
@@ -58,6 +60,7 @@ let
     ++ (runGroup "buildImportedPurrLib" testPurrLib.buildImportedPurrLib)
     ++ (runGroup "overlayModules" testAutoModules.overlayModules)
     ++ (runGroup "templateModules" testAutoModules.templateModules)
+    ++ (runGroup "autoModules" testAutoModules.autoModules)
     ++ (runGroup "systemsOnly" testMkFlake.systemsOnly)
     ++ (runGroup "homesOnly" testMkFlake.homesOnly)
     ++ (runGroup "systemsAndHomes" testMkFlake.systemsAndHomes)
@@ -66,6 +69,7 @@ let
     ++ (runGroup "bundleExtraModules" testMkFlake.bundleExtraModules)
     ++ (runGroup "customModuleTypes" testMkFlake.customModuleTypes)
     ++ (runGroup "customSystems" testMkFlake.customSystems)
-    ++ (runGroup "outputsBuilder" testMkFlake.outputsBuilder);
+    ++ (runGroup "outputsBuilder" testMkFlake.outputsBuilder)
+    ++ (runGroup "packagesByName" testMkFlake.packagesByName);
 in
 failures
