@@ -152,29 +152,7 @@ let
           fix (
             self:
             let
-              mergedLib =
-                # Merge input libs into the base lib (skip nixpkgs-style libs)
-                builtins.foldl' (
-                  acc: input:
-                  let
-                    inputLib = input.lib or { };
-                  in
-                  if inputLib ? types then
-                    let
-                      extras = builtins.removeAttrs inputLib [
-                        "types"
-                        "nixos"
-                        "nixosSystem"
-                        "nixosOptionsDoc"
-                        "nixosModules"
-                        "nixosTests"
-                        "systems"
-                      ];
-                    in
-                    acc // extras
-                  else
-                    acc // inputLib
-                ) lib (builtins.attrValues inputs);
+              mergedLib = lib;
 
               rootModule =
                 if builtins.pathExists (src + "/${libDir'}/default.nix") then
@@ -217,27 +195,7 @@ let
         else
           null;
 
-      mergedInputLibs = builtins.foldl' (
-        acc: input:
-        let
-          inputLib = input.lib or { };
-        in
-        if inputLib ? types then
-          let
-            extras = builtins.removeAttrs inputLib [
-              "types"
-              "nixos"
-              "nixosSystem"
-              "nixosOptionsDoc"
-              "nixosModules"
-              "nixosTests"
-              "systems"
-            ];
-          in
-          acc // extras
-        else
-          acc // inputLib
-      ) lib (builtins.attrValues inputs);
+      mergedInputLibs = lib;
 
       purrLib =
         if importedPurrLib != null then
