@@ -52,7 +52,7 @@ in
       "receives pkgs, config, lib, namespace" = {
         expr =
           let
-            wrapped = namespacedModules.wrapModule "test-ns" (mkMockModule true);
+            wrapped = namespacedModules.wrapModule "test-ns" null (mkMockModule true);
             result = lib.evalModules {
               modules = [ wrapped ];
               specialArgs = {
@@ -69,7 +69,7 @@ in
       "config passed by module system is not null" = {
         expr =
           let
-            wrapped = namespacedModules.wrapModule "test-ns" (mkMockModule true);
+            wrapped = namespacedModules.wrapModule "test-ns" null (mkMockModule true);
             result = lib.evalModules {
               modules = [ wrapped ];
               specialArgs = {
@@ -86,7 +86,7 @@ in
       "lib passed by module system is not null" = {
         expr =
           let
-            wrapped = namespacedModules.wrapModule "test-ns" (mkMockModule true);
+            wrapped = namespacedModules.wrapModule "test-ns" null (mkMockModule true);
             result = lib.evalModules {
               modules = [ wrapped ];
               specialArgs = {
@@ -103,7 +103,7 @@ in
       "namespace injected by wrapModule is correct" = {
         expr =
           let
-            wrapped = namespacedModules.wrapModule "test-ns" (mkMockModule true);
+            wrapped = namespacedModules.wrapModule "test-ns" null (mkMockModule true);
             result = lib.evalModules {
               modules = [ wrapped ];
               specialArgs = {
@@ -141,7 +141,7 @@ in
       "_module.args.lib does not strip pkgs" = {
         expr =
           let
-            wrapped = namespacedModules.wrapModule "test-ns" (mkMockModule true);
+            wrapped = namespacedModules.wrapModule "test-ns" null (mkMockModule true);
             customLib = lib // {
               testMarker = true;
             };
@@ -167,7 +167,7 @@ in
       "_module.args.lib does not strip config" = {
         expr =
           let
-            wrapped = namespacedModules.wrapModule "test-ns" (mkMockModule true);
+            wrapped = namespacedModules.wrapModule "test-ns" null (mkMockModule true);
             customLib = lib // {
               testMarker = true;
             };
@@ -218,7 +218,7 @@ in
       "namespace is preserved with _module.args.lib" = {
         expr =
           let
-            wrapped = namespacedModules.wrapModule "test-ns" (mkMockModule true);
+            wrapped = namespacedModules.wrapModule "test-ns" null (mkMockModule true);
             customLib = lib // {
               testMarker = true;
             };
@@ -282,7 +282,7 @@ in
                 b = recordModule;
               };
             };
-            wrapped = namespacedModules.wrapModuleSet "test-ns" modules;
+            wrapped = namespacedModules.wrapModuleSet "test-ns" null modules;
             result = lib.evalModules {
               modules = [ wrapped.a.b ];
               specialArgs = {
@@ -304,7 +304,7 @@ in
                 b = recordModule;
               };
             };
-            wrapped = namespacedModules.wrapModuleSet "test-ns" modules;
+            wrapped = namespacedModules.wrapModuleSet "test-ns" null modules;
             result = lib.evalModules {
               modules = [ wrapped.a.b ];
               specialArgs = {
@@ -325,7 +325,7 @@ in
       "null namespace passes modules unchanged" = {
         expr =
           let
-            wrapped = namespacedModules.wrapModuleSet null {
+            wrapped = namespacedModules.wrapModuleSet null null {
               a = recordModule;
             };
           in
