@@ -136,12 +136,14 @@ let
         else
           { };
 
+      sharedOverlays = builtins.attrValues importedOverlays;
+
       pkgs = forAllSystems (
         system:
         import inputs.nixpkgs {
           inherit system;
           config = nixpkgsConfig;
-          overlays = builtins.attrValues importedOverlays;
+          overlays = sharedOverlays;
         }
       );
 
@@ -215,39 +217,36 @@ let
         else
           null;
 
+      mergedInputLibs = builtins.foldl' (
+        acc: input:
+        let
+          inputLib = input.lib or { };
+        in
+        if inputLib ? types then
+          let
+            extras = builtins.removeAttrs inputLib [
+              "types"
+              "nixos"
+              "nixosSystem"
+              "nixosOptionsDoc"
+              "nixosModules"
+              "nixosTests"
+              "systems"
+            ];
+          in
+          acc // extras
+        else
+          acc // inputLib
+      ) lib (builtins.attrValues inputs);
+
       purrLib =
         if importedPurrLib != null then
-          let
-            merged = builtins.foldl' (
-              acc: input:
-              let
-                inputLib = input.lib or { };
-              in
-              if inputLib ? types then
-                let
-                  extras = builtins.removeAttrs inputLib [
-                    "types"
-                    "nixos"
-                    "nixosSystem"
-                    "nixosOptionsDoc"
-                    "nixosModules"
-                    "nixosTests"
-                    "systems"
-                  ];
-                in
-                acc // extras
-              else
-                acc // inputLib
-            ) lib (builtins.attrValues inputs);
-            libWithNs =
-              if namespace != null then
-                merged // { ${namespace} = importedPurrLib; }
-              else
-                merged // importedPurrLib;
-          in
-          libWithNs
+          if namespace != null then
+            mergedInputLibs // { ${namespace} = importedPurrLib; }
+          else
+            mergedInputLibs // importedPurrLib
         else
-          lib;
+          mergedInputLibs;
 
       makeModuleSet = name: namespacedModules.wrapModuleSet namespace (allModules.${name} or { });
 
@@ -365,11 +364,11 @@ let
               discoveredHomes
               namespace
               nixpkgsConfig
+              sharedOverlays
               ;
             inputs = allInputs;
             extraModules = extraModulesWithLocal;
             lib = purrLib;
-            extraOverlays = importedOverlays;
           }
         else
           { };
@@ -382,6 +381,7 @@ let
               discoveredHomes
               namespace
               nixpkgsConfig
+              sharedOverlays
               ;
             inputs = allInputs;
             extraModules = extraModulesWithLocal;

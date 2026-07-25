@@ -220,6 +220,38 @@ in
           result."alice@myhost";
         expected = 1;
       };
+
+      "passes sharedOverlays to pkgs import" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs =
+                {
+                  overlays ? [ ],
+                  ...
+                }@args:
+                args;
+              home-manager = {
+                lib.homeManagerConfiguration =
+                  {
+                    pkgs,
+                    ...
+                  }:
+                  pkgs;
+              };
+            };
+            result = buildHomeConfigs {
+              discoveredHomes = {
+                "x86_64-linux"."alice@myhost" = /tmp;
+              };
+              inputs = fakeInputs;
+              nixpkgsConfig = { };
+              sharedOverlays = [ "my-ovl" ];
+            };
+          in
+          result."alice@myhost".overlays;
+        expected = [ "my-ovl" ];
+      };
     };
   };
 
@@ -490,7 +522,7 @@ in
         };
       };
 
-      "returns {} as config when nixpkgsConfig is empty" = {
+      "returns empty nixpkgs.config when nixpkgsConfig is {}" = {
         expr =
           let
             fakeInputs = {
@@ -510,8 +542,63 @@ in
             cfg = result.nixosConfigurations.myhost;
             firstModule = builtins.head cfg.modules;
           in
-          firstModule;
-        expected = /tmp;
+          firstModule.nixpkgs or { };
+        expected = { };
+      };
+
+      "injects sharedOverlays as nixpkgs.overlays (mkDefault)" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem = { modules, system }: {
+                inherit modules system;
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+              nixpkgsConfig = { };
+              autoInject = false;
+              sharedOverlays = [
+                "overlay1"
+                "overlay2"
+              ];
+            };
+            cfg = result.nixosConfigurations.myhost;
+            firstModule = builtins.head cfg.modules;
+          in
+          firstModule.nixpkgs.overlays;
+        expected = [
+          "overlay1"
+          "overlay2"
+        ];
+      };
+
+      "system module does NOT set nixpkgs.pkgs" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem = { modules, system }: {
+                inherit modules system;
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+              nixpkgsConfig = { };
+              autoInject = false;
+            };
+            cfg = result.nixosConfigurations.myhost;
+            firstModule = builtins.head cfg.modules;
+          in
+          firstModule.nixpkgs ? pkgs || false;
+        expected = false;
       };
 
       "injects extraModules.nixos into linux system configs" = {

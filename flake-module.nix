@@ -451,6 +451,7 @@ in
               ;
             inherit (cfg) autoInject nixpkgsConfig extraModules;
             lib = purrLib;
+            sharedOverlays = builtins.attrValues discoveredOverlays;
           }
         else
           { };
@@ -463,6 +464,7 @@ in
               inputs
               ;
             inherit (cfg) autoInject nixpkgsConfig extraModules;
+            sharedOverlays = builtins.attrValues discoveredOverlays;
           }
         else
           { };
@@ -500,7 +502,7 @@ in
           pkgs = import inputs.nixpkgs {
             inherit system;
             config = cfg.nixpkgsConfig;
-            overlays = [ ];
+            overlays = builtins.attrValues discoveredOverlays;
           };
           mod = autoModules pkgs;
 
