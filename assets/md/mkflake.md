@@ -44,6 +44,7 @@
 | `shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `packagesDir` | nullOr str | `null` | auto-detects `packages/` |
+| `packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
 | `appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 | `templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |

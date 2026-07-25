@@ -63,6 +63,23 @@ Discover flat (non-recursive) modules. Returns only immediate children.
 
 Discover lib-like modules (nested `default.nix` files).
 
+### `findModulesByName`
+
+Discover packages using the `by-name/` convention (`<dir>/by-name/<shard>/<name>/package.nix`).
+Returns a flat attrset of `{ name = path; }`.
+
+### `validateByName`
+
+Validate a by-name packages directory. Returns a list of errors; empty list means all valid.
+Checks that each package's shard prefix matches its name, and that each package has a `package.nix`.
+
+```nix
+validateByName src "packages"
+# => [ ]
+# or errors like:
+# => [ { name = "badshard"; shard = "xx"; error = "shard mismatch: ..."; } ]
+```
+
 ### `loadModules`
 
 Recursively load all `.nix` files from a directory.
@@ -166,7 +183,7 @@ purrLib = lib                   # standard nixpkgs lib
 
 ### `autoModules`
 
-Per-system auto-discovery for checks, shells, packages, and apps. Evaluates each `default.nix` with `pkgs` and `system`.
+Per-system auto-discovery for checks, shells, packages, and apps. Each module is imported with `pkgs` spread into the function arguments (like `callPackage`), so `{ stdenv, fetchurl, pkgs, lib, ... }` style destructuring works directly.
 
 ### `overlayModules`
 

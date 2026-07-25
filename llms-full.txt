@@ -202,6 +202,7 @@ Default `moduleTypes`:
 | `purr.shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
+| `purr.packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
 | `purr.appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `purr.templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 | `purr.templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
@@ -300,6 +301,7 @@ Set `bundleExtraModules = false` to exclude extraModules from the default bundle
 | `shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `packagesDir` | nullOr str | `null` | auto-detects `packages/` |
+| `packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
 | `appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 | `templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
@@ -482,8 +484,12 @@ src/
 ├── packages/                         # Per-system packages (auto-detect: "packages")
 │   ├── known-hosts/
 │   │   └── default.nix               #   → packages.<system>.known-hosts
-│   └── match-blocks/
-│       └── default.nix               #   → packages.<system>.match-blocks
+│   ├── match-blocks/
+│   │   └── default.nix               #   → packages.<system>.match-blocks
+│   └── by-name/                      #   Optional by-name convention (packagesByName = true)
+│       └── co/
+│           └── cowsay/
+│               └── package.nix       #   → packages.<system>.cowsay
 │
 ├── shells/                           # Dev shells (auto-detect: "shells", "devShells")
 │   └── default/
@@ -776,6 +782,23 @@ Discover flat (non-recursive) modules. Returns only immediate children.
 
 Discover lib-like modules (nested `default.nix` files).
 
+### `findModulesByName`
+
+Discover packages using the `by-name/` convention (`<dir>/by-name/<shard>/<name>/package.nix`).
+Returns a flat attrset of `{ name = path; }`.
+
+### `validateByName`
+
+Validate a by-name packages directory. Returns a list of errors; empty list means all valid.
+Checks that each package's shard prefix matches its name, and that each package has a `package.nix`.
+
+```nix
+validateByName src "packages"
+# => [ ]
+# or errors like:
+# => [ { name = "badshard"; shard = "xx"; error = "shard mismatch: ..."; } ]
+```
+
 ### `loadModules`
 
 Recursively load all `.nix` files from a directory.
@@ -879,7 +902,7 @@ purrLib = lib                   # standard nixpkgs lib
 
 ### `autoModules`
 
-Per-system auto-discovery for checks, shells, packages, and apps. Evaluates each `default.nix` with `pkgs` and `system`.
+Per-system auto-discovery for checks, shells, packages, and apps. Each module is imported with `pkgs` spread into the function arguments (like `callPackage`), so `{ stdenv, fetchurl, pkgs, lib, ... }` style destructuring works directly.
 
 ### `overlayModules`
 

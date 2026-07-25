@@ -66,6 +66,7 @@ Default `moduleTypes`:
 | `purr.shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
+| `purr.packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
 | `purr.appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `purr.templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 | `purr.templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |

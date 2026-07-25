@@ -21,8 +21,12 @@ src/
 ├── packages/                         # Per-system packages (auto-detect: "packages")
 │   ├── known-hosts/
 │   │   └── default.nix               #   → packages.<system>.known-hosts
-│   └── match-blocks/
-│       └── default.nix               #   → packages.<system>.match-blocks
+│   ├── match-blocks/
+│   │   └── default.nix               #   → packages.<system>.match-blocks
+│   └── by-name/                      #   Optional by-name convention (packagesByName = true)
+│       └── co/
+│           └── cowsay/
+│               └── package.nix       #   → packages.<system>.cowsay
 │
 ├── shells/                           # Dev shells (auto-detect: "shells", "devShells")
 │   └── default/
