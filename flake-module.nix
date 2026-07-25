@@ -449,7 +449,12 @@ in
               discoveredHomes
               inputs
               ;
-            inherit (cfg) autoInject nixpkgsConfig extraModules;
+            inherit (cfg)
+              autoInject
+              namespace
+              nixpkgsConfig
+              extraModules
+              ;
             lib = purrLib;
             sharedOverlays = builtins.attrValues discoveredOverlays;
           }
@@ -463,7 +468,12 @@ in
               discoveredHomes
               inputs
               ;
-            inherit (cfg) autoInject nixpkgsConfig extraModules;
+            inherit (cfg)
+              autoInject
+              namespace
+              nixpkgsConfig
+              extraModules
+              ;
             sharedOverlays = builtins.attrValues discoveredOverlays;
           }
         else
