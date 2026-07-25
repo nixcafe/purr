@@ -32,18 +32,17 @@
 
 ### Namespace Lib Merging
 
-`purrLib` is built at flake evaluation time by merging the flake's own namespace lib
-with libs from other inputs. Inputs whose `lib` contains `types` (full nixpkgs-style
-libraries like nixpkgs, nixpkgs-stable, home-manager) are **skipped** to avoid
-overwriting the active `lib.types`.
+`purrLib` is built at flake evaluation time from the standard `lib` (nixpkgs-lib)
+plus the flake's own namespace lib. Other input libs are NOT auto-merged—modules
+access them directly via `inputs.xxx.lib`.
 
-The merged `purrLib` is passed via `specialArgs.lib` to `nixosSystem` and
-`home-manager.extraSpecialArgs.lib`, providing `lib.${namespace}.xxx` to all modules.
+`purrLib` is passed via `specialArgs.lib` to `nixosSystem` and as
+`extraSpecialArgs.purrLib` to home-manager, providing `lib.${namespace}.xxx` to
+all modules.
 
 ```nix
 purrLib = lib                   # standard nixpkgs lib
   // { ${namespace} = ownLib }  # flake's own namespace lib
-  // merged-input-libs          # cattery, purr, etc. (no types)
 ```
 
 Modules use `lib.${namespace}.xxx` as before. No `_module.args.lib` overrides.
