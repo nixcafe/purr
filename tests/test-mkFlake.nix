@@ -733,4 +733,53 @@ in
       };
     };
   };
+
+  packagesByName = {
+    tests = {
+      "packagesByName = false only finds regular packages" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              packagesByName = false;
+              namespace = null;
+              autoInject = false;
+            };
+          in
+          attrNames (result.packages."x86_64-linux" or { });
+        expected = [
+          "hello"
+          "lib-check"
+          "spread-test"
+        ];
+      };
+      "packagesByName = true finds both regular and by-name" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              packagesByName = true;
+              namespace = null;
+              autoInject = false;
+            };
+          in
+          builtins.sort (a: b: a < b) (attrNames (result.packages."x86_64-linux" or { }));
+        expected = [
+          "badshard"
+          "cowsay"
+          "hello"
+          "lib-check"
+          "spread-test"
+        ];
+      };
+    };
+  };
 }

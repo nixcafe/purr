@@ -127,6 +127,93 @@ let
     else
       { };
 
+  findModulesByName =
+    parentDir: type:
+    let
+      dir = parentDir + "/${type}/by-name";
+    in
+    if builtins.pathExists dir then
+      let
+        entries = builtins.readDir dir;
+        shardDirs = builtins.attrNames (filterAttrs (_: t: t == "directory") entries);
+        scanShard =
+          shard:
+          let
+            shardDir = dir + "/${shard}";
+            shardEntries = builtins.readDir shardDir;
+            pkgDirs = builtins.attrNames (filterAttrs (_: t: t == "directory") shardEntries);
+            packages = builtins.filter (d: builtins.pathExists (shardDir + "/${d}/package.nix")) pkgDirs;
+          in
+          builtins.listToAttrs (
+            builtins.map (d: {
+              name = d;
+              value = shardDir + "/${d}/package.nix";
+            }) packages
+          );
+      in
+      builtins.foldl' (acc: shard: acc // scanShard shard) { } shardDirs
+    else
+      { };
+
+  validateByName =
+    parentDir: type:
+    let
+      dir = parentDir + "/${type}/by-name";
+    in
+    if builtins.pathExists dir then
+      let
+        entries = builtins.readDir dir;
+        shardDirs = builtins.attrNames (filterAttrs (_: t: t == "directory") entries);
+
+        expectedShard =
+          name:
+          let
+            slen = builtins.stringLength name;
+            len = if slen > 1 then 2 else slen;
+          in
+          builtins.substring 0 len name;
+
+        shardErrors =
+          shard:
+          let
+            shardDir = dir + "/${shard}";
+            shardEntries = builtins.readDir shardDir;
+            pkgDirs = builtins.attrNames (filterAttrs (_: t: t == "directory") shardEntries);
+          in
+          concatMap (
+            name:
+            let
+              mismatch = expectedShard name != shard;
+              noPkg = !builtins.pathExists (shardDir + "/${name}/package.nix");
+            in
+            (
+              if mismatch then
+                [
+                  {
+                    inherit name shard;
+                    error = "shard mismatch: package '${name}' is in shard '${shard}', expected shard '${expectedShard name}'";
+                  }
+                ]
+              else
+                [ ]
+            )
+            ++ (
+              if noPkg then
+                [
+                  {
+                    inherit name shard;
+                    error = "missing package.nix: package '${name}' has no package.nix";
+                  }
+                ]
+              else
+                [ ]
+            )
+          ) pkgDirs;
+      in
+      concatMap shardErrors shardDirs
+    else
+      [ ];
+
   discoverModules =
     modulesDir: dirMap:
     let
@@ -230,10 +317,12 @@ in
     discoverModules
     discoverSystems
     findModules
+    findModulesByName
     findModulesFlat
     findModulesLib
     loadModules
     mergeModuleTree
     readDirModules
+    validateByName
     ;
 }

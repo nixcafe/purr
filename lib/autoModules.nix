@@ -1,19 +1,24 @@
 { modules }:
 let
   autoModules =
-    src: pkgs: purrLib: namespace: inputs: dir:
+    src: pkgs: purrLib: namespace: inputs: dir: packagesByName:
     if dir != null then
       let
-        mods = modules.findModulesLib src dir;
+        importMod =
+          module:
+          import module (
+            pkgs
+            // {
+              inherit inputs pkgs namespace;
+              inherit (pkgs) system;
+              lib = purrLib;
+            }
+          );
+        regularMods = modules.findModulesLib src dir;
+        byNameMods = if packagesByName then modules.findModulesByName src dir else { };
+        allMods = regularMods // byNameMods;
       in
-      builtins.mapAttrs (
-        _: module:
-        import module {
-          inherit inputs pkgs namespace;
-          inherit (pkgs) system;
-          lib = purrLib;
-        }
-      ) mods
+      builtins.mapAttrs (_: importMod) allMods
     else
       { };
 

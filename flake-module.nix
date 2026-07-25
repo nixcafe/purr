@@ -172,6 +172,18 @@ in
       '';
     };
 
+    packagesByName = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether to also discover packages using the by-name convention.
+        When enabled, packages are discovered from
+        `<packagesDir>/by-name/<shard>/<name>/package.nix` in addition
+        to the standard `<packagesDir>/<name>/default.nix` pattern.
+        Coexists with regular package discovery.
+      '';
+    };
+
     appsDir = mkOption {
       type = types.nullOr types.str;
       default = null;
@@ -440,10 +452,10 @@ in
           };
           mod = autoModules cfg.src pkgs mergedLib cfg.namespace inputs;
 
-          checksModules = mod resolved.checksDir;
-          shellsModules = mod resolved.shellsDir;
-          packagesModules = mod resolved.packagesDir;
-          appsModules = mod resolved.appsDir;
+          checksModules = mod resolved.checksDir false;
+          shellsModules = mod resolved.shellsDir false;
+          packagesModules = mod resolved.packagesDir cfg.packagesByName;
+          appsModules = mod resolved.appsDir false;
         in
         {
           _file = ./flake-module.nix;

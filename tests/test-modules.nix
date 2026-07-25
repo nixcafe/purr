@@ -19,9 +19,11 @@ let
     discoverModules
     discoverSystems
     findModules
+    findModulesByName
     findModulesFlat
     findModulesLib
     loadModules
+    validateByName
     ;
 
   fixturesDir = ./fixtures;
@@ -460,6 +462,75 @@ in
           };
         });
         expected = 1;
+      };
+    };
+  };
+
+  # ---- findModulesByName ----
+  findModulesByName = {
+    tests = {
+      "discovers by-name package modules" = {
+        expr =
+          let
+            result = findModulesByName fixturesDir "packages";
+          in
+          builtins.sort (a: b: a < b) (attrNames result);
+        expected = [
+          "badshard"
+          "cowsay"
+        ];
+      };
+      "module value is the package.nix path" = {
+        expr =
+          let
+            result = findModulesByName fixturesDir "packages";
+          in
+          hasSuffix "package.nix" (toString result.cowsay);
+        expected = true;
+      };
+      "returns {} when by-name dir doesn't exist" = {
+        expr = findModulesByName fixturesDir "nonexistent";
+        expected = { };
+      };
+      "returns {} when packages dir doesn't have by-name" = {
+        expr = findModulesByName fixturesDir "modules";
+        expected = { };
+      };
+    };
+  };
+
+  # ---- validateByName ----
+  validateByName = {
+    tests = {
+      "returns empty list for valid by-name directory" = {
+        expr = validateByName fixturesDir "modules";
+        expected = [ ];
+      };
+      "returns shard mismatch error" = {
+        expr =
+          let
+            errors = validateByName fixturesDir "packages";
+            mismatch = builtins.filter (
+              e: e.error != "" && builtins.match ".*shard mismatch.*" e.error != null
+            ) errors;
+          in
+          builtins.length mismatch > 0;
+        expected = true;
+      };
+      "returns missing package.nix error" = {
+        expr =
+          let
+            errors = validateByName fixturesDir "packages";
+            missing = builtins.filter (
+              e: e.error != "" && builtins.match ".*missing package.nix.*" e.error != null
+            ) errors;
+          in
+          builtins.length missing > 0;
+        expected = true;
+      };
+      "returns empty when by-name dir does not exist" = {
+        expr = validateByName fixturesDir "nonexistent";
+        expected = [ ];
       };
     };
   };
