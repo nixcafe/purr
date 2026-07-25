@@ -349,6 +349,8 @@ in
   inherit
     buildHomeConfigs
     buildSystemConfigs
+    findMatchingHomes
+    formatOutputKey
     parseArchFormat
     parseUserHost
     ;

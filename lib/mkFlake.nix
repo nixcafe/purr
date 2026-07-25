@@ -1,10 +1,13 @@
 {
   attrs,
-  configs,
-  systems,
+  autoMods,
+  confs,
   lib,
-  modules,
-  namespacedModules,
+  mods,
+  nsm,
+  purrLib,
+  resolveDir,
+  systems,
   ...
 }:
 let
@@ -16,14 +19,15 @@ let
     unique
     ;
 
-  inherit (attrs)
-    optionalAttrs
-    ;
+  inherit (attrs) optionalAttrs;
 
-  inherit (systems)
-    defaultSystems
-    eachSystem
-    ;
+  inherit (systems) defaultSystems eachSystem;
+
+  inherit (resolveDir) resolveDirs;
+
+  inherit (purrLib) buildImportedPurrLib mergePurrLib;
+
+  inherit (autoMods) autoModules overlayModules templateModules;
 
   mkFlake =
     {
@@ -90,51 +94,26 @@ let
 
       forAllSystems = f: eachSystem systems f;
 
+      resolved = resolveDirs src {
+        inherit
+          checksDir
+          shellsDir
+          overlaysDir
+          packagesDir
+          appsDir
+          templatesDir
+          systemsDir
+          homesDir
+          libDir
+          ;
+      };
+
       modulesPath = src + "/${modulesDir}";
-      allModules = modules.discoverModules modulesPath moduleTypes;
+      allModules = mods.discoverModules modulesPath moduleTypes;
 
       extra = builtins.mapAttrs (_: listModules) extraModules;
 
-      resolve =
-        dir: candidates:
-        if dir != null then
-          dir
-        else
-          let
-            found = builtins.filter (d: builtins.pathExists (src + "/${d}")) candidates;
-          in
-          if found != [ ] then builtins.head found else null;
-
-      checksDir' = resolve checksDir [ "checks" ];
-      shellsDir' = resolve shellsDir [
-        "shells"
-        "devShells"
-      ];
-      overlaysDir' = resolve overlaysDir [ "overlays" ];
-      packagesDir' = resolve packagesDir [ "packages" ];
-      appsDir' = resolve appsDir [ "apps" ];
-      libDir' = resolve libDir [ "lib" ];
-      templatesDir' = resolve templatesDir [ "templates" ];
-      systemsDir' = resolve systemsDir [
-        "systems"
-        "hosts"
-      ];
-      homesDir' = resolve homesDir [ "homes" ];
-
-      importedOverlays =
-        if overlaysDir' != null then
-          let
-            overlayModules = modules.findModulesFlat src overlaysDir';
-            normalizeOverlay =
-              fn: final: prev:
-              let
-                result = fn final prev;
-              in
-              if builtins.isFunction result then result prev else result;
-          in
-          builtins.mapAttrs (_: path: normalizeOverlay (import path)) overlayModules
-        else
-          { };
+      importedOverlays = overlayModules src resolved.overlaysDir;
 
       sharedOverlays = builtins.attrValues importedOverlays;
 
@@ -147,64 +126,19 @@ let
         }
       );
 
-      importedPurrLib =
-        if libDir' != null then
-          fix (
-            self:
-            let
-              mergedLib = lib;
+      importedPurrLib = buildImportedPurrLib {
+        inherit
+          src
+          namespace
+          inputs
+          flattenLib
+          ;
+        inherit (resolved) libDir;
+      };
 
-              rootModule =
-                if builtins.pathExists (src + "/${libDir'}/default.nix") then
-                  import (src + "/${libDir'}/default.nix") {
-                    inherit inputs namespace;
-                    lib = mergedLib // (optionalAttrs (namespace != null) { ${namespace} = self; });
-                  }
-                else
-                  { };
+      mergedLib = mergePurrLib lib importedPurrLib namespace;
 
-              subModules = modules.findModulesLib src libDir';
-              importedSubModules = namespacedModules.deepMapAttrs (
-                path:
-                import path {
-                  inherit inputs namespace;
-                  lib = mergedLib // (optionalAttrs (namespace != null) { ${namespace} = self; });
-                }
-              ) subModules;
-
-              nested = rootModule // importedSubModules;
-
-              flatMerge =
-                let
-                  collectLeaf =
-                    v:
-                    if builtins.isAttrs v then
-                      let
-                        direct = v."default.nix" or null;
-                        rest = builtins.removeAttrs v [ "default.nix" ];
-                        sub = lib.concatMap collectLeaf (builtins.attrValues rest);
-                      in
-                      (if direct != null then [ direct ] else [ ]) ++ sub
-                    else
-                      [ ];
-                in
-                lib.foldl' (a: b: a // b) rootModule (collectLeaf importedSubModules);
-            in
-            if flattenLib then flatMerge else nested
-          )
-        else
-          null;
-
-      mergedInputLibs = lib;
-
-      purrLib =
-        if importedPurrLib != null then
-          if namespace != null then lib // { ${namespace} = importedPurrLib; } else lib // importedPurrLib
-        else
-          lib;
-
-      makeModuleSet =
-        name: namespacedModules.wrapModuleSet namespace importedPurrLib (allModules.${name} or { });
+      makeModuleSet = name: nsm.wrapModuleSet namespace importedPurrLib (allModules.${name} or { });
 
       makeBundled =
         name:
@@ -215,7 +149,7 @@ let
         authored
         // lib.optionalAttrs (!(everything ? "default")) {
           default = {
-            imports = modules.collectModules (
+            imports = mods.collectModules (
               if bundleModules then if bundleExtraModules then everything else authored else authored
             );
           };
@@ -240,7 +174,7 @@ let
             inputs
             namespace
             ;
-          lib = purrLib;
+          lib = mergedLib;
           pkgs = pkgs.${system};
         }
       );
@@ -256,82 +190,53 @@ let
           }) allKeys
         );
 
-      autoModules =
-        system: dir:
-        if dir != null then
-          let
-            mods = modules.findModulesFlat src dir;
-          in
-          builtins.mapAttrs (
-            _: module:
-            import module {
-              inherit
-                inputs
-                system
-                namespace
-                ;
-              lib = purrLib;
-              pkgs = pkgs.${system};
-            }
-          ) mods
-        else
-          { };
+      checks = forAllSystems (
+        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.checksDir
+      );
 
-      checks = forAllSystems (system: autoModules system checksDir');
-
-      shells = forAllSystems (system: autoModules system shellsDir');
+      shells = forAllSystems (
+        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.shellsDir
+      );
 
       overlays = importedOverlays;
 
-      templates =
-        if templatesDir' != null then
-          let
-            templateModules =
-              if templatesRecursive then
-                modules.findModulesLib src templatesDir'
-              else
-                modules.findModulesFlat src templatesDir';
-          in
-          builtins.mapAttrs (
-            _name: module:
-            import module {
-              inherit inputs namespace;
-              lib = purrLib;
-            }
-          ) templateModules
-        else
-          { };
+      templates = templateModules src resolved.templatesDir templatesRecursive mergedLib namespace inputs;
 
-      packages = forAllSystems (system: autoModules system packagesDir');
+      packages = forAllSystems (
+        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.packagesDir
+      );
 
-      apps = forAllSystems (system: autoModules system appsDir');
+      apps = forAllSystems (
+        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.appsDir
+      );
 
-      # -- Systems and Homes --
-      discoveredSystems = if systemsDir' != null then modules.discoverSystems src systemsDir' else { };
+      discoveredSystems =
+        if resolved.systemsDir != null then mods.discoverSystems src resolved.systemsDir else { };
 
-      discoveredHomes = if homesDir' != null then modules.discoverHomes src homesDir' else { };
+      discoveredHomes =
+        if resolved.homesDir != null then mods.discoverHomes src resolved.homesDir else { };
 
       buildSystemConfigs =
         if discoveredSystems != { } then
-          configs.buildSystemConfigs {
+          confs.buildSystemConfigs {
             inherit
               autoInject
-              discoveredSystems
               discoveredHomes
+              discoveredSystems
               namespace
               nixpkgsConfig
               sharedOverlays
               ;
             inputs = allInputs;
             extraModules = extraModulesWithLocal;
-            lib = purrLib;
+            lib = mergedLib;
           }
         else
           { };
 
       buildHomeConfigs =
         if discoveredHomes != { } then
-          configs.buildHomeConfigs {
+          confs.buildHomeConfigs {
             inherit
               autoInject
               discoveredHomes
@@ -341,7 +246,7 @@ let
               ;
             inputs = allInputs;
             extraModules = extraModulesWithLocal;
-            lib = purrLib;
+            lib = mergedLib;
           }
         else
           { };

@@ -1,56 +1,71 @@
 # Test runner for purr.
-# Import this and check returned list is empty for all-pass.
-{
-  lib,
-}:
+# Each test file corresponds to a module under lib/.
+{ lib }:
 let
   runTests = lib.debug.runTests;
 
-  attrsSystems = import ./attrs-systems.nix { inherit lib; };
+  testAttrs = import ./test-attrs.nix { inherit lib; };
 
-  moduleArgs = import ./module-args.nix { inherit lib; };
+  testSystems = import ./test-systems.nix { inherit lib; };
 
-  namespacedModules = import ./namespacedModules.nix { inherit lib; };
+  testFs = import ./test-fs.nix { inherit lib; };
 
-  collectModules = import ./collectModules.nix { inherit lib; };
+  testModules = import ./test-modules.nix { inherit lib; };
 
-  configs = import ./configs.nix { inherit lib; };
+  testNamespacedModules = import ./test-namespacedModules.nix { inherit lib; };
 
-  modulesLib = import ./modules-lib.nix { inherit lib; };
+  testConfigs = import ./test-configs.nix { inherit lib; };
 
-  mkFlakeSystems = import ./mkFlake-systems.nix { inherit lib; };
+  testResolveDir = import ./test-resolveDir.nix { inherit lib; };
+
+  testPurrLib = import ./test-purrLib.nix { inherit lib; };
+
+  testAutoModules = import ./test-autoModules.nix { inherit lib; };
+
+  testMkFlake = import ./test-mkFlake.nix { inherit lib; };
 
   runGroup = name: tests: runTests { "${name}" = tests; };
 
   failures =
-    (runGroup "optionalAttrs" attrsSystems.optionalAttrs)
-    ++ (runGroup "eachSystem" attrsSystems.eachSystem)
-    ++ (runGroup "defaultSystems" attrsSystems.defaultSystems)
-    ++ (runGroup "eachDefaultSystem" attrsSystems.eachDefaultSystem)
-    ++ (runGroup "moduleArgs.wrapModule" moduleArgs.wrapModule)
-    ++ (runGroup "moduleArgs.wrapModuleEdgeCases" moduleArgs.wrapModuleEdgeCases)
-    ++ (runGroup "moduleArgs.wrapWithLib" moduleArgs.wrapWithLib)
-    ++ (runGroup "moduleArgs.wrapModuleSet" moduleArgs.wrapModuleSet)
-    ++ (runGroup "moduleArgs.nullNamespace" moduleArgs.nullNamespace)
-    ++ (runGroup "deepMapAttrs" namespacedModules.deepMapAttrs)
-    ++ (runGroup "wrapModuleSet" namespacedModules.wrapModuleSet)
-    ++ (runGroup "collectModules" collectModules.basic)
-    ++ (runGroup "getDefaultNixFiles" modulesLib.getDefaultNixFiles)
-    ++ (runGroup "findModulesFlat" modulesLib.findModulesFlat)
-    ++ (runGroup "findModules" modulesLib.findModules)
-    ++ (runGroup "findModulesLib" modulesLib.findModulesLib)
-    ++ (runGroup "loadModules" modulesLib.loadModules)
-    ++ (runGroup "discoverModules" modulesLib.discoverModules)
-    ++ (runGroup "discoverSystems" modulesLib.discoverSystems)
-    ++ (runGroup "discoverHomes" modulesLib.discoverHomes)
-    ++ (runGroup "buildHomeConfigs" configs.buildHomeConfigs)
-    ++ (runGroup "buildSystemConfigs" configs.buildSystemConfigs)
-    ++ (runGroup "buildHomeConfigsExtra" configs.buildHomeConfigsExtra)
-    ++ (runGroup "parseArchFormat" configs.parseArchFormat)
-    ++ (runGroup "parseUserHost" configs.parseUserHost)
-    ++ (runGroup "mkFlake.systemsOnly" mkFlakeSystems.systemsOnly)
-    ++ (runGroup "mkFlake.homesOnly" mkFlakeSystems.homesOnly)
-    ++ (runGroup "mkFlake.systemsAndHomes" mkFlakeSystems.systemsAndHomes)
-    ++ (runGroup "mkFlake.fullPipeline" mkFlakeSystems.fullPipeline);
+    (runGroup "optionalAttrs" testAttrs.optionalAttrs)
+    ++ (runGroup "eachSystem" testSystems.eachSystem)
+    ++ (runGroup "defaultSystems" testSystems.defaultSystems)
+    ++ (runGroup "eachDefaultSystem" testSystems.eachDefaultSystem)
+    ++ (runGroup "getDefaultNixFiles" testFs.getDefaultNixFiles)
+    ++ (runGroup "findModulesFlat" testModules.findModulesFlat)
+    ++ (runGroup "findModules" testModules.findModules)
+    ++ (runGroup "findModulesLib" testModules.findModulesLib)
+    ++ (runGroup "loadModules" testModules.loadModules)
+    ++ (runGroup "discoverModules" testModules.discoverModules)
+    ++ (runGroup "discoverSystems" testModules.discoverSystems)
+    ++ (runGroup "discoverHomes" testModules.discoverHomes)
+    ++ (runGroup "collectModules" testModules.collectModules)
+    ++ (runGroup "deepMapAttrs" testNamespacedModules.deepMapAttrs)
+    ++ (runGroup "wrapModule" testNamespacedModules.wrapModule)
+    ++ (runGroup "wrapWithLib" testNamespacedModules.wrapWithLib)
+    ++ (runGroup "wrapModuleSet" testNamespacedModules.wrapModuleSet)
+    ++ (runGroup "nullNamespace" testNamespacedModules.nullNamespace)
+    ++ (runGroup "parseArchFormat" testConfigs.parseArchFormat)
+    ++ (runGroup "parseUserHost" testConfigs.parseUserHost)
+    ++ (runGroup "formatOutputKey" testConfigs.formatOutputKey)
+    ++ (runGroup "findMatchingHomes" testConfigs.findMatchingHomes)
+    ++ (runGroup "buildHomeConfigs" testConfigs.buildHomeConfigs)
+    ++ (runGroup "buildHomeConfigsExtra" testConfigs.buildHomeConfigsExtra)
+    ++ (runGroup "buildSystemConfigs" testConfigs.buildSystemConfigs)
+    ++ (runGroup "resolveDir" testResolveDir.resolveDir)
+    ++ (runGroup "resolveDirs" testResolveDir.resolveDirs)
+    ++ (runGroup "mergePurrLib" testPurrLib.mergePurrLib)
+    ++ (runGroup "buildImportedPurrLib" testPurrLib.buildImportedPurrLib)
+    ++ (runGroup "overlayModules" testAutoModules.overlayModules)
+    ++ (runGroup "templateModules" testAutoModules.templateModules)
+    ++ (runGroup "systemsOnly" testMkFlake.systemsOnly)
+    ++ (runGroup "homesOnly" testMkFlake.homesOnly)
+    ++ (runGroup "systemsAndHomes" testMkFlake.systemsAndHomes)
+    ++ (runGroup "fullPipeline" testMkFlake.fullPipeline)
+    ++ (runGroup "flattenLib" testMkFlake.flattenLib)
+    ++ (runGroup "bundleExtraModules" testMkFlake.bundleExtraModules)
+    ++ (runGroup "customModuleTypes" testMkFlake.customModuleTypes)
+    ++ (runGroup "customSystems" testMkFlake.customSystems)
+    ++ (runGroup "outputsBuilder" testMkFlake.outputsBuilder);
 in
 failures

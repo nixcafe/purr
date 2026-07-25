@@ -1,16 +1,142 @@
-# Tests for lib/configs.nix — buildHomeConfigs, buildSystemConfigs
-{
-  lib,
-}:
+# Tests for lib/configs.nix
+{ lib }:
 let
-  inherit (import ../lib/configs.nix { inherit lib; })
+  inherit (lib) elem;
+
+  confs = import ../lib/configs.nix {
+    inherit lib;
+  };
+
+  inherit (confs)
     buildHomeConfigs
     buildSystemConfigs
+    findMatchingHomes
+    formatOutputKey
     parseArchFormat
     parseUserHost
     ;
 in
 {
+  # ---- parseArchFormat ----
+  parseArchFormat = {
+    tests = {
+      "parses x86_64-linux" = {
+        expr = parseArchFormat "x86_64-linux";
+        expected = {
+          arch = "x86_64";
+          format = "linux";
+        };
+      };
+      "parses aarch64-darwin" = {
+        expr = parseArchFormat "aarch64-darwin";
+        expected = {
+          arch = "aarch64";
+          format = "darwin";
+        };
+      };
+      "parses x86_64-iso" = {
+        expr = parseArchFormat "x86_64-iso";
+        expected = {
+          arch = "x86_64";
+          format = "iso";
+        };
+      };
+      "malformed name returns nulls" = {
+        expr = parseArchFormat "x86_64";
+        expected = {
+          arch = null;
+          format = null;
+        };
+      };
+    };
+  };
+
+  # ---- parseUserHost ----
+  parseUserHost = {
+    tests = {
+      "parses alice@server" = {
+        expr = parseUserHost "alice@server";
+        expected = {
+          user = "alice";
+          host = "server";
+        };
+      };
+      "parses root@host" = {
+        expr = parseUserHost "root@host";
+        expected = {
+          user = "root";
+          host = "host";
+        };
+      };
+      "malformed name returns nulls" = {
+        expr = parseUserHost "alice";
+        expected = {
+          user = null;
+          host = null;
+        };
+      };
+    };
+  };
+
+  # ---- formatOutputKey ----
+  formatOutputKey = {
+    tests = {
+      "linux maps to nixosConfigurations" = {
+        expr = formatOutputKey "linux";
+        expected = "nixosConfigurations";
+      };
+      "darwin maps to darwinConfigurations" = {
+        expr = formatOutputKey "darwin";
+        expected = "darwinConfigurations";
+      };
+      "iso maps to isoConfigurations" = {
+        expr = formatOutputKey "iso";
+        expected = "isoConfigurations";
+      };
+      "do maps to doConfigurations" = {
+        expr = formatOutputKey "do";
+        expected = "doConfigurations";
+      };
+    };
+  };
+
+  # ---- findMatchingHomes ----
+  findMatchingHomes = {
+    tests = {
+      "finds matching homes across all archs" = {
+        expr =
+          let
+            homes = {
+              "x86_64-linux" = {
+                "alice@myhost" = /tmp;
+                "bob@other" = /tmp;
+              };
+              "aarch64-linux" = {
+                "charlie@myhost" = /tmp;
+              };
+            };
+            matches = findMatchingHomes homes "myhost";
+          in
+          builtins.sort (a: b: a.user < b.user) matches;
+        expected = [
+          {
+            user = "alice";
+            path = /tmp;
+          }
+          {
+            user = "charlie";
+            path = /tmp;
+          }
+        ];
+      };
+      "returns empty when no homes match" = {
+        expr = findMatchingHomes { } "unknown";
+        expected = [ ];
+      };
+    };
+  };
+
+  # ---- buildHomeConfigs ----
   buildHomeConfigs = {
     tests = {
       "returns empty when no home-manager input" = {
@@ -23,7 +149,6 @@ in
         };
         expected = { };
       };
-
       "returns empty when no homes discovered" = {
         expr = buildHomeConfigs {
           discoveredHomes = { };
@@ -32,7 +157,6 @@ in
         };
         expected = { };
       };
-
       "injects purr metadata via extraSpecialArgs" = {
         expr =
           let
@@ -47,11 +171,10 @@ in
                   extraSpecialArgs;
               };
             };
-            homes = {
-              "x86_64-linux"."alice@myhost" = /tmp;
-            };
             result = buildHomeConfigs {
-              discoveredHomes = homes;
+              discoveredHomes = {
+                "x86_64-linux"."alice@myhost" = /tmp;
+              };
               inputs = fakeInputs;
               nixpkgsConfig = { };
             };
@@ -67,7 +190,6 @@ in
           };
         };
       };
-
       "root user also gets purr metadata" = {
         expr =
           let
@@ -82,11 +204,10 @@ in
                   extraSpecialArgs;
               };
             };
-            homes = {
-              "x86_64-linux"."root@myserver" = /tmp;
-            };
             result = buildHomeConfigs {
-              discoveredHomes = homes;
+              discoveredHomes = {
+                "x86_64-linux"."root@myserver" = /tmp;
+              };
               inputs = fakeInputs;
               nixpkgsConfig = { };
             };
@@ -102,7 +223,6 @@ in
           };
         };
       };
-
       "accepts homeManager as alias for home-manager" = {
         expr =
           let
@@ -117,11 +237,10 @@ in
                   extraSpecialArgs;
               };
             };
-            homes = {
-              "x86_64-linux"."alice@myhost" = /tmp;
-            };
             result = buildHomeConfigs {
-              discoveredHomes = homes;
+              discoveredHomes = {
+                "x86_64-linux"."alice@myhost" = /tmp;
+              };
               inputs = fakeInputs;
               nixpkgsConfig = { };
             };
@@ -137,7 +256,6 @@ in
           };
         };
       };
-
       "auto-injects home.username" = {
         expr =
           let
@@ -165,8 +283,7 @@ in
           home.username = "alice";
         };
       };
-
-      "auto-injects home.username for darwin" = {
+      "auto-injects homeDirectory for darwin" = {
         expr =
           let
             fakeInputs = {
@@ -174,7 +291,7 @@ in
               home-manager = {
                 lib.homeManagerConfiguration =
                   {
-                    modules,
+                    modules ? [ ],
                     ...
                   }:
                   builtins.head modules;
@@ -182,18 +299,28 @@ in
             };
             result = buildHomeConfigs {
               discoveredHomes = {
-                "aarch64-darwin"."alice@mac1" = /tmp;
+                "aarch64-darwin"."alice@macbook" = /tmp;
+                "x86_64-linux"."alice@myhost" = /tmp;
               };
               inputs = fakeInputs;
               nixpkgsConfig = { };
             };
           in
-          result."alice@mac1";
+          {
+            darwin = result."alice@macbook".home or { };
+            linux = result."alice@myhost".home or { };
+          };
         expected = {
-          home.username = "alice";
+          darwin = {
+            username = "alice";
+            homeDirectory = "/Users/alice";
+          };
+          linux = {
+            username = "alice";
+            homeDirectory = "/home/alice";
+          };
         };
       };
-
       "autoInject = false skips home injection" = {
         expr =
           let
@@ -220,7 +347,6 @@ in
           result."alice@myhost";
         expected = 1;
       };
-
       "passes sharedOverlays to pkgs import" = {
         expr =
           let
@@ -255,15 +381,48 @@ in
     };
   };
 
+  buildHomeConfigsExtra = {
+    tests = {
+      "injects extraModules.home into home configs" = {
+        expr =
+          let
+            extraMod = {
+              home.extra = true;
+            };
+            fakeInputs = {
+              nixpkgs = { };
+              home-manager = {
+                lib.homeManagerConfiguration =
+                  {
+                    modules ? [ ],
+                    ...
+                  }:
+                  modules;
+              };
+            };
+            result = buildHomeConfigs {
+              discoveredHomes = {
+                "x86_64-linux"."alice@myhost" = /tmp;
+              };
+              inputs = fakeInputs;
+              nixpkgsConfig = { };
+              extraModules.home = [ extraMod ];
+            };
+          in
+          elem extraMod (result."alice@myhost" or [ ]);
+        expected = true;
+      };
+    };
+  };
+
+  # ---- buildSystemConfigs ----
   buildSystemConfigs = {
     tests = {
       "returns nested nixosConfigurations for linux" = {
         expr =
           let
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
@@ -276,15 +435,12 @@ in
           builtins.attrNames result;
         expected = [ "nixosConfigurations" ];
       };
-
       "returns nested darwinConfigurations for darwin" = {
         expr =
           let
             fakeInputs = {
               nixpkgs.lib = { };
-              nix-darwin.lib.darwinSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nix-darwin.lib.darwinSystem = { modules, system }: { inherit modules system; };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
@@ -297,15 +453,12 @@ in
           builtins.attrNames result;
         expected = [ "darwinConfigurations" ];
       };
-
       "accepts darwin as alias for nix-darwin" = {
         expr =
           let
             fakeInputs = {
               nixpkgs.lib = { };
-              darwin.lib.darwinSystem = { modules, system }: {
-                inherit modules system;
-              };
+              darwin.lib.darwinSystem = { modules, system }: { inherit modules system; };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
@@ -318,59 +471,51 @@ in
           builtins.attrNames result;
         expected = [ "darwinConfigurations" ];
       };
-
-      "accepts homeManager alias for home-manager in system configs" = {
+      "accepts homeManager alias in system configs" = {
         expr =
           let
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
               homeManager = {
                 nixosModules.home-manager = "hm-mod";
                 darwinModules.home-manager = "hm-darwin";
               };
             };
-            homes = {
-              "x86_64-linux"."alice@myhost" = /tmp;
-            };
             result = buildSystemConfigs {
               discoveredSystems = {
                 "x86_64-linux"."myhost" = /tmp;
               };
-              discoveredHomes = homes;
+              discoveredHomes = {
+                "x86_64-linux"."alice@myhost" = /tmp;
+              };
               inputs = fakeInputs;
             };
             cfg = result.nixosConfigurations.myhost;
-            hmMods = builtins.filter (m: builtins.isAttrs m && m ? home-manager) cfg.modules;
+            hmMods = builtins.filter (m: builtins.isAttrs m && m ? "home-manager") cfg.modules;
           in
-          builtins.attrNames (builtins.head hmMods).home-manager.users;
+          builtins.attrNames (builtins.head hmMods)."home-manager".users;
         expected = [ "alice" ];
       };
-
       "auto-creates users.users for linked non-root homes" = {
         expr =
           let
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
               home-manager = {
                 nixosModules.home-manager = "hm-mod";
                 darwinModules.home-manager = "hm-darwin";
               };
             };
-            homes = {
-              "x86_64-linux" = {
-                "alice@myhost" = /tmp;
-                "bob@myhost" = /tmp;
-              };
-            };
             result = buildSystemConfigs {
               discoveredSystems = {
                 "x86_64-linux"."myhost" = /tmp;
               };
-              discoveredHomes = homes;
+              discoveredHomes = {
+                "x86_64-linux" = {
+                  "alice@myhost" = /tmp;
+                  "bob@myhost" = /tmp;
+                };
+              };
               inputs = fakeInputs;
             };
             cfg = result.nixosConfigurations.myhost;
@@ -382,29 +527,23 @@ in
           "bob"
         ];
       };
-
       "excludes root from users.users auto-creation" = {
         expr =
           let
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
               home-manager = {
                 nixosModules.home-manager = "hm-mod";
                 darwinModules.home-manager = "hm-darwin";
-              };
-            };
-            homes = {
-              "x86_64-linux" = {
-                "root@myhost" = /tmp;
               };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
                 "x86_64-linux"."myhost" = /tmp;
               };
-              discoveredHomes = homes;
+              discoveredHomes = {
+                "x86_64-linux"."root@myhost" = /tmp;
+              };
               inputs = fakeInputs;
             };
             cfg = result.nixosConfigurations.myhost;
@@ -413,35 +552,31 @@ in
           userModules;
         expected = [ ];
       };
-
       "includes root in home-manager.users but not users.users" = {
         expr =
           let
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
               home-manager = {
                 nixosModules.home-manager = "hm-mod";
                 darwinModules.home-manager = "hm-darwin";
-              };
-            };
-            homes = {
-              "x86_64-linux" = {
-                "alice@myhost" = /tmp;
-                "root@myhost" = /tmp;
               };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
                 "x86_64-linux"."myhost" = /tmp;
               };
-              discoveredHomes = homes;
+              discoveredHomes = {
+                "x86_64-linux" = {
+                  "alice@myhost" = /tmp;
+                  "root@myhost" = /tmp;
+                };
+              };
               inputs = fakeInputs;
             };
             cfg = result.nixosConfigurations.myhost;
-            hmMods = builtins.filter (m: builtins.isAttrs m && m ? home-manager) cfg.modules;
-            hmUsers = builtins.attrNames (builtins.head hmMods).home-manager.users;
+            hmMods = builtins.filter (m: builtins.isAttrs m && m ? "home-manager") cfg.modules;
+            hmUsers = builtins.attrNames (builtins.head hmMods)."home-manager".users;
             userMods = builtins.filter (m: builtins.isAttrs m && m ? users) cfg.modules;
             usersUsers =
               if userMods != [ ] then builtins.attrNames (builtins.head userMods).users.users else [ ];
@@ -457,48 +592,40 @@ in
           usersUsers = [ "alice" ];
         };
       };
-
       "cross-archformat home matching" = {
         expr =
           let
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
               home-manager = {
                 nixosModules.home-manager = "hm-mod";
                 darwinModules.home-manager = "hm-darwin";
               };
             };
-            homes = {
-              "x86_64-linux"."alice@myhost" = /tmp;
-              "aarch64-linux"."bob@myhost" = /tmp;
-            };
             result = buildSystemConfigs {
               discoveredSystems = {
                 "x86_64-linux"."myhost" = /tmp;
               };
-              discoveredHomes = homes;
+              discoveredHomes = {
+                "x86_64-linux"."alice@myhost" = /tmp;
+                "aarch64-linux"."bob@myhost" = /tmp;
+              };
               inputs = fakeInputs;
             };
             cfg = result.nixosConfigurations.myhost;
-            hmMods = builtins.filter (m: builtins.isAttrs m && m ? home-manager) cfg.modules;
-            hmUsers = builtins.attrNames (builtins.head hmMods).home-manager.users;
+            hmMods = builtins.filter (m: builtins.isAttrs m && m ? "home-manager") cfg.modules;
           in
-          hmUsers;
+          builtins.attrNames (builtins.head hmMods)."home-manager".users;
         expected = [
           "alice"
           "bob"
         ];
       };
-
       "injects nixpkgsConfig as nixpkgs.config module" = {
         expr =
           let
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
@@ -513,22 +640,18 @@ in
               autoInject = false;
             };
             cfg = result.nixosConfigurations.myhost;
-            firstModule = builtins.head cfg.modules;
           in
-          firstModule.nixpkgs.config;
+          (builtins.head cfg.modules).nixpkgs.config;
         expected = {
           allowUnfree = true;
           permittedInsecurePackages = [ "bad-1.0" ];
         };
       };
-
       "returns empty nixpkgs.config when nixpkgsConfig is {}" = {
         expr =
           let
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
@@ -540,19 +663,15 @@ in
               autoInject = false;
             };
             cfg = result.nixosConfigurations.myhost;
-            firstModule = builtins.head cfg.modules;
           in
-          firstModule.nixpkgs or { };
+          (builtins.head cfg.modules).nixpkgs or { };
         expected = { };
       };
-
       "injects sharedOverlays as nixpkgs.overlays (mkDefault)" = {
         expr =
           let
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
@@ -568,22 +687,18 @@ in
               ];
             };
             cfg = result.nixosConfigurations.myhost;
-            firstModule = builtins.head cfg.modules;
           in
-          firstModule.nixpkgs.overlays;
+          (builtins.head cfg.modules).nixpkgs.overlays;
         expected = [
           "overlay1"
           "overlay2"
         ];
       };
-
       "system module does NOT set nixpkgs.pkgs" = {
         expr =
           let
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
@@ -595,12 +710,10 @@ in
               autoInject = false;
             };
             cfg = result.nixosConfigurations.myhost;
-            firstModule = builtins.head cfg.modules;
           in
-          firstModule.nixpkgs ? pkgs || false;
+          (builtins.head cfg.modules).nixpkgs ? pkgs || false;
         expected = false;
       };
-
       "injects extraModules.nixos into linux system configs" = {
         expr =
           let
@@ -608,9 +721,7 @@ in
               services.extra = true;
             };
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
@@ -622,10 +733,9 @@ in
             };
             cfg = result.nixosConfigurations.myhost;
           in
-          builtins.elem extraMod cfg.modules;
+          elem extraMod cfg.modules;
         expected = true;
       };
-
       "injects extraModules.darwin into darwin system configs" = {
         expr =
           let
@@ -634,9 +744,7 @@ in
             };
             fakeInputs = {
               nixpkgs.lib = { };
-              darwin.lib.darwinSystem = { modules, system }: {
-                inherit modules system;
-              };
+              darwin.lib.darwinSystem = { modules, system }: { inherit modules system; };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
@@ -648,10 +756,9 @@ in
             };
             cfg = result.darwinConfigurations.mac1;
           in
-          builtins.elem extraMod cfg.modules;
+          elem extraMod cfg.modules;
         expected = true;
       };
-
       "does not inject darwin extras into linux configs" = {
         expr =
           let
@@ -659,9 +766,7 @@ in
               services.extra = true;
             };
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
@@ -673,11 +778,10 @@ in
             };
             cfg = result.nixosConfigurations.myhost;
           in
-          builtins.elem extraMod cfg.modules;
+          elem extraMod cfg.modules;
         expected = false;
       };
-
-      "passes purr metadata as specialArgs (linux, no homes)" = {
+      "passes purr metadata as specialArgs (linux)" = {
         expr =
           let
             fakeInputs = {
@@ -705,7 +809,6 @@ in
           homes = [ ];
         };
       };
-
       "purr.homes includes linked homes" = {
         expr =
           let
@@ -746,7 +849,6 @@ in
           }
         ];
       };
-
       "passes purr metadata as specialArgs (darwin)" = {
         expr =
           let
@@ -776,7 +878,6 @@ in
           homes = [ ];
         };
       };
-
       "cross-archformat homes show in purr.homes" = {
         expr =
           let
@@ -815,14 +916,11 @@ in
           }
         ];
       };
-
       "auto-injects networking.hostName" = {
         expr =
           let
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
@@ -832,19 +930,15 @@ in
               inputs = fakeInputs;
             };
             cfg = result.nixosConfigurations.myhost;
-            hostNameMod = builtins.head cfg.modules;
           in
-          hostNameMod.networking.hostName;
+          (builtins.head cfg.modules).networking.hostName;
         expected = "myhost";
       };
-
       "autoInject = false skips hostName injection" = {
         expr =
           let
             fakeInputs = {
-              nixpkgs.lib.nixosSystem = { modules, system }: {
-                inherit modules system;
-              };
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
             };
             result = buildSystemConfigs {
               discoveredSystems = {
@@ -855,104 +949,9 @@ in
               autoInject = false;
             };
             cfg = result.nixosConfigurations.myhost;
-            firstModule = builtins.head cfg.modules;
           in
-          firstModule;
+          builtins.head cfg.modules;
         expected = /tmp;
-      };
-    };
-  };
-
-  buildHomeConfigsExtra = {
-    tests = {
-      "injects extraModules.home into home configs" = {
-        expr =
-          let
-            extraMod = {
-              home.extra = true;
-            };
-            fakeInputs = {
-              nixpkgs = { };
-              home-manager = {
-                lib.homeManagerConfiguration =
-                  {
-                    modules ? [ ],
-                    ...
-                  }:
-                  modules;
-              };
-            };
-            homes = {
-              "x86_64-linux"."alice@myhost" = /tmp;
-            };
-            result = buildHomeConfigs {
-              discoveredHomes = homes;
-              inputs = fakeInputs;
-              nixpkgsConfig = { };
-              extraModules.home = [ extraMod ];
-            };
-          in
-          builtins.elem extraMod (result."alice@myhost" or [ ]);
-        expected = true;
-      };
-    };
-  };
-
-  parseArchFormat = {
-    tests = {
-      "parses x86_64-linux" = {
-        expr = parseArchFormat "x86_64-linux";
-        expected = {
-          arch = "x86_64";
-          format = "linux";
-        };
-      };
-      "parses aarch64-darwin" = {
-        expr = parseArchFormat "aarch64-darwin";
-        expected = {
-          arch = "aarch64";
-          format = "darwin";
-        };
-      };
-      "parses x86_64-iso" = {
-        expr = parseArchFormat "x86_64-iso";
-        expected = {
-          arch = "x86_64";
-          format = "iso";
-        };
-      };
-      "malformed name returns nulls" = {
-        expr = parseArchFormat "x86_64";
-        expected = {
-          arch = null;
-          format = null;
-        };
-      };
-    };
-  };
-
-  parseUserHost = {
-    tests = {
-      "parses alice@server" = {
-        expr = parseUserHost "alice@server";
-        expected = {
-          user = "alice";
-          host = "server";
-        };
-      };
-      "parses root@host" = {
-        expr = parseUserHost "root@host";
-        expected = {
-          user = "root";
-          host = "host";
-        };
-      };
-      "malformed name returns nulls" = {
-        expr = parseUserHost "alice";
-        expected = {
-          user = null;
-          host = null;
-        };
       };
     };
   };

@@ -233,5 +233,7 @@ in
     findModulesFlat
     findModulesLib
     loadModules
+    mergeModuleTree
+    readDirModules
     ;
 }

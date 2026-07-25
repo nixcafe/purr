@@ -454,12 +454,53 @@ purr = {
 | `purr.nixpkgsConfig` | attrs | `{}` | nixpkgs config (allowUnfree, etc.) |
 | `purr.autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
 
-```nix
-inputs.purr.lib.defaultSystems  # ["x86_64-linux" "aarch64-linux" "aarch64-darwin"]
-inputs.purr.lib.eachSystem [...]
-inputs.purr.lib.eachDefaultSystem
-inputs.purr.lib.collectModules  # flatten nested modules to a list
-inputs.purr.lib.loadModules     # recursively load .nix files from a dir
+### Lib API
+
+All lib functions are exported from a single `rec` attrset under `inputs.purr.lib`.
+
+| Function | Description |
+|---|---|
+| `mkFlake` | Standalone flake builder (see table above) |
+| `optionalAttrs` | `cond: attrs: if cond then attrs else {}` |
+| `defaultSystems` | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` |
+| `eachSystem` | `systems: f: { system = f system; }` |
+| `eachDefaultSystem` | `eachSystem defaultSystems` |
+| `getDefaultNixFiles` | Recursively find all `default.nix` files under a path |
+| `collectModules` | Flatten a nested module attrset into a flat list |
+| `loadModules` | Recursively load all `.nix` files from a dir |
+| `findModules` | Discover nested module tree with `_module` keys |
+| `findModulesFlat` | Discover flat (non-recursive) modules |
+| `findModulesLib` | Discover lib-like modules (nested `default.nix`) |
+| `discoverModules` | Multi-type module discovery from a modules dir |
+| `discoverSystems` | Discover system configs (`<arch>-<format>/<name>`) |
+| `discoverHomes` | Discover home configs (`<arch>/<user>@<host>`) |
+| `deepMapAttrs` | Map over nested attrs, treating modules as leaves |
+| `wrapModule` | Wrap a module with namespace/lib injection |
+| `wrapModuleSet` | Wrap a module tree with namespace/lib injection |
+| `buildHomeConfigs` | Build home-manager configurations from discovered homes |
+| `buildSystemConfigs` | Build nixos/darwin configurations from discovered systems |
+| `parseArchFormat` | Parse `arch-format` → `{ arch; format; }` |
+| `parseUserHost` | Parse `user@host` → `{ user; host; }` |
+| `findMatchingHomes` | Find homes matching a host across all archs |
+| `formatOutputKey` | Map format string to flake output key |
+| `resolveDir` | Resolve a dir from explicit value or auto-detect candidates |
+| `resolveDirs` | Resolve all standard purr directories at once |
+| `buildImportedPurrLib` | Build the project's custom lib (with fix recursion) |
+| `mergePurrLib` | Merge project lib into nixpkgs lib under namespace |
+| `autoModules` | Per-system auto-discovery (checks, shells, packages, apps) |
+| `overlayModules` | Discover and normalize overlays from a directory |
+| `templateModules` | Discover flake templates from a directory |
+
+### Templates
+
+Scaffold a new purr project:
+
+```shell
+# Standalone (mkFlake)
+nix flake init -t github:nixcafe/purr
+
+# With flake-parts
+nix flake init -t github:nixcafe/purr#flake-parts
 ```
 
 ## License

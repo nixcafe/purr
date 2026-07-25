@@ -1,34 +1,95 @@
 { lib }:
 let
-  systems = import ./lib/systems.nix;
-
   attrs = import ./lib/attrs.nix;
+
+  systems = import ./lib/systems.nix;
 
   fs = import ./lib/fs.nix;
 
-  modules = import ./lib/modules.nix {
+  mods = import ./lib/modules.nix {
     inherit fs lib;
   };
 
-  configs = import ./lib/configs.nix {
+  nsm = import ./lib/namespacedModules.nix;
+
+  confs = import ./lib/configs.nix {
     inherit lib;
   };
 
-  namespacedModules = import ./lib/namespacedModules.nix;
+  resolver = import ./lib/resolveDir.nix {
+    inherit lib;
+  };
 
-  mkFlake = import ./lib/mkFlake.nix {
+  libBuilder = import ./lib/purrLib.nix {
+    inherit lib attrs;
+    modules = mods;
+    namespacedModules = nsm;
+  };
+
+  autoMods = import ./lib/autoModules.nix {
+    modules = mods;
+  };
+
+  mkFlakeMod = import ./lib/mkFlake.nix {
     inherit
       attrs
-      configs
+      confs
       lib
-      modules
-      namespacedModules
+      mods
+      nsm
       systems
       ;
+    resolveDir = resolver;
+    purrLib = libBuilder;
+    autoMods = autoMods;
   };
 in
-{
-  inherit (systems) eachSystem eachDefaultSystem defaultSystems;
-  inherit (mkFlake) mkFlake;
-  inherit (modules) collectModules loadModules;
+rec {
+  # ---- attributes ----
+  inherit (attrs) optionalAttrs;
+
+  # ---- systems ----
+  inherit (systems) defaultSystems eachDefaultSystem eachSystem;
+
+  # ---- filesystem ----
+  inherit (fs) getDefaultNixFiles;
+
+  # ---- modules ----
+  inherit (mods)
+    collectModules
+    discoverHomes
+    discoverModules
+    discoverSystems
+    findModules
+    findModulesFlat
+    findModulesLib
+    loadModules
+    readDirModules
+    mergeModuleTree
+    ;
+
+  # ---- namespace wrapping ----
+  inherit (nsm) deepMapAttrs wrapModule wrapModuleSet;
+
+  # ---- config builders ----
+  inherit (confs)
+    buildHomeConfigs
+    buildSystemConfigs
+    findMatchingHomes
+    formatOutputKey
+    parseArchFormat
+    parseUserHost
+    ;
+
+  # ---- directory resolution ----
+  inherit (resolver) resolveDir resolveDirs;
+
+  # ---- library construction ----
+  inherit (libBuilder) buildImportedPurrLib mergePurrLib;
+
+  # ---- auto-discovery ----
+  inherit (autoMods) autoModules overlayModules templateModules;
+
+  # ---- mkFlake ----
+  inherit (mkFlakeMod) mkFlake;
 }
