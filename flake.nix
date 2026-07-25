@@ -19,7 +19,7 @@
       devFlake = import ./dev/flake.nix;
       dev = devFlake.outputs {
         nixpkgs = flake-compat.outputs.inputs.nixpkgs;
-        pre-commit-hooks = flake-compat.outputs.inputs.pre-commit-hooks;
+        git-hooks = flake-compat.outputs.inputs.git-hooks;
         root = ./.;
       };
     in

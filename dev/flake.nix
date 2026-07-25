@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    pre-commit-hooks.url = "github:cachix/git-hooks.nix";
+    git-hooks.url = "github:cachix/git-hooks.nix";
   };
 
   outputs =
@@ -20,7 +20,7 @@
         system:
         let
           pkgs = inputs.nixpkgs.legacyPackages.${system};
-          pre-commit-check = inputs.pre-commit-hooks.lib.${system}.run {
+          pre-commit-check = inputs.git-hooks.lib.${system}.run {
             src = root;
             hooks = {
               deadnix = {
