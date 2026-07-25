@@ -99,9 +99,17 @@ let
               sysModule = discoveredSystems.${archFormat}.${systemName};
               matchingHomes = if hasHomeManager then findMatchingHomes discoveredHomes systemName else [ ];
 
+              isDarwin = lib.hasSuffix "darwin" archFormat;
+
               purr = {
                 name = systemName;
-                inherit arch archFormat format;
+                inherit
+                  arch
+                  archFormat
+                  format
+                  isDarwin
+                  ;
+                isLinux = !isDarwin;
                 homes = builtins.map (h: {
                   inherit (h) user;
                   host = systemName;
@@ -136,7 +144,7 @@ let
                         ...
                       }:
                       let
-                        nsUsers = config.${namespace}.users or { };
+                        nsUsers = if namespace != null then config.${namespace}.users or { } else { };
                       in
                       {
                         home-manager.useGlobalPkgs = mkDefault true;
@@ -299,10 +307,11 @@ let
             value =
               let
                 hostParsed = parseUserHost userHost;
+                isDarwin = lib.hasSuffix "darwin" archFormat;
                 autoInjectModules = lib.optional autoInject {
                   home.username = mkDefault hostParsed.user;
                   home.homeDirectory = mkDefault (
-                    if format == "darwin" then "/Users/${hostParsed.user}" else "/home/${hostParsed.user}"
+                    if isDarwin then "/Users/${hostParsed.user}" else "/home/${hostParsed.user}"
                   );
                 };
               in
@@ -320,7 +329,13 @@ let
                   purrLib = lib;
                   purr = {
                     inherit (hostParsed) user host;
-                    inherit arch archFormat format;
+                    inherit
+                      arch
+                      archFormat
+                      format
+                      isDarwin
+                      ;
+                    isLinux = !isDarwin;
                   };
                 };
               };
