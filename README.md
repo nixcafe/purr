@@ -347,6 +347,11 @@ current configuration. This is passed via `specialArgs` (systems) and
 | `format` | `"linux"` | linux, darwin, ... |
 | `archFormat` | `"x86_64-linux"` | Full arch-format string |
 
+> **Note:** The fields above apply to *standalone* homes (discovered from
+> `homes/` but not linked to any system). When a home is auto-linked to a
+> system (via `@host` matching), the home module receives the *system's*
+> `purr` metadata instead — see the [System modules](#purr-metadata) table above.
+
 Example:
 
 ```nix
