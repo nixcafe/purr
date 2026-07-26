@@ -89,13 +89,9 @@ in
         expr = formatOutputKey "darwin";
         expected = "darwinConfigurations";
       };
-      "iso maps to isoConfigurations" = {
-        expr = formatOutputKey "iso";
-        expected = "isoConfigurations";
-      };
-      "do maps to doConfigurations" = {
-        expr = formatOutputKey "do";
-        expected = "doConfigurations";
+      "throws for unsupported format" = {
+        expr = (builtins.tryEval (formatOutputKey "iso")).success;
+        expected = false;
       };
     };
   };
