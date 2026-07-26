@@ -245,9 +245,7 @@ let
             else
               inputs.nixpkgs.lib.nixosSystem {
                 inherit system;
-                modules = baseModules ++ [
-                  { image.variant = format; }
-                ];
+                modules = baseModules;
                 specialArgs = {
                   inherit
                     inputs
