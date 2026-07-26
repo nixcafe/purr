@@ -146,7 +146,7 @@ Find homes matching a host across all architectures.
 
 ### `formatOutputKey`
 
-Map format string to flake output key (`"linux" -> "nixosConfigurations"`, `"iso" -> "isoConfigurations"`, etc.)
+Map format string to flake output key (`"linux" -> "nixosConfigurations"`, `"darwin" -> "darwinConfigurations"`). Throws for unsupported formats.
 
 ## Directory Resolution
 

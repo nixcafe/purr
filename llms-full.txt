@@ -559,7 +559,7 @@ purr = {
 
 # Systems & Homes
 
-purr auto-discovers NixOS/darwin systems, home-manager homes, and image formats using the `<arch>-<format>/<name>` convention (compatible with [Snowfall Lib](https://snowfall.org)).
+purr auto-discovers NixOS/darwin systems and home-manager homes using the `<arch>-<format>/<name>` convention (compatible with [Snowfall Lib](https://snowfall.org)). Only `linux` and `darwin` formats are supported.
 
 ## Directory Structure
 
@@ -569,10 +569,6 @@ src/
 │   ├── x86_64-linux/
 │   │   ├── server/default.nix        # → nixosConfigurations.server
 │   │   └── laptop/default.nix        # → nixosConfigurations.laptop
-│   ├── x86_64-iso/
-│   │   └── server/default.nix        # → isoConfigurations.server
-│   ├── x86_64-do/
-│   │   └── server/default.nix        # → doConfigurations.server
 │   └── aarch64-darwin/
 │       └── macbook/default.nix       # → darwinConfigurations.macbook
 │
@@ -590,7 +586,6 @@ src/
 |---|---|---|
 | `linux` | `nixosConfigurations.<name>` | `nixosSystem` |
 | `darwin` | `darwinConfigurations.<name>` | `darwinSystem` |
-| `iso`, `do`, … | `<format>Configurations.<name>` | `nixosSystem` + `image.variant` |
 
 ## Home Auto-Linking
 
@@ -606,15 +601,60 @@ Homes named `<user>@<host>` are automatically injected into matching hosts. When
 
 The home is auto-configured via `home-manager.users.alice` in the host's NixOS config. No additional wiring needed.
 
-## Image Formats (nixos-generators replacement)
+## Building Images (ISO, qemu, raw, cloud, …)
 
-nixos-generators was merged into nixpkgs (25.05+). Set `image.variant` in the system config to build images. purr auto-detects format directories and adds the variant:
+purr does **not** have special format directories (`x86_64-iso`, `x86_64-do`, …). Instead, nixpkgs (25.05+) already imports `image/images.nix` by default, which makes every NixOS configuration capable of building all image formats out of the box. Just put your system under `systems/<arch>-linux/` and build any image from it:
 
-```nix
-# systems/x86_64-iso/server/default.nix
-{ ... }: {
-  image.variant = "iso";  # implied, auto-set by purr
-}
+```bash
+# ISO image
+nix build .#nixosConfigurations.server.config.system.build.images.iso
+
+# QEMU qcow2 image (EFI)
+nix build .#nixosConfigurations.server.config.system.build.images.qemu-efi
+
+# Raw disk image
+nix build .#nixosConfigurations.server.config.system.build.images.raw
+
+# DigitalOcean image
+nix build .#nixosConfigurations.server.config.system.build.images.digital-ocean
+
+# Amazon EC2 AMI
+nix build .#nixosConfigurations.server.config.system.build.images.amazon
+```
+
+### Available image formats
+
+All formats from the now-deprecated [nixos-generators](https://github.com/nix-community/nixos-generators) are built into nixpkgs:
+
+| Format key | Image type | Format key | Image type |
+|---|---|---|---|
+| `iso` | Bootable ISO 9660 | `proxmox` | Proxmox VE image |
+| `qemu-efi` | QEMU qcow2 (EFI) | `proxmox-lxc` | Proxmox LXC container |
+| `qemu` | QEMU qcow2 (BIOS) | `lxc` | LXC container |
+| `raw-efi` | Raw disk (EFI) | `lxc-metadata` | LXC metadata tarball |
+| `raw` | Raw disk (BIOS) | `oci` | OCI container image |
+| `amazon` | AWS EC2 AMI | `vagrant-virtualbox` | Vagrant VirtualBox |
+| `azure` | Azure VM image | `virtualbox` | VirtualBox OVA |
+| `google-compute` | GCP image | `vmware` | VMware VMDK |
+| `digital-ocean` | DigitalOcean image | `kubevirt` | KubeVirt container disk |
+| `hyperv` | Hyper-V VHDX | `cloudstack` | Apache CloudStack |
+| `linode` | Linode image | `openstack` | OpenStack image |
+| `kexec` | Netboot kexec image | `sd-card` | Raspberry Pi / SD card |
+
+### If you need different configs for different images
+
+Put multiple systems under `systems/x86_64-linux/` with different names:
+
+```
+systems/x86_64-linux/
+  ├── production/default.nix   # full server
+  └── installer/default.nix    # minimal ISO config
+```
+
+Then build:
+
+```bash
+nix build .#nixosConfigurations.installer.config.system.build.images.iso
 ```
 
 ## Namespace Bridge (system -> home config forwarding)
@@ -652,7 +692,7 @@ Each system and home module receives a `purr` attrset with metadata about the cu
 |---|---|---|
 | `name` | `"server"` | System/host name |
 | `arch` | `"x86_64"` | Architecture |
-| `format` | `"linux"` | linux, darwin, iso, ... |
+| `format` | `"linux"` | linux or darwin |
 | `archFormat` | `"x86_64-linux"` | Full arch-format string |
 | `isDarwin` | `false` | Whether the target is Darwin |
 | `isLinux` | `true` | Whether the target is Linux |
@@ -665,7 +705,7 @@ Each system and home module receives a `purr` attrset with metadata about the cu
 | `user` | `"alice"` | Username |
 | `host` | `"server"` | Host name |
 | `arch` | `"x86_64"` | Architecture |
-| `format` | `"linux"` | linux, darwin, ... |
+| `format` | `"linux"` | linux or darwin |
 | `archFormat` | `"x86_64-linux"` | Full arch-format string |
 | `isDarwin` | `false` | Whether the target is Darwin |
 | `isLinux` | `true` | Whether the target is Linux |
@@ -865,7 +905,7 @@ Find homes matching a host across all architectures.
 
 ### `formatOutputKey`
 
-Map format string to flake output key (`"linux" -> "nixosConfigurations"`, `"iso" -> "isoConfigurations"`, etc.)
+Map format string to flake output key (`"linux" -> "nixosConfigurations"`, `"darwin" -> "darwinConfigurations"`). Throws for unsupported formats.
 
 ## Directory Resolution
 
