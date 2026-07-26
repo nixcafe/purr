@@ -49,7 +49,7 @@ let
     else if format == "darwin" then
       "darwinConfigurations"
     else
-      "${format}Configurations";
+      throw "unsupported format '${format}': purr only supports 'linux' and 'darwin'. Put your system configs under systems/<arch>-linux/ or systems/<arch>-darwin/.";
 
   findMatchingHomes =
     discoveredHomes: hostName:
@@ -88,9 +88,15 @@ let
         let
           parsed = parseArchFormat archFormat;
           inherit (parsed) arch format;
+          system =
+            if format == "darwin" then
+              "${arch}-darwin"
+            else if format == "linux" then
+              "${arch}-linux"
+            else
+              throw "unsupported format '${format}' in systems directory: purr only supports 'linux' and 'darwin'. Put your system configs under systems/<arch>-linux/ or systems/<arch>-darwin/.";
           systems = discoveredSystems.${archFormat};
           outputKey = formatOutputKey format;
-          system = if format == "darwin" then "${arch}-darwin" else "${arch}-linux";
         in
         builtins.map (systemName: {
           inherit outputKey systemName;
@@ -227,36 +233,26 @@ let
                   host = systemName;
                 };
               }
-            else if format == "darwin" && hasNixDarwin then
-              nd.lib.darwinSystem {
-                inherit system;
-                modules = baseModules;
-                specialArgs = {
-                  inherit
-                    inputs
-                    lib
-                    namespace
-                    purr
-                    system
-                    ;
-                  host = systemName;
-                };
-              }
+            else if format == "darwin" then
+              if hasNixDarwin then
+                nd.lib.darwinSystem {
+                  inherit system;
+                  modules = baseModules;
+                  specialArgs = {
+                    inherit
+                      inputs
+                      lib
+                      namespace
+                      purr
+                      system
+                      ;
+                    host = systemName;
+                  };
+                }
+              else
+                throw "darwin system '${systemName}' requires nix-darwin input (add inputs.nix-darwin or inputs.darwin to your flake)"
             else
-              inputs.nixpkgs.lib.nixosSystem {
-                inherit system;
-                modules = baseModules;
-                specialArgs = {
-                  inherit
-                    inputs
-                    lib
-                    namespace
-                    purr
-                    system
-                    ;
-                  host = systemName;
-                };
-              };
+              throw "unsupported format '${format}' for system '${systemName}'";
         }) (builtins.attrNames systems)
       ) (builtins.attrNames discoveredSystems);
 
@@ -293,7 +289,13 @@ let
           let
             parsed = parseArchFormat archFormat;
             inherit (parsed) arch format;
-            system = if format == "darwin" then "${arch}-darwin" else "${arch}-linux";
+            system =
+              if format == "darwin" then
+                "${arch}-darwin"
+              else if format == "linux" then
+                "${arch}-linux"
+              else
+                throw "unsupported format '${format}' in homes directory: purr only supports 'linux' and 'darwin'.";
             pkgs = import inputs.nixpkgs {
               inherit system;
               config = nixpkgsConfig;
