@@ -782,4 +782,142 @@ in
       };
     };
   };
+
+  extraArgs = {
+    tests = {
+      "extraArgs flows to outputsBuilder" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              namespace = null;
+              autoInject = false;
+              extraArgs = {
+                myConstructor = "builder";
+              };
+              outputsBuilder =
+                { myConstructor, ... }:
+                {
+                  gotConstructor = myConstructor;
+                };
+            };
+          in
+          result.gotConstructor."x86_64-linux" or null;
+        expected = "builder";
+      };
+      "extraArgs flows to system specialArgs" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              systemsDir = "systems";
+              namespace = null;
+              autoInject = false;
+              extraArgs = {
+                myCustom = "extra-value";
+              };
+            };
+          in
+          result.nixosConfigurations.myhost.specialArgs.myCustom or null;
+        expected = "extra-value";
+      };
+      "extraArgs flows to standalone home extraSpecialArgs" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+              home-manager = mkHomeManager;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              homesDir = "homes";
+              namespace = null;
+              autoInject = false;
+              extraArgs = {
+                myHomeCustom = "home-value";
+              };
+            };
+          in
+          result.homeConfigurations."alice@myhost".extraSpecialArgs.myHomeCustom or null;
+        expected = "home-value";
+      };
+      "extraArgs does not override purr's own keys in specialArgs" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              systemsDir = "systems";
+              namespace = "my-ns";
+              autoInject = false;
+              extraArgs = {
+                namespace = "evil-ns";
+              };
+            };
+          in
+          result.nixosConfigurations.myhost.specialArgs.namespace;
+        expected = "my-ns";
+      };
+      "extraArgs flows to packages" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              namespace = null;
+              autoInject = false;
+              extraArgs = {
+                myCustom = "pkg-value";
+              };
+            };
+            pkg = result.packages."x86_64-linux".extra-test or null;
+          in
+          if pkg != null then pkg.myCustom or null else null;
+        expected = "pkg-value";
+      };
+      "extraArgs flows to linked home extraSpecialArgs" = {
+        expr =
+          let
+            inputs = {
+              nixpkgs = mkNixpkgs mkNixpkgsLib;
+              home-manager = mkHomeManager;
+            };
+            result = mkFlake {
+              inherit inputs;
+              src = fixturesDir;
+              systemsDir = "systems";
+              homesDir = "homes";
+              namespace = null;
+              autoInject = false;
+              extraArgs = {
+                linkedHomeCustom = "linked-value";
+              };
+            };
+            cfg = result.nixosConfigurations.myhost;
+          in
+          builtins.any (
+            m:
+            builtins.isAttrs m
+            && m ? "home-manager"
+            && m."home-manager".extraSpecialArgs.linkedHomeCustom or null == "linked-value"
+          ) cfg.modules;
+        expected = true;
+      };
+    };
+  };
 }

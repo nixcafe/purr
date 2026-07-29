@@ -54,6 +54,7 @@ let
     ++ (runGroup "buildHomeConfigs" testConfigs.buildHomeConfigs)
     ++ (runGroup "buildHomeConfigsExtra" testConfigs.buildHomeConfigsExtra)
     ++ (runGroup "buildSystemConfigs" testConfigs.buildSystemConfigs)
+    ++ (runGroup "extraArgs" testConfigs.extraArgs)
     ++ (runGroup "resolveDir" testResolveDir.resolveDir)
     ++ (runGroup "resolveDirs" testResolveDir.resolveDirs)
     ++ (runGroup "mergePurrLib" testPurrLib.mergePurrLib)
@@ -70,6 +71,7 @@ let
     ++ (runGroup "customModuleTypes" testMkFlake.customModuleTypes)
     ++ (runGroup "customSystems" testMkFlake.customSystems)
     ++ (runGroup "outputsBuilder" testMkFlake.outputsBuilder)
-    ++ (runGroup "packagesByName" testMkFlake.packagesByName);
+    ++ (runGroup "packagesByName" testMkFlake.packagesByName)
+    ++ (runGroup "extraArgs" testMkFlake.extraArgs);
 in
 failures

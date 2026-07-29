@@ -951,4 +951,115 @@ in
       };
     };
   };
+
+  extraArgs = {
+    tests = {
+      "buildSystemConfigs passes extraArgs to specialArgs" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem =
+                {
+                  specialArgs ? { },
+                  ...
+                }:
+                specialArgs;
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+              extraArgs = {
+                myCustom = "system-extra";
+              };
+            };
+          in
+          result.nixosConfigurations.myhost.myCustom;
+        expected = "system-extra";
+      };
+      "buildSystemConfigs extraArgs does not override purr keys" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem =
+                {
+                  specialArgs ? { },
+                  ...
+                }:
+                specialArgs;
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+              namespace = "my-ns";
+              extraArgs = {
+                namespace = "bad-ns";
+              };
+            };
+          in
+          result.nixosConfigurations.myhost.namespace;
+        expected = "my-ns";
+      };
+      "buildHomeConfigs passes extraArgs to extraSpecialArgs" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs = { };
+              home-manager = {
+                lib.homeManagerConfiguration =
+                  {
+                    extraSpecialArgs ? { },
+                    ...
+                  }:
+                  extraSpecialArgs;
+              };
+            };
+            result = buildHomeConfigs {
+              discoveredHomes = {
+                "x86_64-linux"."alice@myhost" = /tmp;
+              };
+              inputs = fakeInputs;
+              extraArgs = {
+                myHomeExtra = "home-extra";
+              };
+            };
+          in
+          result."alice@myhost".myHomeExtra;
+        expected = "home-extra";
+      };
+      "buildHomeConfigs extraArgs does not override purr keys" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs = { };
+              home-manager = {
+                lib.homeManagerConfiguration =
+                  {
+                    extraSpecialArgs ? { },
+                    ...
+                  }:
+                  extraSpecialArgs;
+              };
+            };
+            result = buildHomeConfigs {
+              discoveredHomes = {
+                "x86_64-linux"."alice@myhost" = /tmp;
+              };
+              inputs = fakeInputs;
+              namespace = "my-ns";
+              extraArgs = {
+                namespace = "bad-ns";
+              };
+            };
+          in
+          result."alice@myhost".namespace;
+        expected = "my-ns";
+      };
+    };
+  };
 }

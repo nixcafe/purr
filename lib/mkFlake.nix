@@ -65,6 +65,7 @@ let
       homesDir ? null,
       autoInject ? true,
       packagesByName ? false,
+      extraArgs ? { },
       ...
     }:
     let
@@ -169,15 +170,18 @@ let
 
       perSystem = forAllSystems (
         system:
-        outputsBuilder {
-          inherit
-            system
-            inputs
-            namespace
-            ;
-          lib = mergedLib;
-          pkgs = pkgs.${system};
-        }
+        outputsBuilder (
+          extraArgs
+          // {
+            inherit
+              system
+              inputs
+              namespace
+              ;
+            lib = mergedLib;
+            pkgs = pkgs.${system};
+          }
+        )
       );
 
       pivotedOutputs =
@@ -192,24 +196,27 @@ let
         );
 
       checks = forAllSystems (
-        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.checksDir false
+        system: autoModules src pkgs.${system} mergedLib namespace inputs extraArgs resolved.checksDir false
       );
 
       shells = forAllSystems (
-        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.shellsDir false
+        system: autoModules src pkgs.${system} mergedLib namespace inputs extraArgs resolved.shellsDir false
       );
 
       overlays = importedOverlays;
 
-      templates = templateModules src resolved.templatesDir templatesRecursive mergedLib namespace inputs;
+      templates =
+        templateModules src resolved.templatesDir templatesRecursive mergedLib namespace inputs
+          extraArgs;
 
       packages = forAllSystems (
         system:
-        autoModules src pkgs.${system} mergedLib namespace inputs resolved.packagesDir packagesByName
+        autoModules src pkgs.${system} mergedLib namespace inputs extraArgs resolved.packagesDir
+          packagesByName
       );
 
       apps = forAllSystems (
-        system: autoModules src pkgs.${system} mergedLib namespace inputs resolved.appsDir false
+        system: autoModules src pkgs.${system} mergedLib namespace inputs extraArgs resolved.appsDir false
       );
 
       discoveredSystems =
@@ -225,6 +232,7 @@ let
               autoInject
               discoveredHomes
               discoveredSystems
+              extraArgs
               namespace
               nixpkgsConfig
               sharedOverlays
@@ -242,6 +250,7 @@ let
             inherit
               autoInject
               discoveredHomes
+              extraArgs
               namespace
               nixpkgsConfig
               sharedOverlays

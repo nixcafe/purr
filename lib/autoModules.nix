@@ -1,13 +1,14 @@
 { modules }:
 let
   autoModules =
-    src: pkgs: purrLib: namespace: inputs: dir: packagesByName:
+    src: pkgs: purrLib: namespace: inputs: extraArgs: dir: packagesByName:
     if dir != null then
       let
         importMod =
           module:
           import module (
             pkgs
+            // extraArgs
             // {
               inherit inputs pkgs namespace;
               inherit (pkgs) system;
@@ -39,7 +40,7 @@ let
       { };
 
   templateModules =
-    src: templatesDir: templatesRecursive: purrLib: namespace: inputs:
+    src: templatesDir: templatesRecursive: purrLib: namespace: inputs: extraArgs:
     if templatesDir != null then
       let
         scan = if templatesRecursive then modules.findModulesLib else modules.findModulesFlat;
@@ -47,10 +48,13 @@ let
       in
       builtins.mapAttrs (
         _: module:
-        import module {
-          inherit inputs namespace;
-          lib = purrLib;
-        }
+        import module (
+          extraArgs
+          // {
+            inherit inputs namespace;
+            lib = purrLib;
+          }
+        )
       ) mods
     else
       { };
