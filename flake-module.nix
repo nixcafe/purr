@@ -306,6 +306,25 @@ in
         in your modules will override.
       '';
     };
+
+    extraArgs = mkOption {
+      type = types.attrs;
+      default = { };
+      description = ''
+        Additional arguments to pass to every module. These are merged
+        into the argument set for all auto-discovered modules —
+        packages, shells, checks, apps, templates — as well as
+        system `specialArgs` and home `extraSpecialArgs`.
+        Purr's own keys (inputs, pkgs, namespace, lib, system, purr)
+        always override `extraArgs` in case of naming conflicts.
+      '';
+      example = lib.literalExpression ''
+        {
+          customConfigPath = "/etc/myapp";
+          deploymentTarget = "production";
+        }
+      '';
+    };
   };
 
   config = mkIf cfg.enable (
@@ -388,8 +407,8 @@ in
       discoveredOverlays = overlayModules cfg.src resolved.overlaysDir;
 
       discoveredTemplates =
-        templateModules cfg.src resolved.templatesDir cfg.templatesRecursive mergedLib cfg.namespace
-          inputs;
+        templateModules cfg.src resolved.templatesDir cfg.templatesRecursive mergedLib cfg.namespace inputs
+          cfg.extraArgs;
 
       discoveredSystems =
         if resolved.systemsDir != null then mods.discoverSystems cfg.src resolved.systemsDir else { };
@@ -407,6 +426,7 @@ in
               ;
             inherit (cfg)
               autoInject
+              extraArgs
               namespace
               nixpkgsConfig
               extraModules
@@ -423,6 +443,7 @@ in
             inherit discoveredHomes inputs;
             inherit (cfg)
               autoInject
+              extraArgs
               namespace
               nixpkgsConfig
               extraModules
@@ -450,7 +471,7 @@ in
             config = cfg.nixpkgsConfig;
             overlays = builtins.attrValues discoveredOverlays;
           };
-          mod = autoModules cfg.src pkgs mergedLib cfg.namespace inputs;
+          mod = autoModules cfg.src pkgs mergedLib cfg.namespace inputs cfg.extraArgs;
 
           checksModules = mod resolved.checksDir false;
           shellsModules = mod resolved.shellsDir false;

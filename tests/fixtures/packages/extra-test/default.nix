@@ -1,0 +1,7 @@
+{
+  myCustom ? null,
+  ...
+}:
+{
+  inherit myCustom;
+}

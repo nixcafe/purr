@@ -73,6 +73,7 @@ let
       namespace ? null,
       nixpkgsConfig ? { },
       extraModules ? { },
+      extraArgs ? { },
       autoInject ? true,
       lib ? lib,
       sharedOverlays ? [ ],
@@ -155,7 +156,7 @@ let
                       {
                         home-manager.useGlobalPkgs = mkDefault true;
                         home-manager.useUserPackages = mkDefault true;
-                        home-manager.extraSpecialArgs = {
+                        home-manager.extraSpecialArgs = extraArgs // {
                           inherit
                             inputs
                             namespace
@@ -222,7 +223,7 @@ let
               inputs.nixpkgs.lib.nixosSystem {
                 inherit system;
                 modules = baseModules;
-                specialArgs = {
+                specialArgs = extraArgs // {
                   inherit
                     inputs
                     lib
@@ -238,7 +239,7 @@ let
                 nd.lib.darwinSystem {
                   inherit system;
                   modules = baseModules;
-                  specialArgs = {
+                  specialArgs = extraArgs // {
                     inherit
                       inputs
                       lib
@@ -275,6 +276,7 @@ let
       namespace ? null,
       nixpkgsConfig ? { },
       extraModules ? { },
+      extraArgs ? { },
       autoInject ? true,
       lib ? lib,
       sharedOverlays ? [ ],
@@ -319,7 +321,7 @@ let
                 inherit pkgs;
                 modules =
                   autoInjectModules ++ extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
-                extraSpecialArgs = {
+                extraSpecialArgs = extraArgs // {
                   inherit
                     inputs
                     namespace

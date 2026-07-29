@@ -33,7 +33,7 @@ in
   templateModules = {
     tests = {
       "returns {} when templatesDir is null" = {
-        expr = autoMods.templateModules fixturesDir null false lib null { };
+        expr = autoMods.templateModules fixturesDir null false lib null { } { };
         expected = { };
       };
     };
@@ -42,13 +42,13 @@ in
   autoModules = {
     tests = {
       "returns {} when dir is null" = {
-        expr = autoMods.autoModules fixturesDir mockPkgs lib null { } null false;
+        expr = autoMods.autoModules fixturesDir mockPkgs lib null { } { } null false;
         expected = { };
       };
       "discovers regular modules when packagesByName is false" = {
         expr =
           let
-            result = autoMods.autoModules fixturesDir mockPkgs lib null { } "packages" false;
+            result = autoMods.autoModules fixturesDir mockPkgs lib null { } { } "packages" false;
           in
           attrNames result;
         expected = [ "hello" ];
@@ -56,7 +56,7 @@ in
       "discovers both regular and by-name when packagesByName is true" = {
         expr =
           let
-            result = autoMods.autoModules fixturesDir mockPkgs lib null { } "packages" true;
+            result = autoMods.autoModules fixturesDir mockPkgs lib null { } { } "packages" true;
           in
           builtins.sort (a: b: a < b) (attrNames result);
         expected = [
@@ -73,7 +73,7 @@ in
             pkgPkgs = mockPkgs // {
               testMarker = "found";
             };
-            result = autoMods.autoModules fixturesDir pkgPkgs lib null { } "packages" false;
+            result = autoMods.autoModules fixturesDir pkgPkgs lib null { } { } "packages" false;
             modBody = result.hello;
           in
           modBody.type or null;
@@ -85,7 +85,7 @@ in
             pkgWithLib = mockPkgs // {
               lib = "pkgs-lib";
             };
-            result = autoMods.autoModules fixturesDir pkgWithLib "custom-lib" null { } "packages" false;
+            result = autoMods.autoModules fixturesDir pkgWithLib "custom-lib" null { } { } "packages" false;
           in
           result.spread-test.libWorks;
         expected = true;
@@ -93,10 +93,20 @@ in
       "module receives spread pkgs attrs like stdenv" = {
         expr =
           let
-            result = autoMods.autoModules fixturesDir mockPkgs "custom-lib" null { } "packages" false;
+            result = autoMods.autoModules fixturesDir mockPkgs "custom-lib" null { } { } "packages" false;
           in
           result.spread-test.foundStdenv;
         expected = true;
+      };
+      "module receives extraArgs" = {
+        expr =
+          let
+            result = autoMods.autoModules fixturesDir mockPkgs lib null { } {
+              myCustom = "extra-value";
+            } "packages" false;
+          in
+          result.extra-test.myCustom;
+        expected = "extra-value";
       };
     };
   };
