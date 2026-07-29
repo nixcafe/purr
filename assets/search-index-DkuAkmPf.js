@@ -1,1 +1,0 @@
-var e=async()=>JSON.stringify(await(await fetch(`/assets/search-index-f5e47d300c16.json`)).json());export{e as getSearchIndex};

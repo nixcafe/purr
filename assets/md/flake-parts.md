@@ -45,6 +45,7 @@ All options are under the `purr.*` namespace.
 | `purr.modulesDir` | str | `"modules"` | Module directory name under src |
 | `purr.moduleTypes` | attrs | See below | Subdirectory mapping per output |
 | `purr.extraModules` | attrs | `{}` | `{ nixos = [...]; darwin = [...]; home = [...]; }` |
+| `purr.extraArgs` | attrs | `{}` | Custom key-value pairs injected into all auto-discovered module args (packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`). Purr's own keys override `extraArgs` on conflict |
 | `purr.bundleModules` | bool | `false` | Bundle all modules into a `default` module |
 | `purr.bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
 
@@ -118,3 +119,27 @@ Users can then import with:
 ```
 
 Set `bundleExtraModules = false` to exclude extraModules from the default bundle (only auto-discovered modules will be included). If you define your own `default` module under `modules/`, the auto-generated bundle is skipped.
+
+## Extra Args
+
+Pass custom values to every auto-discovered module:
+
+```nix
+purr.extraArgs = {
+  deploymentTarget = "production";
+};
+```
+
+Modules receive `extraArgs` values as function parameters:
+
+```nix
+# modules/nixos/server/default.nix
+{ deploymentTarget, config, lib, ... }:
+{
+  services.nginx.virtualHosts."myapp" = lib.mkIf (deploymentTarget == "production") {
+    # ...
+  };
+}
+```
+
+All auto-discovered modules receive `extraArgs` keys — packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`, and `outputsBuilder`. Purr's own keys (`inputs`, `pkgs`, `namespace`, `lib`, etc.) always override `extraArgs` in case of naming conflicts.

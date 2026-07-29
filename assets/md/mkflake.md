@@ -34,10 +34,11 @@
 | `flattenLib` | bool | `false` | Flatten lib subdirectories into root (no dir nesting) |
 | `systems` | list | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` | Systems to generate for |
 | `nixpkgsConfig` | attrs | `{}` | nixpkgs config (`allowUnfree`, etc.) |
-| `outputsBuilder` | fn | `({ pkgs, system, inputs, namespace, lib }: {})` | Per-system extra flake outputs |
+| `outputsBuilder` | fn | `({ pkgs, system, inputs, namespace, lib, ... }: {})` | Per-system extra flake outputs. Also receives all `extraArgs` keys |
 | `modulesDir` | str | `"modules"` | Module directory name under src |
 | `moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | Subdirectory mapping per output |
 | `extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` — raw module injection |
+| `extraArgs` | attrs | `{}` | Custom key-value pairs injected into all auto-discovered module args (packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`). Purr's own keys override `extraArgs` on conflict |
 | `bundleModules` | bool | `false` | Bundle all modules into a `default` module |
 | `bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
 | `checksDir` | nullOr str | `null` | auto-detects `checks/` |
@@ -84,3 +85,27 @@ inputs.purr.lib.mkFlake {
   homesDir = "homes";
 }
 ```
+
+## Extra Args
+
+Pass custom values to every auto-discovered module:
+
+```nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  extraArgs = {
+    deploymentTarget = "production";
+  };
+}
+```
+
+Modules receive `extraArgs` values as function parameters:
+
+```nix
+# packages/myapp/default.nix
+{ deploymentTarget, pkgs, ... }:
+pkgs.writeText "myapp" "target: ${deploymentTarget}"
+```
+
+All auto-discovered modules receive `extraArgs` keys — packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`, and `outputsBuilder`. Purr's own keys (`inputs`, `pkgs`, `namespace`, `lib`, etc.) always override `extraArgs` in case of naming conflicts.
