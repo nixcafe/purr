@@ -42,6 +42,12 @@ let
     modules = mods;
   };
 
+  hj = import ./lib/hydraJobs.nix {
+    inherit lib attrs;
+  };
+
+  systemsMod = import ./lib/systems.nix;
+
   inherit (resolver) resolveDirs;
   inherit (libBuilder) buildImportedPurrLib mergePurrLib;
   inherit (autoMods)
@@ -381,6 +387,58 @@ in
         }
       '';
     };
+
+    hydraJobs = {
+      enable = mkEnableOption "hydraJobs flake output with automatic derivation discovery";
+
+      dir = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Directory name under `src` for Hydra CI job definitions.
+          If `null`, auto-detects from `hydraJobs/`.
+          Each subdirectory `<group>/<job>/default.nix` is a function
+          `{ pkgs, system, lib, inputs, namespace }` that returns a
+          derivation, derivation attrset, or `null`.
+          Produces `hydraJobs.<group>.<system>.<job>`.
+        '';
+      };
+
+      systems = mkOption {
+        type = types.nullOr (types.listOf types.str);
+        default = null;
+        description = ''
+          System architectures to include in `hydraJobs` output.
+          When `null` (default), all flake systems are included.
+          Set to e.g. `["x86_64-linux"]` to restrict CI jobs.
+        '';
+      };
+
+      include = mkOption {
+        type = types.nullOr (types.listOf types.str);
+        default = null;
+        description = ''
+          Mirror existing outputs into hydraJobs.
+          When `null` (default), auto-detects all available outputs.
+          Set to `[]` to disable mirroring, or explicitly list names.
+          Valid per-system names: checks, packages, devShells, apps,
+          legacyPackages, formatter.
+          Valid config names: nixosConfigs, darwinConfigs, homeConfigs.
+          Note: apps are not included by auto-detection even if present
+          because they are not derivations.
+        '';
+      };
+
+      extra = mkOption {
+        type = types.attrs;
+        default = { };
+        description = ''
+          Additional hydraJobs attributes merged at top level.
+          Has highest priority and can override any job from
+          directory discovery or output mirroring.
+        '';
+      };
+    };
   };
 
   config = mkIf cfg.enable (
@@ -399,6 +457,7 @@ in
           homesDir
           libDir
           ;
+        hydraJobsDir = cfg.hydraJobs.dir;
       };
 
       modulesPath = cfg.src + "/${cfg.modulesDir}";
@@ -519,6 +578,42 @@ in
           }
         else
           { };
+
+      images = hj.imagesFromConfigs buildSystemConfigs (cfg.hydraJobs.systems or null);
+
+      hydraJobs =
+        if cfg.hydraJobs.enable then
+          let
+            systemPkgs = builtins.listToAttrs (
+              builtins.map (system: {
+                name = system;
+                value = import inputs.nixpkgs {
+                  inherit system;
+                  config = cfg.nixpkgsConfig;
+                  overlays = builtins.attrValues discoveredOverlays;
+                };
+              }) systemsMod.defaultSystems
+            );
+          in
+          hj.buildHydraJobs {
+            inherit (cfg)
+              extraArgs
+              namespace
+              src
+              ;
+            inherit inputs;
+            inherit (resolved) hydraJobsDir;
+            hydraSystems = cfg.hydraJobs.systems;
+            hydraJobsInclude = cfg.hydraJobs.include;
+            hydraJobsExtra = cfg.hydraJobs.extra;
+            inherit systemPkgs;
+            lib = mergedLib;
+            perSystemOutputs = { };
+            systemConfigs = buildSystemConfigs;
+            homeConfigs = buildHomeConfigs;
+          }
+        else
+          { };
     in
     {
       flake =
@@ -533,6 +628,8 @@ in
           templates = discoveredTemplates;
           homeConfigurations = buildHomeConfigs;
         }
+        // lib.optionalAttrs (images != { }) { inherit images; }
+        // lib.optionalAttrs cfg.hydraJobs.enable { inherit hydraJobs; }
         // lib.optionalAttrs (importedPurrLib != null) (
           if cfg.namespace != null then
             {

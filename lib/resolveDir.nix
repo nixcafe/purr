@@ -33,6 +33,7 @@ let
     ];
     legacyPackagesDir = resolveDir src cfg.legacyPackagesDir [ "legacyPackages" ];
     libDir = resolveDir src cfg.libDir [ "lib" ];
+    hydraJobsDir = resolveDir src cfg.hydraJobsDir [ "hydraJobs" ];
   };
 in
 {

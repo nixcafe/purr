@@ -40,7 +40,7 @@ assert lib != null;
   '';
 
   # namespace bridge: inject home-manager config from system module
-  demo.users.alice.homeConfig = {
+  purr.users.alice.homeConfig = {
     home.packages = [ pkgs.cowsay ];
     home.file = {
       "from-system-bridge".text = "injected via namespace bridge from system module";

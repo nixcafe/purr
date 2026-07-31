@@ -5,6 +5,9 @@
 let
   inherit (lib)
     concatMap
+    elem
+    filterAttrs
+    foldl'
     groupBy
     mapAttrs
     mkDefault
@@ -130,20 +133,22 @@ let
               nonRootHomes = builtins.filter (h: h.user != "root") matchingHomes;
               homeModules =
                 if matchingHomes != [ ] then
-                  (lib.optional (namespace != null) {
-                    options.${namespace}.users = lib.mkOption {
-                      type = lib.types.attrs;
-                      default = { };
-                      description = ''
-                        Per-user home-manager config forwarded via namespace bridge.
-                        Set `<ns>.users.<name>.homeConfig = { ... }` from any
-                        NixOS module to inject home-manager settings for that
-                        user.  Keys inside `homeConfig` map directly to
-                        home-manager option paths (home.packages, programs.*,
-                        services.*, etc.).
-                      '';
-                    };
-                  })
+                  [
+                    {
+                      options.purr.users = lib.mkOption {
+                        type = lib.types.attrs;
+                        default = { };
+                        description = ''
+                          Per-user home-manager config forwarded via namespace bridge.
+                          Set `purr.users.<name>.homeConfig = { ... }` from any
+                          NixOS module to inject home-manager settings for that
+                          user.  Keys inside `homeConfig` map directly to
+                          home-manager option paths (home.packages, programs.*,
+                          services.*, etc.).
+                        '';
+                      };
+                    }
+                  ]
                   ++ [
                     hmModule
                     (
@@ -153,7 +158,7 @@ let
                         ...
                       }:
                       let
-                        nsUsers = if namespace != null then config.${namespace}.users or { } else { };
+                        nsUsers = config.purr.users or { };
                       in
                       {
                         home-manager.useGlobalPkgs = mkDefault true;
@@ -209,6 +214,17 @@ let
                     type = lib.types.str;
                     internal = true;
                     visible = false;
+                  };
+                }
+                {
+                  options.purr.images = lib.mkOption {
+                    type = lib.types.listOf lib.types.str;
+                    default = [ ];
+                    description = ''
+                      Image formats to build for this host via Hydra CI.
+                      Each format maps to `config.system.build.images.<name>`.
+                      Supported formats include iso, qemu, raw, sd-card, amazon, etc.
+                    '';
                   };
                 }
               ];
@@ -348,6 +364,40 @@ let
       )
     else
       { };
+  imagesFromConfigs =
+    systemConfigs: systems:
+    let
+      nixosConfigs = systemConfigs.nixosConfigurations or { };
+
+      filteredConfigs =
+        if systems == null then
+          nixosConfigs
+        else
+          filterAttrs (
+            _host: cfg:
+            let
+              sys = cfg.pkgs.system or null;
+            in
+            sys != null && elem sys systems
+          ) nixosConfigs;
+
+      scanHost =
+        _host: cfg:
+        let
+          imagesExists = cfg.config.system ? build && cfg.config.system.build ? images;
+          purrImages = if cfg.config ? purr && cfg.config.purr ? images then cfg.config.purr.images else [ ];
+        in
+        if imagesExists && purrImages != [ ] then
+          let
+            images = cfg.config.system.build.images;
+          in
+          foldl' (
+            acc: format: if images ? ${format} then acc // { ${format} = images.${format}; } else acc
+          ) { } purrImages
+        else
+          { };
+    in
+    filterAttrs (_: v: v != { }) (builtins.mapAttrs scanHost filteredConfigs);
 in
 {
   inherit
@@ -355,6 +405,7 @@ in
     buildSystemConfigs
     findMatchingHomes
     formatOutputKey
+    imagesFromConfigs
     parseArchFormat
     parseUserHost
     ;
