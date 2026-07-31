@@ -1,6 +1,6 @@
 # purr
 
-purr turns your project directory structure into a fully wired Nix flake — **no boilerplate, no manual wiring**. Drop files into conventional directories and purr discovers everything: modules, packages, shells, checks, apps, overlays, templates, NixOS/darwin systems, home-manager homes, and a shared lib.
+purr turns your project directory structure into a fully wired Nix flake — **no boilerplate, no manual wiring**. Drop files into conventional directories and purr discovers everything: modules, packages, legacy packages, shells, checks, apps, overlays, templates, a formatter, NixOS/darwin systems, home-manager homes, and a shared lib.
 
 Compared to other flake auto-discovery tools, purr stays **minimal** — a single dependency (`nixpkgs-lib`, ~2 MB) and a small, focused API surface.
 
@@ -117,4 +117,4 @@ See the [Directory Structure](/directory-structure) page for the complete layout
 
 ## API Reference
 
-The full library API (32 functions) is documented on the [API Reference](/api) page.
+The full library API (35 functions) is documented on the [API Reference](/api) page.

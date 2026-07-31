@@ -28,6 +28,14 @@ src/
 │           └── cowsay/
 │               └── package.nix       #   → packages.<system>.cowsay
 │
+├── legacyPackages/                   # Per-system legacy packages (auto-detect: "legacyPackages")
+│   ├── hello/
+│   │   └── default.nix               #   → legacyPackages.<system>.hello
+│   └── by-name/                      #   Optional by-name convention (legacyPackagesByName = true)
+│       └── he/
+│           └── hello/
+│               └── package.nix       #   → legacyPackages.<system>.hello
+│
 ├── shells/                           # Dev shells (auto-detect: "shells", "devShells")
 │   └── default/
 │       └── default.nix               #   → devShells.<system>.default
@@ -47,6 +55,10 @@ src/
 ├── apps/                             # Per-system apps (auto-detect: "apps")
 │   └── serve/
 │       └── default.nix               #   → apps.<system>.serve
+│
+├── formatters/                       # Formatter (auto-detect: "formatters", "formatter")
+│   └── default.nix                   #   returns a derivation → formatter.<system>
+│                                     #   e.g. { pkgs, ... }: pkgs.nixfmt-rfc-style
 │
 ├── systems/                          # auto-detect: "systems", "hosts"
 │   └── x86_64-linux/
@@ -69,8 +81,10 @@ Each directory is auto-detected when the option is `null` (default). The discove
 | Shells | `shellsDir` | `shells/` → `devShells/` |
 | Overlays | `overlaysDir` | `overlays/` |
 | Packages | `packagesDir` | `packages/` |
+| Legacy Packages | `legacyPackagesDir` | `legacyPackages/` |
 | Apps | `appsDir` | `apps/` |
 | Templates | `templatesDir` | `templates/` |
+| Formatter | `formatterDir` | `formatters/` → `formatter/` |
 | Systems | `systemsDir` | `systems/` → `hosts/` |
 | Homes | `homesDir` | `homes/` |
 

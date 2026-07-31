@@ -68,9 +68,12 @@ Default `moduleTypes`:
 | `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
 | `purr.packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
+| `purr.legacyPackagesDir` | nullOr str | `null` | auto-detects `legacyPackages/` |
+| `purr.legacyPackagesByName` | bool | `false` | Also discover legacy packages via `by-name/` convention (coexists with regular discovery) |
 | `purr.appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `purr.templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 | `purr.templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
+| `purr.formatterDir` | nullOr str | `null` | auto-detects `formatters/` then `formatter/`. The `default.nix` must return a derivation |
 | `purr.systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `purr.homesDir` | nullOr str | `null` | auto-detects `homes/` |
 
@@ -80,6 +83,7 @@ Default `moduleTypes`:
 |--------|------|---------|-------------|
 | `purr.nixpkgsConfig` | attrs | `{}` | nixpkgs config (`allowUnfree`, etc.) |
 | `purr.autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
+| `purr.outputsBuilder` | fn | `(_: {})` | Additional per-system outputs. Called for each system with `{ pkgs, system, lib, inputs, namespace }` plus all `extraArgs` keys; the returned attrset is **deep-merged** into the perSystem flake outputs |
 
 ## Custom Module Directories
 
@@ -106,19 +110,62 @@ purr.extraModules = {
 
 ## Default Module Bundle
 
-By default, sub-modules are exported individually. Enable `bundleModules = true` to auto-generate a `default` module that imports all sub-modules:
-
-```nix
-purr.bundleModules = true;
-```
-
-Users can then import with:
+A `default` module that imports all discovered sub-modules is **always generated** (for `nixosModules`, `darwinModules`, and `homeModules`) — unless you define your own `default` module, in which case the auto-generated bundle is skipped. Users can import with:
 
 ```nix
 { imports = [ inputs.myflake.nixosModules.default ]; }
 ```
 
-Set `bundleExtraModules = false` to exclude extraModules from the default bundle (only auto-discovered modules will be included). If you define your own `default` module under `modules/`, the auto-generated bundle is skipped.
+`bundleModules` (default `false`) controls whether your `extraModules` are folded into this bundle. Set `bundleModules = true` to include them; combine with `bundleExtraModules = false` to include only the auto-discovered modules.
+
+```nix
+purr.bundleModules = true;        # include extraModules in the default bundle
+purr.bundleExtraModules = false;  # (optional) only discovered modules, no extras
+```
+
+## Formatter & Legacy Packages
+
+Auto-discovery works the same as mkFlake — drop a `formatters/default.nix` (returns a derivation) or `legacyPackages/<name>/default.nix` and the outputs appear:
+
+```nix
+# formatters/default.nix
+{ pkgs, ... }: pkgs.nixfmt-rfc-style
+
+# legacyPackages/hello/default.nix
+{ pkgs, ... }: pkgs.hello
+```
+
+To also scan the `by-name/` convention for legacy packages, enable `legacyPackagesByName`:
+
+```nix
+purr.legacyPackagesByName = true;   # also scan legacyPackages/by-name/
+```
+
+## Outputs Builder
+
+`purr.outputsBuilder` mirrors mkFlake's `outputsBuilder` — add any custom per-system output. It receives `{ pkgs, system, lib, inputs, namespace }` plus all `extraArgs` keys, and its result is deep-merged with purr's auto-discovered outputs:
+
+```nix
+purr.outputsBuilder = { pkgs, system, lib, namespace, ... }: {
+  packages.fmt = pkgs.nixfmt-rfc-style;
+};
+```
+
+## Namespace Lib Output
+
+When a `lib/` directory exists and `namespace` is set, purr exports the namespace lib as a flake `lib.<namespace>` output — in both mkFlake and flake-parts modes:
+
+```nix
+# lib/default.nix
+{ lib, inputs, namespace }:
+{
+  utils = import ./utils.nix { inherit lib inputs namespace; };
+}
+```
+
+```bash
+nix eval .#lib.myproject.utils
+```
 
 ## Extra Args
 

@@ -185,6 +185,15 @@ purrLib = lib                   # standard nixpkgs lib
 
 Per-system auto-discovery for checks, shells, packages, and apps. Each module is imported with `pkgs` spread into the function arguments (like `callPackage`), so `{ stdenv, fetchurl, pkgs, lib, ... }` style destructuring works directly.
 
+### `autoFormatter`
+
+Per-system formatter discovery. Imports `<dir>/default.nix` with the same `pkgs`-spread arguments as `autoModules` and returns a single derivation, or `null` when the directory is absent. Used to produce `formatter.<system>`:
+
+```nix
+# formatters/default.nix
+{ pkgs, ... }: pkgs.nixfmt-rfc-style
+```
+
 ### `overlayModules`
 
 Discover and normalize overlays from a directory.

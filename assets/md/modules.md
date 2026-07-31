@@ -56,15 +56,17 @@ Each auto-discovered module receives different arguments depending on its direct
 | `lib/` | `{ lib, inputs, namespace }` |
 | `modules/` | `{ config, options, lib, pkgs, namespace, ... }` |
 | `packages/` | `{ inputs, system, namespace, lib, pkgs }` |
+| `legacyPackages/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `shells/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `checks/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `apps/` | `{ inputs, system, namespace, lib, pkgs }` |
+| `formatter/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `overlays/` | `final: prev:` (Nix overlay convention) |
 | `templates/` | `{ inputs, namespace, lib }` |
 | `systems/` | `{ config, options, lib, pkgs, purr, host, namespace, system, inputs, ... }` |
 | `homes/` | `{ config, options, lib, pkgs, purr, purrLib, host, namespace, system, inputs, ... }` |
 
-> **Note:** `lib` in `packages/`, `shells/`, `checks/`, and `apps/` includes the project's custom lib under `lib.<namespace>.*`, merged via `purrLib`. `systems/` and `homes/` receive a `purr` attrset with metadata about the current configuration context via `specialArgs` / `extraSpecialArgs`.
+> **Note:** `lib` in `packages/`, `legacyPackages/`, `shells/`, `checks/`, `apps/`, and `formatter/` includes the project's custom lib under `lib.<namespace>.*`, merged via `purrLib`. `systems/` and `homes/` receive a `purr` attrset with metadata about the current configuration context via `specialArgs` / `extraSpecialArgs`.
 
 ## Custom Lib
 
@@ -96,13 +98,13 @@ The `lib/` directory supports both a root `default.nix` and recursive subdirecto
 
 ## Default Module Bundle
 
-By default, sub-modules are exported individually. Enable `bundleModules = true` to auto-generate a `default` module that imports all sub-modules:
+A `default` module that imports all discovered sub-modules is **always generated** (for `nixosModules`, `darwinModules`, and `homeModules`) — unless you define your own `default` module, in which case the auto-generated bundle is skipped:
 
 ```nix
 { imports = [ inputs.myflake.nixosModules.default ]; }
 ```
 
-Set `bundleExtraModules = false` to exclude extraModules from the default bundle (only auto-discovered modules will be included). If you define your own `default` module under `modules/`, the auto-generated bundle is skipped.
+`bundleModules` (default `false`) controls whether your `extraModules` are folded into this bundle. Set `bundleModules = true` to include them; combine with `bundleExtraModules = false` to include only the auto-discovered modules.
 
 ## Extra Modules
 

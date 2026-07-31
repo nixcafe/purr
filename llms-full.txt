@@ -15,7 +15,7 @@ Sitemap:
 
 # purr
 
-purr turns your project directory structure into a fully wired Nix flake — **no boilerplate, no manual wiring**. Drop files into conventional directories and purr discovers everything: modules, packages, shells, checks, apps, overlays, templates, NixOS/darwin systems, home-manager homes, and a shared lib.
+purr turns your project directory structure into a fully wired Nix flake — **no boilerplate, no manual wiring**. Drop files into conventional directories and purr discovers everything: modules, packages, legacy packages, shells, checks, apps, overlays, templates, a formatter, NixOS/darwin systems, home-manager homes, and a shared lib.
 
 Compared to other flake auto-discovery tools, purr stays **minimal** — a single dependency (`nixpkgs-lib`, ~2 MB) and a small, focused API surface.
 
@@ -132,7 +132,7 @@ See the [Directory Structure](/directory-structure) page for the complete layout
 
 ## API Reference
 
-The full library API (32 functions) is documented on the [API Reference](/api) page.
+The full library API (35 functions) is documented on the [API Reference](/api) page.
 
 # flake-parts Integration
 
@@ -204,9 +204,12 @@ Default `moduleTypes`:
 | `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
 | `purr.packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
+| `purr.legacyPackagesDir` | nullOr str | `null` | auto-detects `legacyPackages/` |
+| `purr.legacyPackagesByName` | bool | `false` | Also discover legacy packages via `by-name/` convention (coexists with regular discovery) |
 | `purr.appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `purr.templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 | `purr.templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
+| `purr.formatterDir` | nullOr str | `null` | auto-detects `formatters/` then `formatter/`. The `default.nix` must return a derivation |
 | `purr.systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `purr.homesDir` | nullOr str | `null` | auto-detects `homes/` |
 
@@ -216,6 +219,7 @@ Default `moduleTypes`:
 |--------|------|---------|-------------|
 | `purr.nixpkgsConfig` | attrs | `{}` | nixpkgs config (`allowUnfree`, etc.) |
 | `purr.autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
+| `purr.outputsBuilder` | fn | `(_: {})` | Additional per-system outputs. Called for each system with `{ pkgs, system, lib, inputs, namespace }` plus all `extraArgs` keys; the returned attrset is **deep-merged** into the perSystem flake outputs |
 
 ## Custom Module Directories
 
@@ -242,19 +246,62 @@ purr.extraModules = {
 
 ## Default Module Bundle
 
-By default, sub-modules are exported individually. Enable `bundleModules = true` to auto-generate a `default` module that imports all sub-modules:
-
-```nix
-purr.bundleModules = true;
-```
-
-Users can then import with:
+A `default` module that imports all discovered sub-modules is **always generated** (for `nixosModules`, `darwinModules`, and `homeModules`) — unless you define your own `default` module, in which case the auto-generated bundle is skipped. Users can import with:
 
 ```nix
 { imports = [ inputs.myflake.nixosModules.default ]; }
 ```
 
-Set `bundleExtraModules = false` to exclude extraModules from the default bundle (only auto-discovered modules will be included). If you define your own `default` module under `modules/`, the auto-generated bundle is skipped.
+`bundleModules` (default `false`) controls whether your `extraModules` are folded into this bundle. Set `bundleModules = true` to include them; combine with `bundleExtraModules = false` to include only the auto-discovered modules.
+
+```nix
+purr.bundleModules = true;        # include extraModules in the default bundle
+purr.bundleExtraModules = false;  # (optional) only discovered modules, no extras
+```
+
+## Formatter & Legacy Packages
+
+Auto-discovery works the same as mkFlake — drop a `formatters/default.nix` (returns a derivation) or `legacyPackages/<name>/default.nix` and the outputs appear:
+
+```nix
+# formatters/default.nix
+{ pkgs, ... }: pkgs.nixfmt-rfc-style
+
+# legacyPackages/hello/default.nix
+{ pkgs, ... }: pkgs.hello
+```
+
+To also scan the `by-name/` convention for legacy packages, enable `legacyPackagesByName`:
+
+```nix
+purr.legacyPackagesByName = true;   # also scan legacyPackages/by-name/
+```
+
+## Outputs Builder
+
+`purr.outputsBuilder` mirrors mkFlake's `outputsBuilder` — add any custom per-system output. It receives `{ pkgs, system, lib, inputs, namespace }` plus all `extraArgs` keys, and its result is deep-merged with purr's auto-discovered outputs:
+
+```nix
+purr.outputsBuilder = { pkgs, system, lib, namespace, ... }: {
+  packages.fmt = pkgs.nixfmt-rfc-style;
+};
+```
+
+## Namespace Lib Output
+
+When a `lib/` directory exists and `namespace` is set, purr exports the namespace lib as a flake `lib.<namespace>` output — in both mkFlake and flake-parts modes:
+
+```nix
+# lib/default.nix
+{ lib, inputs, namespace }:
+{
+  utils = import ./utils.nix { inherit lib inputs namespace; };
+}
+```
+
+```bash
+nix eval .#lib.myproject.utils
+```
 
 ## Extra Args
 
@@ -316,21 +363,24 @@ All auto-discovered modules receive `extraArgs` keys — packages, shells, check
 | `flattenLib` | bool | `false` | Flatten lib subdirectories into root (no dir nesting) |
 | `systems` | list | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` | Systems to generate for |
 | `nixpkgsConfig` | attrs | `{}` | nixpkgs config (`allowUnfree`, etc.) |
-| `outputsBuilder` | fn | `({ pkgs, system, inputs, namespace, lib, ... }: {})` | Per-system extra flake outputs. Also receives all `extraArgs` keys |
+| `outputsBuilder` | fn | `({ pkgs, system, inputs, namespace, lib, ... }: {})` | Per-system extra flake outputs. Also receives all `extraArgs` keys. Results are **deep-merged** with auto-discovered outputs, so both coexist (e.g. `packages` from auto-discovery and from `outputsBuilder`) |
 | `modulesDir` | str | `"modules"` | Module directory name under src |
 | `moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | Subdirectory mapping per output |
 | `extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` — raw module injection |
 | `extraArgs` | attrs | `{}` | Custom key-value pairs injected into all auto-discovered module args (packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`). Purr's own keys override `extraArgs` on conflict |
-| `bundleModules` | bool | `false` | Bundle all modules into a `default` module |
-| `bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
+| `bundleModules` | bool | `false` | Include `extraModules` in the auto-generated `default` bundle (the `default` module itself is always generated unless you define your own) |
+| `bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle (only when `bundleModules = true`) |
 | `checksDir` | nullOr str | `null` | auto-detects `checks/` |
 | `shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `packagesDir` | nullOr str | `null` | auto-detects `packages/` |
 | `packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
+| `legacyPackagesDir` | nullOr str | `null` | auto-detects `legacyPackages/` |
+| `legacyPackagesByName` | bool | `false` | Also discover legacy packages via `by-name/` convention (coexists with regular discovery) |
 | `appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `templatesDir` | nullOr str | `null` | auto-detects `templates/` |
 | `templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
+| `formatterDir` | nullOr str | `null` | auto-detects `formatters/` then `formatter/`. The `default.nix` must return a derivation (`{ pkgs, ... }: pkgs.nixfmt-rfc-style`) |
 | `systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `homesDir` | nullOr str | `null` | auto-detects `homes/` |
 | `autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
@@ -365,6 +415,44 @@ inputs.purr.lib.mkFlake {
   src = ./.;
   systemsDir = "systems";   # or "hosts", or null to auto-detect
   homesDir = "homes";
+}
+```
+
+## Formatter
+
+Auto-discover a per-system formatter from `formatters/` (or `formatter/`). The `default.nix` receives `{ pkgs, lib, system, namespace, inputs, ... }` and must return a derivation:
+
+```nix
+# formatters/default.nix
+{ pkgs, ... }: pkgs.nixfmt-rfc-style
+```
+
+This produces `formatter.<system>` so `nix fmt` works out of the box. You can still override via `outputsBuilder`:
+
+```nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  outputsBuilder = { pkgs, ... }: {
+    formatter = pkgs.alejandra;
+  };
+}
+```
+
+## Legacy Packages
+
+Auto-discover `legacyPackages.<system>.*` from `legacyPackages/` — the convention for unmergeable or non-standard packages, still buildable via `nix build .#<name>`:
+
+```nix
+# legacyPackages/hello/default.nix
+{ pkgs, ... }: pkgs.hello
+```
+
+```nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  legacyPackagesByName = true;   # also scan legacyPackages/by-name/<shard>/<name>/package.nix
 }
 ```
 
@@ -450,15 +538,17 @@ Each auto-discovered module receives different arguments depending on its direct
 | `lib/` | `{ lib, inputs, namespace }` |
 | `modules/` | `{ config, options, lib, pkgs, namespace, ... }` |
 | `packages/` | `{ inputs, system, namespace, lib, pkgs }` |
+| `legacyPackages/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `shells/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `checks/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `apps/` | `{ inputs, system, namespace, lib, pkgs }` |
+| `formatter/` | `{ inputs, system, namespace, lib, pkgs }` |
 | `overlays/` | `final: prev:` (Nix overlay convention) |
 | `templates/` | `{ inputs, namespace, lib }` |
 | `systems/` | `{ config, options, lib, pkgs, purr, host, namespace, system, inputs, ... }` |
 | `homes/` | `{ config, options, lib, pkgs, purr, purrLib, host, namespace, system, inputs, ... }` |
 
-> **Note:** `lib` in `packages/`, `shells/`, `checks/`, and `apps/` includes the project's custom lib under `lib.<namespace>.*`, merged via `purrLib`. `systems/` and `homes/` receive a `purr` attrset with metadata about the current configuration context via `specialArgs` / `extraSpecialArgs`.
+> **Note:** `lib` in `packages/`, `legacyPackages/`, `shells/`, `checks/`, `apps/`, and `formatter/` includes the project's custom lib under `lib.<namespace>.*`, merged via `purrLib`. `systems/` and `homes/` receive a `purr` attrset with metadata about the current configuration context via `specialArgs` / `extraSpecialArgs`.
 
 ## Custom Lib
 
@@ -490,13 +580,13 @@ The `lib/` directory supports both a root `default.nix` and recursive subdirecto
 
 ## Default Module Bundle
 
-By default, sub-modules are exported individually. Enable `bundleModules = true` to auto-generate a `default` module that imports all sub-modules:
+A `default` module that imports all discovered sub-modules is **always generated** (for `nixosModules`, `darwinModules`, and `homeModules`) — unless you define your own `default` module, in which case the auto-generated bundle is skipped:
 
 ```nix
 { imports = [ inputs.myflake.nixosModules.default ]; }
 ```
 
-Set `bundleExtraModules = false` to exclude extraModules from the default bundle (only auto-discovered modules will be included). If you define your own `default` module under `modules/`, the auto-generated bundle is skipped.
+`bundleModules` (default `false`) controls whether your `extraModules` are folded into this bundle. Set `bundleModules = true` to include them; combine with `bundleExtraModules = false` to include only the auto-discovered modules.
 
 ## Extra Modules
 
@@ -541,6 +631,14 @@ src/
 │           └── cowsay/
 │               └── package.nix       #   → packages.<system>.cowsay
 │
+├── legacyPackages/                   # Per-system legacy packages (auto-detect: "legacyPackages")
+│   ├── hello/
+│   │   └── default.nix               #   → legacyPackages.<system>.hello
+│   └── by-name/                      #   Optional by-name convention (legacyPackagesByName = true)
+│       └── he/
+│           └── hello/
+│               └── package.nix       #   → legacyPackages.<system>.hello
+│
 ├── shells/                           # Dev shells (auto-detect: "shells", "devShells")
 │   └── default/
 │       └── default.nix               #   → devShells.<system>.default
@@ -560,6 +658,10 @@ src/
 ├── apps/                             # Per-system apps (auto-detect: "apps")
 │   └── serve/
 │       └── default.nix               #   → apps.<system>.serve
+│
+├── formatters/                       # Formatter (auto-detect: "formatters", "formatter")
+│   └── default.nix                   #   returns a derivation → formatter.<system>
+│                                     #   e.g. { pkgs, ... }: pkgs.nixfmt-rfc-style
 │
 ├── systems/                          # auto-detect: "systems", "hosts"
 │   └── x86_64-linux/
@@ -582,8 +684,10 @@ Each directory is auto-detected when the option is `null` (default). The discove
 | Shells | `shellsDir` | `shells/` → `devShells/` |
 | Overlays | `overlaysDir` | `overlays/` |
 | Packages | `packagesDir` | `packages/` |
+| Legacy Packages | `legacyPackagesDir` | `legacyPackages/` |
 | Apps | `appsDir` | `apps/` |
 | Templates | `templatesDir` | `templates/` |
+| Formatter | `formatterDir` | `formatters/` → `formatter/` |
 | Systems | `systemsDir` | `systems/` → `hosts/` |
 | Homes | `homesDir` | `homes/` |
 
@@ -993,6 +1097,15 @@ purrLib = lib                   # standard nixpkgs lib
 ### `autoModules`
 
 Per-system auto-discovery for checks, shells, packages, and apps. Each module is imported with `pkgs` spread into the function arguments (like `callPackage`), so `{ stdenv, fetchurl, pkgs, lib, ... }` style destructuring works directly.
+
+### `autoFormatter`
+
+Per-system formatter discovery. Imports `<dir>/default.nix` with the same `pkgs`-spread arguments as `autoModules` and returns a single derivation, or `null` when the directory is absent. Used to produce `formatter.<system>`:
+
+```nix
+# formatters/default.nix
+{ pkgs, ... }: pkgs.nixfmt-rfc-style
+```
 
 ### `overlayModules`
 
