@@ -27,6 +27,11 @@ let
       "hosts"
     ];
     homesDir = resolveDir src cfg.homesDir [ "homes" ];
+    formatterDir = resolveDir src cfg.formatterDir [
+      "formatters"
+      "formatter"
+    ];
+    legacyPackagesDir = resolveDir src cfg.legacyPackagesDir [ "legacyPackages" ];
     libDir = resolveDir src cfg.libDir [ "lib" ];
   };
 in

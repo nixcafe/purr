@@ -27,7 +27,12 @@ let
 
   inherit (purrLib) buildImportedPurrLib mergePurrLib;
 
-  inherit (autoMods) autoModules overlayModules templateModules;
+  inherit (autoMods)
+    autoFormatter
+    autoModules
+    overlayModules
+    templateModules
+    ;
 
   mkFlake =
     {
@@ -61,6 +66,9 @@ let
       appsDir ? null,
       templatesDir ? null,
       templatesRecursive ? false,
+      formatterDir ? null,
+      legacyPackagesDir ? null,
+      legacyPackagesByName ? false,
       systemsDir ? null,
       homesDir ? null,
       autoInject ? true,
@@ -104,6 +112,8 @@ let
           packagesDir
           appsDir
           templatesDir
+          formatterDir
+          legacyPackagesDir
           systemsDir
           homesDir
           libDir
@@ -219,6 +229,20 @@ let
         system: autoModules src pkgs.${system} mergedLib namespace inputs extraArgs resolved.appsDir false
       );
 
+      autoFormatterOut =
+        if resolved.formatterDir != null then
+          forAllSystems (
+            system: autoFormatter src pkgs.${system} mergedLib namespace inputs extraArgs resolved.formatterDir
+          )
+        else
+          { };
+
+      legacyPackages = forAllSystems (
+        system:
+        autoModules src pkgs.${system} mergedLib namespace inputs extraArgs resolved.legacyPackagesDir
+          legacyPackagesByName
+      );
+
       discoveredSystems =
         if resolved.systemsDir != null then mods.discoverSystems src resolved.systemsDir else { };
 
@@ -243,7 +267,6 @@ let
           }
         else
           { };
-
       buildHomeConfigs =
         if discoveredHomes != { } then
           confs.buildHomeConfigs {
@@ -261,37 +284,39 @@ let
           }
         else
           { };
-    in
-    {
-      inherit
-        darwinModules
-        homeModules
-        nixosModules
-        ;
 
-      formatter = pivotedOutputs.formatter or { };
-    }
-    // foldl' (acc: x: acc // x) { } [
-      (optionalAttrs (checks != { }) { inherit checks; })
-      (optionalAttrs (shells != { }) { devShells = shells; })
-      (optionalAttrs (overlays != { }) { inherit overlays; })
-      (optionalAttrs (templates != { }) { inherit templates; })
-      (optionalAttrs (packages != { }) { inherit packages; })
-      (optionalAttrs (apps != { }) { inherit apps; })
-      (optionalAttrs (discoveredSystems != { }) buildSystemConfigs)
-      (optionalAttrs (discoveredHomes != { }) { homeConfigurations = buildHomeConfigs; })
-      (optionalAttrs (importedPurrLib != null) (
-        if namespace != null then
-          {
-            lib = {
-              ${namespace} = importedPurrLib;
-            };
-          }
-        else
-          { lib = importedPurrLib; }
-      ))
-    ]
-    // builtins.removeAttrs pivotedOutputs [ "formatter" ];
+      autoOutputs = {
+        inherit
+          darwinModules
+          homeModules
+          nixosModules
+          ;
+
+        formatter = autoFormatterOut // (pivotedOutputs.formatter or { });
+      }
+      // foldl' (acc: x: acc // x) { } [
+        (optionalAttrs (checks != { }) { inherit checks; })
+        (optionalAttrs (shells != { }) { devShells = shells; })
+        (optionalAttrs (overlays != { }) { inherit overlays; })
+        (optionalAttrs (templates != { }) { inherit templates; })
+        (optionalAttrs (packages != { }) { inherit packages; })
+        (optionalAttrs (legacyPackages != { }) { inherit legacyPackages; })
+        (optionalAttrs (apps != { }) { inherit apps; })
+        (optionalAttrs (discoveredSystems != { }) buildSystemConfigs)
+        (optionalAttrs (discoveredHomes != { }) { homeConfigurations = buildHomeConfigs; })
+        (optionalAttrs (importedPurrLib != null) (
+          if namespace != null then
+            {
+              lib = {
+                ${namespace} = importedPurrLib;
+              };
+            }
+          else
+            { lib = importedPurrLib; }
+        ))
+      ];
+    in
+    lib.recursiveUpdate autoOutputs (builtins.removeAttrs pivotedOutputs [ "formatter" ]);
 in
 {
   inherit mkFlake;
