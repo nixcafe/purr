@@ -50,6 +50,8 @@ in
               packagesDir = null;
               appsDir = null;
               templatesDir = null;
+              formatterDir = null;
+              legacyPackagesDir = null;
               systemsDir = null;
               homesDir = null;
               libDir = null;
@@ -76,6 +78,8 @@ in
               packagesDir = null;
               appsDir = null;
               templatesDir = null;
+              formatterDir = null;
+              legacyPackagesDir = null;
               systemsDir = "explicit-systems";
               homesDir = null;
               libDir = null;

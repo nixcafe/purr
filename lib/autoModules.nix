@@ -1,27 +1,38 @@
 { modules }:
 let
+  importMod =
+    pkgs: purrLib: namespace: inputs: extraArgs: module:
+    import module (
+      pkgs
+      // extraArgs
+      // {
+        inherit inputs pkgs namespace;
+        inherit (pkgs) system;
+        lib = purrLib;
+      }
+    );
+
   autoModules =
     src: pkgs: purrLib: namespace: inputs: extraArgs: dir: packagesByName:
     if dir != null then
       let
-        importMod =
-          module:
-          import module (
-            pkgs
-            // extraArgs
-            // {
-              inherit inputs pkgs namespace;
-              inherit (pkgs) system;
-              lib = purrLib;
-            }
-          );
         regularMods = modules.findModulesLib src dir;
         byNameMods = if packagesByName then modules.findModulesByName src dir else { };
         allMods = regularMods // byNameMods;
       in
-      builtins.mapAttrs (_: importMod) allMods
+      builtins.mapAttrs (_: importMod pkgs purrLib namespace inputs extraArgs) allMods
     else
       { };
+
+  autoFormatter =
+    src: pkgs: purrLib: namespace: inputs: extraArgs: dir:
+    if dir != null then
+      let
+        f = src + "/${dir}/default.nix";
+      in
+      if builtins.pathExists f then importMod pkgs purrLib namespace inputs extraArgs f else null
+    else
+      null;
 
   overlayModules =
     src: overlaysDir:
@@ -60,5 +71,10 @@ let
       { };
 in
 {
-  inherit autoModules overlayModules templateModules;
+  inherit
+    autoFormatter
+    autoModules
+    overlayModules
+    templateModules
+    ;
 }

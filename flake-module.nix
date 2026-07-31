@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  flake-parts-lib,
   inputs,
   ...
 }:
@@ -45,7 +44,12 @@ let
 
   inherit (resolver) resolveDirs;
   inherit (libBuilder) buildImportedPurrLib mergePurrLib;
-  inherit (autoMods) autoModules overlayModules templateModules;
+  inherit (autoMods)
+    autoFormatter
+    autoModules
+    overlayModules
+    templateModules
+    ;
 in
 {
   options.purr = {
@@ -184,6 +188,25 @@ in
       '';
     };
 
+    legacyPackagesDir = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Directory name under `src` for per-system legacy packages.
+        If `null`, auto-detects from `legacyPackages/`.
+        Each `default.nix` under subdirectories becomes a legacy package.
+      '';
+    };
+
+    legacyPackagesByName = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether to also discover legacy packages using the by-name convention.
+        Same semantics as {option}`purr.packagesByName`.
+      '';
+    };
+
     appsDir = mkOption {
       type = types.nullOr types.str;
       default = null;
@@ -191,6 +214,17 @@ in
         Directory name under `src` for per-system apps.
         If `null`, auto-detects from `apps/`.
         Each `default.nix` under subdirectories becomes an app.
+      '';
+    };
+
+    formatterDir = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Directory name under `src` for the per-system formatter.
+        If `null`, auto-detects from `formatters/` then `formatter/`.
+        The `default.nix` in this directory is imported per-system
+        and must return a derivation (e.g. `pkgs.nixfmt-rfc-style`).
       '';
     };
 
@@ -325,6 +359,28 @@ in
         }
       '';
     };
+
+    outputsBuilder = mkOption {
+      type = types.raw;
+      default = _: { };
+      description = ''
+        Additional per-system outputs. Called for each system with
+        `{ pkgs, system, lib, inputs, namespace }` and must return
+        an attrset that is merged into the perSystem flake outputs.
+        Use this for custom outputs like `formatter` or any other
+        per-system key not covered by purr's auto-discovery.
+      '';
+      example = lib.literalExpression ''
+        {
+          pkgs,
+          lib,
+          namespace,
+          ...
+        }: {
+          formatter = pkgs.nixfmt-rfc-style;
+        }
+      '';
+    };
   };
 
   config = mkIf cfg.enable (
@@ -336,6 +392,8 @@ in
           overlaysDir
           packagesDir
           appsDir
+          formatterDir
+          legacyPackagesDir
           templatesDir
           systemsDir
           homesDir
@@ -391,18 +449,14 @@ in
           authored = makeModuleSet name;
           everything = lib.recursiveUpdate authored (extra.${name} or { });
         in
-        if cfg.bundleModules then
-          let
-            toBundle = if cfg.bundleExtraModules then everything else authored;
-          in
-          authored
-          // lib.optionalAttrs (!(everything ? "default")) {
-            default = {
-              imports = mods.collectModules toBundle;
-            };
-          }
-        else
-          authored;
+        authored
+        // lib.optionalAttrs (!(everything ? "default")) {
+          default = {
+            imports = mods.collectModules (
+              if cfg.bundleModules then if cfg.bundleExtraModules then everything else authored else authored
+            );
+          };
+        };
 
       discoveredOverlays = overlayModules cfg.src resolved.overlaysDir;
 
@@ -415,6 +469,18 @@ in
 
       discoveredHomes =
         if resolved.homesDir != null then mods.discoverHomes cfg.src resolved.homesDir else { };
+
+      nixosModules = makeBundled "nixos";
+      darwinModules = makeBundled "darwin";
+      homeModules = makeBundled "home";
+
+      extraModulesWithLocal = {
+        nixos =
+          cfg.extraModules.nixos or [ ] ++ lib.optional (nixosModules ? "default") nixosModules.default;
+        darwin =
+          cfg.extraModules.darwin or [ ] ++ lib.optional (darwinModules ? "default") darwinModules.default;
+        home = cfg.extraModules.home or [ ] ++ lib.optional (homeModules ? "default") homeModules.default;
+      };
 
       buildSystemConfigs =
         if discoveredSystems != { } then
@@ -429,8 +495,8 @@ in
               extraArgs
               namespace
               nixpkgsConfig
-              extraModules
               ;
+            extraModules = extraModulesWithLocal;
             lib = mergedLib;
             sharedOverlays = builtins.attrValues discoveredOverlays;
           }
@@ -446,24 +512,39 @@ in
               extraArgs
               namespace
               nixpkgsConfig
-              extraModules
               ;
+            extraModules = extraModulesWithLocal;
+            lib = mergedLib;
             sharedOverlays = builtins.attrValues discoveredOverlays;
           }
         else
           { };
     in
     {
-      flake = buildSystemConfigs // {
-        nixosModules = makeBundled "nixos";
-        darwinModules = makeBundled "darwin";
-        homeModules = makeBundled "home";
-        overlays = discoveredOverlays;
-        templates = discoveredTemplates;
-        homeConfigurations = buildHomeConfigs;
-      };
+      flake =
+        buildSystemConfigs
+        // {
+          inherit
+            darwinModules
+            homeModules
+            nixosModules
+            ;
+          overlays = discoveredOverlays;
+          templates = discoveredTemplates;
+          homeConfigurations = buildHomeConfigs;
+        }
+        // lib.optionalAttrs (importedPurrLib != null) (
+          if cfg.namespace != null then
+            {
+              lib = {
+                ${cfg.namespace} = importedPurrLib;
+              };
+            }
+          else
+            { lib = importedPurrLib; }
+        );
 
-      perSystem = flake-parts-lib.mkPerSystemOption (
+      perSystem =
         { system, ... }:
         let
           pkgs = import inputs.nixpkgs {
@@ -477,11 +558,25 @@ in
           shellsModules = mod resolved.shellsDir false;
           packagesModules = mod resolved.packagesDir cfg.packagesByName;
           appsModules = mod resolved.appsDir false;
+          formatterModule =
+            autoFormatter cfg.src pkgs mergedLib cfg.namespace inputs cfg.extraArgs
+              resolved.formatterDir;
+          legacyPackagesModules = mod resolved.legacyPackagesDir cfg.legacyPackagesByName;
+          extraOutputs = cfg.outputsBuilder (
+            cfg.extraArgs
+            // {
+              inherit pkgs;
+              inherit (pkgs) system;
+              lib = mergedLib;
+              inherit inputs;
+              inherit (cfg) namespace;
+            }
+          );
         in
         {
           _file = ./flake-module.nix;
 
-          config =
+          config = lib.recursiveUpdate (
             { }
             // lib.optionalAttrs (checksModules != { }) {
               checks = checksModules;
@@ -492,11 +587,17 @@ in
             // lib.optionalAttrs (packagesModules != { }) {
               packages = packagesModules;
             }
+            // lib.optionalAttrs (legacyPackagesModules != { }) {
+              legacyPackages = legacyPackagesModules;
+            }
             // lib.optionalAttrs (appsModules != { }) {
               apps = appsModules;
-            };
-        }
-      );
+            }
+            // lib.optionalAttrs (formatterModule != null) {
+              formatter = formatterModule;
+            }
+          ) extraOutputs;
+        };
     }
   );
 }

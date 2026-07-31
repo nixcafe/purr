@@ -10,6 +10,8 @@ let
     mkDefault
     ;
 
+  baseLib = lib;
+
   parseArchFormat =
     archFormat:
     let
@@ -75,7 +77,7 @@ let
       extraModules ? { },
       extraArgs ? { },
       autoInject ? true,
-      lib ? lib,
+      lib ? baseLib,
       sharedOverlays ? [ ],
     }:
     let
@@ -278,7 +280,7 @@ let
       extraModules ? { },
       extraArgs ? { },
       autoInject ? true,
-      lib ? lib,
+      lib ? baseLib,
       sharedOverlays ? [ ],
     }:
     let

@@ -90,7 +90,12 @@ rec {
   inherit (libBuilder) buildImportedPurrLib mergePurrLib;
 
   # ---- auto-discovery ----
-  inherit (autoMods) autoModules overlayModules templateModules;
+  inherit (autoMods)
+    autoFormatter
+    autoModules
+    overlayModules
+    templateModules
+    ;
 
   # ---- mkFlake ----
   inherit (mkFlakeMod) mkFlake;
