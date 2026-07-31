@@ -10,6 +10,7 @@ Sitemap:
 - [Module System](/modules): Module discovery, namespace support, and custom lib
 - [Directory Structure](/directory-structure): Full directory layout auto-discovered by purr
 - [Systems & Homes](/systems-homes): Auto-discovering NixOS/darwin systems and home-manager homes
+- [hydraJobs](/hydrajobs): Hydra CI job sets with automatic derivation discovery
 - [API Reference](/api): Complete purr library API reference
 -->
 
@@ -119,6 +120,10 @@ systems/
 
 See the [Systems & Homes](/systems-homes) page for the namespace bridge, metadata, and image formats.
 
+### hydraJobs (CI)
+
+Generate a `hydraJobs` output for Hydra CI that automatically mirrors every buildable output — packages, checks, shells, NixOS/hosts toplevels, home activation packages, and system images — plus custom jobs from a `hydraJobs/` directory. See the [hydraJobs](/hydrajobs) page.
+
 ## Integration Modes
 
 purr works in two modes — pick whichever fits your stack:
@@ -221,6 +226,18 @@ Default `moduleTypes`:
 | `purr.autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
 | `purr.outputsBuilder` | fn | `(_: {})` | Additional per-system outputs. Called for each system with `{ pkgs, system, lib, inputs, namespace }` plus all `extraArgs` keys; the returned attrset is **deep-merged** into the perSystem flake outputs |
 
+### hydraJobs Options
+
+All under `purr.hydraJobs.*`. See the [hydraJobs](/hydrajobs) page for details.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `purr.hydraJobs.enable` | bool | `false` | Enable the `hydraJobs` flake output |
+| `purr.hydraJobs.dir` | nullOr str | `null` | Custom jobs directory, auto-detects `hydraJobs/` |
+| `purr.hydraJobs.systems` | nullOr \[str] | `null` | Filter which systems get CI jobs |
+| `purr.hydraJobs.include` | nullOr \[str] | `null` | Mirror outputs into hydraJobs (`null` = auto-detect all) |
+| `purr.hydraJobs.extra` | attrs | `{}` | Extra jobs merged last, highest priority |
+
 ## Custom Module Directories
 
 You can customize which subdirectories are scanned for each module type:
@@ -286,6 +303,20 @@ purr.outputsBuilder = { pkgs, system, lib, namespace, ... }: {
   packages.fmt = pkgs.nixfmt-rfc-style;
 };
 ```
+
+## Hydra CI (hydraJobs)
+
+Generate a `hydraJobs` output for Hydra that automatically mirrors every buildable output and adds custom jobs from a `hydraJobs/` directory:
+
+```nix
+purr.hydraJobs = {
+  enable = true;
+  systems = ["x86_64-linux"];
+  include = [ "checks" "packages" "nixosConfigs" ];
+};
+```
+
+See the [hydraJobs](/hydrajobs) page for the full reference.
 
 ## Namespace Lib Output
 
@@ -384,6 +415,25 @@ All auto-discovered modules receive `extraArgs` keys — packages, shells, check
 | `systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `homesDir` | nullOr str | `null` | auto-detects `homes/` |
 | `autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
+| `hydraJobs` | attrs | `{}` | Hydra CI options: `{ enable, dir, systems, include, extra }`. See below |
+
+## Hydra CI (hydraJobs)
+
+Generate a `hydraJobs` output for Hydra CI that automatically mirrors every buildable output, plus custom jobs from a `hydraJobs/` directory:
+
+```nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  hydraJobs = {
+    enable = true;
+    systems = ["x86_64-linux"];
+    include = [ "checks" "packages" "nixosConfigs" ];
+  };
+}
+```
+
+See the [hydraJobs](/hydrajobs) page for the full reference.
 
 ## Customizing Systems
 
@@ -672,6 +722,8 @@ src/
         └── alice@server/default.nix  # → homeConfigurations."alice@server"
 ```
 
+> **hydraJobs:** custom CI jobs live in a top-level `hydraJobs/` directory. Enable with `hydraJobs.enable = true`. See the [hydraJobs](/hydrajobs) page.
+
 ## Directory Discovery
 
 Each directory is auto-detected when the option is `null` (default). The discovery order:
@@ -776,6 +828,50 @@ nix build .#nixosConfigurations.server.config.system.build.images.digital-ocean
 nix build .#nixosConfigurations.server.config.system.build.images.amazon
 ```
 
+### Short `images.<host>.<format>` output
+
+Declare which formats to build for a host with the `purr.images` option, and purr exposes a top-level `images.<host>.<format>` output. This works regardless of whether [hydraJobs](/hydrajobs) is enabled:
+
+```nix
+# systems/x86_64-linux/server/default.nix
+{
+  purr.images = [ "iso" "qemu" ];
+}
+```
+
+```bash
+# Short names, always available
+nix build .#images.server.iso
+nix build .#images.server.qemu
+```
+
+Available formats are the same as below. When hydraJobs is enabled, these same declarations are mirrored as `hydraJobs.images.<host>.<format>`.
+
+### Image-only hosts (not deployable)
+
+A host that sets `purr.images` is treated as an **image-only recipe** by default. It is excluded from `nixosConfigurations`/`darwinConfigurations` (and from the `hydraJobs` config groups), so its `system.build.toplevel` is never evaluated and it cannot be deployed with `nixos-rebuild`. Use this for hosts like installer ISOs that have no root file system and exist only to build images:
+
+```nix
+# systems/x86_64-linux/installer/default.nix
+{
+  purr.images = [ "iso" ];
+}
+```
+
+`installer` will **not** show up in `nixosConfigurations`, but `nix build .#images.installer.iso` still works. The image declarations are read cheaply — nixpkgs and home-manager are never evaluated just to decide how a host is exposed, and the image derivations stay lazy until you actually build them.
+
+To keep a host deployable **and** build images from it, set `purr.deployable = true`:
+
+```nix
+# systems/x86_64-linux/server/default.nix
+{
+  purr.images = [ "iso" "qemu" ];
+  purr.deployable = true; # stays in nixosConfigurations AND builds images
+}
+```
+
+> **Note:** `purr.deployable` is a system option. A host is deployable by default when `purr.images` is empty; setting `purr.images` without `purr.deployable = true` makes it image-only.
+
 ### Available image formats
 
 All formats from the now-deprecated [nixos-generators](https://github.com/nix-community/nixos-generators) are built into nixpkgs:
@@ -797,7 +893,7 @@ All formats from the now-deprecated [nixos-generators](https://github.com/nix-co
 
 ### If you need different configs for different images
 
-Put multiple systems under `systems/x86_64-linux/` with different names:
+Put multiple systems under `systems/x86_64-linux/` with different names. A minimal installer config is a good candidate for an image-only host (see [Image-only hosts](#image-only-hosts-not-deployable)):
 
 ```
 systems/x86_64-linux/
@@ -805,10 +901,17 @@ systems/x86_64-linux/
   └── installer/default.nix    # minimal ISO config
 ```
 
+```nix
+# systems/x86_64-linux/installer/default.nix
+{
+  purr.images = [ "iso" ];
+}
+```
+
 Then build:
 
 ```bash
-nix build .#nixosConfigurations.installer.config.system.build.images.iso
+nix build .#images.installer.iso
 ```
 
 ## Namespace Bridge (system -> home config forwarding)
@@ -910,6 +1013,165 @@ purr = {
   homesDir = "homes";
 };
 ```
+
+# hydraJobs
+
+purr can generate a `hydraJobs` flake output for [Hydra CI](https://nixos.org/hydra/). Hydra evaluates `outputs.hydraJobs` (falling back to `checks`) and every derivation leaf becomes a build job. purr makes this automatic — everything buildable in your flake is mirrored into `hydraJobs` with zero configuration, plus you can add custom jobs from a directory and fine-tune which outputs are included.
+
+## Enabling
+
+hydraJobs is **off by default**. Turn it on with the `hydraJobs.enable` option:
+
+```nix
+# mkFlake
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  hydraJobs.enable = true;
+}
+
+# flake-parts
+purr = {
+  enable = true;
+  src = ./.;
+  hydraJobs.enable = true;
+};
+```
+
+## Options
+
+### mkFlake
+
+```nix
+hydraJobs = {
+  enable = true;                  # bool, default false — output hydraJobs
+  dir = "hydraJobs";              # nullOr str, default null — auto-detects "hydraJobs"
+  systems = ["x86_64-linux"];     # nullOr [str], default null — filter CI systems
+  include = null;                 # nullOr [str], default null — auto-detect all outputs
+  extra = { };                    # attrs, default {} — extra jobs, highest priority
+};
+```
+
+### flake-parts
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `purr.hydraJobs.enable` | bool | `false` | Enable the `hydraJobs` flake output |
+| `purr.hydraJobs.dir` | nullOr str | `null` | Directory for custom jobs, auto-detects `hydraJobs/` |
+| `purr.hydraJobs.systems` | nullOr \[str] | `null` | Filter which systems get CI jobs |
+| `purr.hydraJobs.include` | nullOr \[str] | `null` | Which outputs to mirror (see below) |
+| `purr.hydraJobs.extra` | attrs | `{}` | Extra jobs merged last, can override anything |
+
+## What Gets Mirrored
+
+When `hydraJobs.include = null` (default), purr auto-discovers **everything buildable**:
+
+| Group | Source | Job |
+|-------|--------|-----|
+| `checks.<system>.<name>` | `checks/` | `checks.<system>.<name>` |
+| `packages.<system>.<name>` | `packages/` | `packages.<system>.<name>` |
+| `devShells.<system>.<name>` | `shells/` | `devShells.<system>.<name>` |
+| `legacyPackages.<system>.<name>` | `legacyPackages/` | `legacyPackages.<system>.<name>` |
+| `formatter.<system>` | `formatters/` | `formatter.<system>` |
+| `nixosConfigs.<system>.<host>` | `systems/` | `config.system.build.toplevel` |
+| `darwinConfigs.<system>.<host>` | `systems/` | system derivation |
+| `homeConfigs.<system>.<user@host>` | `homes/` | `activationPackage` |
+| `images.<host>.<format>` | `purr.images` option | `config.system.build.images.<format>` |
+
+> **Note:** `apps` are **not** mirrored, even when present, because apps are `{ type = "app"; program = ...; }` metadata rather than derivations — Hydra cannot build them.
+
+> **Note:** image-only hosts (hosts with `purr.images` set and no `purr.deployable = true`) are excluded from `nixosConfigs`/`darwinConfigs` and never get a `toplevel` job. Their images still show up under `images.<host>.<format>`. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
+
+### Manual control
+
+Set `include` to an explicit list to mirror only what you want, or `[]` to disable mirroring entirely:
+
+```nix
+hydraJobs.include = [ "checks" "packages" ];          # only these two
+hydraJobs.include = [ ];                              # no mirroring at all
+hydraJobs.include = [ "checks" "nixosConfigs" "homeConfigs" ];
+```
+
+Valid per-system names: `checks`, `packages`, `devShells`, `apps`, `legacyPackages`, `formatter`.
+Valid config names: `nixosConfigs`, `darwinConfigs`, `homeConfigs`.
+
+### Architecture filter
+
+Restrict CI jobs to specific systems (Hydra has no built-in system filtering — you control this in the flake):
+
+```nix
+hydraJobs.systems = [ "x86_64-linux" ];
+```
+
+## Directory Jobs
+
+Custom CI jobs go under `hydraJobs/<group>/<job>/default.nix`. Each job is a function receiving `{ pkgs, system, lib, inputs, namespace, ... }` that returns a derivation, an attrset of derivations, or `null` (skip for that system):
+
+```
+hydraJobs/
+├── build/
+│   └── hello/default.nix      → hydraJobs.build.<system>.hello
+└── test/
+    └── unit/default.nix       → hydraJobs.test.<system>.unit
+```
+
+```nix
+# hydraJobs/build/hello/default.nix
+{ pkgs, system, ... }: pkgs.hello
+
+# hydraJobs/test/unit/default.nix
+{ pkgs, system, ... }:
+if system == "x86_64-linux" then
+  pkgs.runCommand "unit-test" { } "echo pass > $out"
+else
+  null   # skip this job on other systems
+```
+
+### Extra jobs
+
+Add arbitrary jobs at the top level with `extra` — this has the highest priority and can override anything:
+
+```nix
+hydraJobs.extra = {
+  ci.gitStatus = {
+    x86_64-linux.check = pkgs.runCommand "git-check" { } "true";
+  };
+};
+```
+
+## Example Output
+
+With `hydraJobs.enable = true`, a project with packages, a NixOS host, and home configs produces:
+
+```
+hydraJobs
+├── build.x86_64-linux.hello         # directory job
+├── checks.x86_64-linux.good         # mirrored from checks/
+├── packages.x86_64-linux.hello      # mirrored from packages/
+├── homeConfigs.x86_64-linux.alice@server   # activationPackage
+├── images.server.iso                # purr.images
+├── nixosConfigs.x86_64-linux.server # toplevel
+└── test.x86_64-linux.unit           # directory job
+```
+
+## Related: the `images` Output
+
+`purr.images` is a **system option** — declare which image formats to build for a host. When set, purr exposes them as a top-level `images.<host>.<format>` output **regardless of whether hydraJobs is enabled**, so you can build an ISO directly:
+
+```nix
+# systems/x86_64-linux/server/default.nix
+{
+  purr.images = [ "iso" "qemu" ];
+}
+```
+
+```bash
+nix build .#images.server.iso
+```
+
+A host with `purr.images` is image-only by default: it is excluded from `nixosConfigurations` and from the `nixosConfigs`/`darwinConfigs` hydraJobs groups. Set `purr.deployable = true` to also expose it as a deployable configuration. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
+
+The same declarations also feed `hydraJobs.images.<host>.<format>` when hydraJobs is enabled. See [Systems & Homes](/systems-homes) for available formats.
 
 # API Reference
 
@@ -1043,7 +1305,7 @@ Build home-manager configurations from discovered homes.
 
 ### `buildSystemConfigs`
 
-Build nixos/darwin configurations from discovered systems.
+Build nixos/darwin configurations from discovered systems. Hosts that set `purr.images` are image-only by default and are excluded from the returned `nixosConfigurations`/`darwinConfigurations`; set `purr.deployable = true` to keep them deployable. Also returns an `imageRecipes` attribute — `{ host = { system; images; cfg; }; }` — consumed by `imagesFromConfigs`.
 
 ### `parseArchFormat`
 
@@ -1060,6 +1322,12 @@ Find homes matching a host across all architectures.
 ### `formatOutputKey`
 
 Map format string to flake output key (`"linux" -> "nixosConfigurations"`, `"darwin" -> "darwinConfigurations"`). Throws for unsupported formats.
+
+### `imagesFromConfigs`
+
+`imagesFromConfigs :: imageRecipes -> systemsOrNull -> { host = { format = derivation; }; }`
+
+Extract image derivations from image recipes. For each recipe, resolves `cfg.config.system.build.images.<format>` lazily for the formats listed in its `images` attr. Filters recipes by system when `systems` is non-null. Used by both the top-level `images` output and `hydraJobs.images`.
 
 ## Directory Resolution
 
@@ -1114,3 +1382,35 @@ Discover and normalize overlays from a directory.
 ### `templateModules`
 
 Discover flake templates from a directory.
+
+## Hydra CI
+
+### `filterSystems`
+
+`filterSystems :: attrs -> systemsOrNull -> attrs`
+
+Filter an attrset keyed by system to only the given systems. Returns the attrset unchanged when `systems` is `null`.
+
+### `mirrorOutputs`
+
+`mirrorOutputs :: perSystemOutputs -> names -> systemsOrNull -> attrs`
+
+Mirror named per-system outputs (e.g. `checks`, `packages`) into `hydraJobs.<name>.<system>.<key>` form, optionally filtered by system.
+
+### `hydraJobsFromDir`
+
+`hydraJobsFromDir :: src -> dir -> systems -> systemPkgs -> lib -> namespace -> inputs -> extraArgs -> attrs`
+
+Scan `src/<dir>/<group>/<job>/default.nix` and produce `hydraJobs.<group>.<system>.<job>`. Each job is a function `{ pkgs, system, lib, inputs, namespace, ... }` returning a derivation, derivation attrset, or `null` (skipped).
+
+### `configOutputs`
+
+`configOutputs :: systemConfigs -> homeConfigs -> names -> systemsOrNull -> attrs`
+
+Mirror system and home configurations into hydraJobs: `nixosConfigs` (toplevel), `darwinConfigs` (system), `homeConfigs` (activationPackage), grouped by system.
+
+### `buildHydraJobs`
+
+`buildHydraJobs :: { src, hydraJobsDir, hydraSystems, hydraJobsInclude, hydraJobsExtra, systemPkgs, perSystemOutputs, systemConfigs, homeConfigs, ... } -> attrs`
+
+Combine all hydraJobs sources — directory jobs, mirrored per-system outputs, config outputs, images, and `hydraJobsExtra` (highest priority) — into the final `hydraJobs` flake output.

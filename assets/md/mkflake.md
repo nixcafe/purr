@@ -55,6 +55,25 @@
 | `systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `homesDir` | nullOr str | `null` | auto-detects `homes/` |
 | `autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
+| `hydraJobs` | attrs | `{}` | Hydra CI options: `{ enable, dir, systems, include, extra }`. See below |
+
+## Hydra CI (hydraJobs)
+
+Generate a `hydraJobs` output for Hydra CI that automatically mirrors every buildable output, plus custom jobs from a `hydraJobs/` directory:
+
+```nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  hydraJobs = {
+    enable = true;
+    systems = ["x86_64-linux"];
+    include = [ "checks" "packages" "nixosConfigs" ];
+  };
+}
+```
+
+See the [hydraJobs](/hydrajobs) page for the full reference.
 
 ## Customizing Systems
 

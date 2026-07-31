@@ -63,6 +63,50 @@ nix build .#nixosConfigurations.server.config.system.build.images.digital-ocean
 nix build .#nixosConfigurations.server.config.system.build.images.amazon
 ```
 
+### Short `images.<host>.<format>` output
+
+Declare which formats to build for a host with the `purr.images` option, and purr exposes a top-level `images.<host>.<format>` output. This works regardless of whether [hydraJobs](/hydrajobs) is enabled:
+
+```nix
+# systems/x86_64-linux/server/default.nix
+{
+  purr.images = [ "iso" "qemu" ];
+}
+```
+
+```bash
+# Short names, always available
+nix build .#images.server.iso
+nix build .#images.server.qemu
+```
+
+Available formats are the same as below. When hydraJobs is enabled, these same declarations are mirrored as `hydraJobs.images.<host>.<format>`.
+
+### Image-only hosts (not deployable)
+
+A host that sets `purr.images` is treated as an **image-only recipe** by default. It is excluded from `nixosConfigurations`/`darwinConfigurations` (and from the `hydraJobs` config groups), so its `system.build.toplevel` is never evaluated and it cannot be deployed with `nixos-rebuild`. Use this for hosts like installer ISOs that have no root file system and exist only to build images:
+
+```nix
+# systems/x86_64-linux/installer/default.nix
+{
+  purr.images = [ "iso" ];
+}
+```
+
+`installer` will **not** show up in `nixosConfigurations`, but `nix build .#images.installer.iso` still works. The image declarations are read cheaply — nixpkgs and home-manager are never evaluated just to decide how a host is exposed, and the image derivations stay lazy until you actually build them.
+
+To keep a host deployable **and** build images from it, set `purr.deployable = true`:
+
+```nix
+# systems/x86_64-linux/server/default.nix
+{
+  purr.images = [ "iso" "qemu" ];
+  purr.deployable = true; # stays in nixosConfigurations AND builds images
+}
+```
+
+> **Note:** `purr.deployable` is a system option. A host is deployable by default when `purr.images` is empty; setting `purr.images` without `purr.deployable = true` makes it image-only.
+
 ### Available image formats
 
 All formats from the now-deprecated [nixos-generators](https://github.com/nix-community/nixos-generators) are built into nixpkgs:
@@ -84,7 +128,7 @@ All formats from the now-deprecated [nixos-generators](https://github.com/nix-co
 
 ### If you need different configs for different images
 
-Put multiple systems under `systems/x86_64-linux/` with different names:
+Put multiple systems under `systems/x86_64-linux/` with different names. A minimal installer config is a good candidate for an image-only host (see [Image-only hosts](#image-only-hosts-not-deployable)):
 
 ```
 systems/x86_64-linux/
@@ -92,10 +136,17 @@ systems/x86_64-linux/
   └── installer/default.nix    # minimal ISO config
 ```
 
+```nix
+# systems/x86_64-linux/installer/default.nix
+{
+  purr.images = [ "iso" ];
+}
+```
+
 Then build:
 
 ```bash
-nix build .#nixosConfigurations.installer.config.system.build.images.iso
+nix build .#images.installer.iso
 ```
 
 ## Namespace Bridge (system -> home config forwarding)

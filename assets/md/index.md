@@ -104,6 +104,10 @@ systems/
 
 See the [Systems & Homes](/systems-homes) page for the namespace bridge, metadata, and image formats.
 
+### hydraJobs (CI)
+
+Generate a `hydraJobs` output for Hydra CI that automatically mirrors every buildable output — packages, checks, shells, NixOS/hosts toplevels, home activation packages, and system images — plus custom jobs from a `hydraJobs/` directory. See the [hydraJobs](/hydrajobs) page.
+
 ## Integration Modes
 
 purr works in two modes — pick whichever fits your stack:

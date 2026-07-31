@@ -69,6 +69,8 @@ src/
         └── alice@server/default.nix  # → homeConfigurations."alice@server"
 ```
 
+> **hydraJobs:** custom CI jobs live in a top-level `hydraJobs/` directory. Enable with `hydraJobs.enable = true`. See the [hydraJobs](/hydrajobs) page.
+
 ## Directory Discovery
 
 Each directory is auto-detected when the option is `null` (default). The discovery order:

@@ -85,6 +85,18 @@ Default `moduleTypes`:
 | `purr.autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
 | `purr.outputsBuilder` | fn | `(_: {})` | Additional per-system outputs. Called for each system with `{ pkgs, system, lib, inputs, namespace }` plus all `extraArgs` keys; the returned attrset is **deep-merged** into the perSystem flake outputs |
 
+### hydraJobs Options
+
+All under `purr.hydraJobs.*`. See the [hydraJobs](/hydrajobs) page for details.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `purr.hydraJobs.enable` | bool | `false` | Enable the `hydraJobs` flake output |
+| `purr.hydraJobs.dir` | nullOr str | `null` | Custom jobs directory, auto-detects `hydraJobs/` |
+| `purr.hydraJobs.systems` | nullOr \[str] | `null` | Filter which systems get CI jobs |
+| `purr.hydraJobs.include` | nullOr \[str] | `null` | Mirror outputs into hydraJobs (`null` = auto-detect all) |
+| `purr.hydraJobs.extra` | attrs | `{}` | Extra jobs merged last, highest priority |
+
 ## Custom Module Directories
 
 You can customize which subdirectories are scanned for each module type:
@@ -150,6 +162,20 @@ purr.outputsBuilder = { pkgs, system, lib, namespace, ... }: {
   packages.fmt = pkgs.nixfmt-rfc-style;
 };
 ```
+
+## Hydra CI (hydraJobs)
+
+Generate a `hydraJobs` output for Hydra that automatically mirrors every buildable output and adds custom jobs from a `hydraJobs/` directory:
+
+```nix
+purr.hydraJobs = {
+  enable = true;
+  systems = ["x86_64-linux"];
+  include = [ "checks" "packages" "nixosConfigs" ];
+};
+```
+
+See the [hydraJobs](/hydrajobs) page for the full reference.
 
 ## Namespace Lib Output
 

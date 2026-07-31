@@ -130,7 +130,7 @@ Build home-manager configurations from discovered homes.
 
 ### `buildSystemConfigs`
 
-Build nixos/darwin configurations from discovered systems.
+Build nixos/darwin configurations from discovered systems. Hosts that set `purr.images` are image-only by default and are excluded from the returned `nixosConfigurations`/`darwinConfigurations`; set `purr.deployable = true` to keep them deployable. Also returns an `imageRecipes` attribute — `{ host = { system; images; cfg; }; }` — consumed by `imagesFromConfigs`.
 
 ### `parseArchFormat`
 
@@ -147,6 +147,12 @@ Find homes matching a host across all architectures.
 ### `formatOutputKey`
 
 Map format string to flake output key (`"linux" -> "nixosConfigurations"`, `"darwin" -> "darwinConfigurations"`). Throws for unsupported formats.
+
+### `imagesFromConfigs`
+
+`imagesFromConfigs :: imageRecipes -> systemsOrNull -> { host = { format = derivation; }; }`
+
+Extract image derivations from image recipes. For each recipe, resolves `cfg.config.system.build.images.<format>` lazily for the formats listed in its `images` attr. Filters recipes by system when `systems` is non-null. Used by both the top-level `images` output and `hydraJobs.images`.
 
 ## Directory Resolution
 
@@ -201,3 +207,35 @@ Discover and normalize overlays from a directory.
 ### `templateModules`
 
 Discover flake templates from a directory.
+
+## Hydra CI
+
+### `filterSystems`
+
+`filterSystems :: attrs -> systemsOrNull -> attrs`
+
+Filter an attrset keyed by system to only the given systems. Returns the attrset unchanged when `systems` is `null`.
+
+### `mirrorOutputs`
+
+`mirrorOutputs :: perSystemOutputs -> names -> systemsOrNull -> attrs`
+
+Mirror named per-system outputs (e.g. `checks`, `packages`) into `hydraJobs.<name>.<system>.<key>` form, optionally filtered by system.
+
+### `hydraJobsFromDir`
+
+`hydraJobsFromDir :: src -> dir -> systems -> systemPkgs -> lib -> namespace -> inputs -> extraArgs -> attrs`
+
+Scan `src/<dir>/<group>/<job>/default.nix` and produce `hydraJobs.<group>.<system>.<job>`. Each job is a function `{ pkgs, system, lib, inputs, namespace, ... }` returning a derivation, derivation attrset, or `null` (skipped).
+
+### `configOutputs`
+
+`configOutputs :: systemConfigs -> homeConfigs -> names -> systemsOrNull -> attrs`
+
+Mirror system and home configurations into hydraJobs: `nixosConfigs` (toplevel), `darwinConfigs` (system), `homeConfigs` (activationPackage), grouped by system.
+
+### `buildHydraJobs`
+
+`buildHydraJobs :: { src, hydraJobsDir, hydraSystems, hydraJobsInclude, hydraJobsExtra, systemPkgs, perSystemOutputs, systemConfigs, homeConfigs, ... } -> attrs`
+
+Combine all hydraJobs sources — directory jobs, mirrored per-system outputs, config outputs, images, and `hydraJobsExtra` (highest priority) — into the final `hydraJobs` flake output.
