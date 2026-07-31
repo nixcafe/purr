@@ -34,6 +34,12 @@ let
     templateModules
     ;
 
+  hj = import ./hydraJobs.nix {
+    inherit lib attrs;
+  };
+
+  inherit (hj) buildHydraJobs;
+
   mkFlake =
     {
       inputs,
@@ -74,9 +80,17 @@ let
       autoInject ? true,
       packagesByName ? false,
       extraArgs ? { },
+      hydraJobs ? { },
       ...
     }:
     let
+      hjCfg = hydraJobs;
+      hjEnabled = hjCfg.enable or false;
+      hjDir = hjCfg.dir or null;
+      hjSystems = hjCfg.systems or null;
+      hjInclude = hjCfg.include or null;
+      hjExtra = hjCfg.extra or { };
+
       allInputs =
         inputs
         // builtins.foldl' (
@@ -118,6 +132,7 @@ let
           homesDir
           libDir
           ;
+        hydraJobsDir = hjDir;
       };
 
       modulesPath = src + "/${modulesDir}";
@@ -285,6 +300,41 @@ let
         else
           { };
 
+      perSysForHJ = {
+        inherit
+          checks
+          packages
+          apps
+          legacyPackages
+          ;
+        devShells = shells;
+      }
+      // optionalAttrs (autoFormatterOut != { }) {
+        formatter = autoFormatterOut;
+      };
+
+      hydraJobsOutput =
+        if hjEnabled then
+          buildHydraJobs {
+            inherit
+              extraArgs
+              inputs
+              namespace
+              ;
+            src = src;
+            inherit (resolved) hydraJobsDir;
+            hydraSystems = hjSystems;
+            hydraJobsInclude = hjInclude;
+            hydraJobsExtra = hjExtra;
+            systemPkgs = pkgs;
+            perSystemOutputs = perSysForHJ;
+            systemConfigs = buildSystemConfigs;
+            homeConfigs = buildHomeConfigs;
+            lib = mergedLib;
+          }
+        else
+          { };
+
       autoOutputs = {
         inherit
           darwinModules
@@ -303,7 +353,11 @@ let
         (optionalAttrs (legacyPackages != { }) { inherit legacyPackages; })
         (optionalAttrs (apps != { }) { inherit apps; })
         (optionalAttrs (discoveredSystems != { }) buildSystemConfigs)
+        (optionalAttrs (discoveredSystems != { }) {
+          images = confs.imagesFromConfigs buildSystemConfigs hjSystems;
+        })
         (optionalAttrs (discoveredHomes != { }) { homeConfigurations = buildHomeConfigs; })
+        (optionalAttrs hjEnabled { hydraJobs = hydraJobsOutput; })
         (optionalAttrs (importedPurrLib != null) (
           if namespace != null then
             {

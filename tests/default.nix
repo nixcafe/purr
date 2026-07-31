@@ -24,6 +24,8 @@ let
 
   testMkFlake = import ./test-mkFlake.nix { inherit lib; };
 
+  testHydraJobs = import ./test-hydraJobs.nix { inherit lib; };
+
   runGroup = name: tests: runTests { "${name}" = tests; };
 
   failures =
@@ -72,6 +74,13 @@ let
     ++ (runGroup "customSystems" testMkFlake.customSystems)
     ++ (runGroup "outputsBuilder" testMkFlake.outputsBuilder)
     ++ (runGroup "packagesByName" testMkFlake.packagesByName)
-    ++ (runGroup "extraArgs" testMkFlake.extraArgs);
+    ++ (runGroup "extraArgs" testMkFlake.extraArgs)
+    ++ (runGroup "filterSystems" testHydraJobs.filterSystems)
+    ++ (runGroup "mirrorOutputs" testHydraJobs.mirrorOutputs)
+    ++ (runGroup "configOutputs" testHydraJobs.configOutputs)
+    ++ (runGroup "hydraJobsFromDir" testHydraJobs.hydraJobsFromDir)
+    ++ (runGroup "imagesFromConfigs" testHydraJobs.imagesFromConfigs)
+    ++ (runGroup "buildHydraJobs" testHydraJobs.buildHydraJobs)
+    ++ (runGroup "directHydraJobs" testHydraJobs.directHydraJobs);
 in
 failures

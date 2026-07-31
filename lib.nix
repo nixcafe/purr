@@ -43,6 +43,11 @@ let
     purrLib = libBuilder;
     autoMods = autoMods;
   };
+
+  hj = import ./lib/hydraJobs.nix {
+    inherit lib;
+    attrs = attrs;
+  };
 in
 rec {
   # ---- attributes ----
@@ -79,6 +84,7 @@ rec {
     buildSystemConfigs
     findMatchingHomes
     formatOutputKey
+    imagesFromConfigs
     parseArchFormat
     parseUserHost
     ;
@@ -95,6 +101,14 @@ rec {
     autoModules
     overlayModules
     templateModules
+    ;
+
+  # ---- hydraJobs ----
+  inherit (hj)
+    buildHydraJobs
+    filterSystems
+    hydraJobsFromDir
+    mirrorOutputs
     ;
 
   # ---- mkFlake ----
