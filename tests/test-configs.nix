@@ -10,6 +10,7 @@ let
   inherit (confs)
     buildHomeConfigs
     buildSystemConfigs
+    excludeSkippedSystems
     findMatchingHomes
     formatOutputKey
     parseArchFormat
@@ -588,6 +589,32 @@ in
           usersUsers = [ "alice" ];
         };
       };
+      "does not auto-create users.users for darwin non-root homes" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib = { };
+              nix-darwin.lib.darwinSystem = { modules, system }: { inherit modules system; };
+              home-manager = {
+                nixosModules.home-manager = "hm-mod";
+                darwinModules.home-manager = "hm-darwin";
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "aarch64-darwin"."mac1" = /tmp;
+              };
+              discoveredHomes = {
+                "aarch64-darwin"."alice@mac1" = /tmp;
+              };
+              inputs = fakeInputs;
+            };
+            cfg = result.darwinConfigurations.mac1;
+            userModules = builtins.filter (m: builtins.isAttrs m && m ? users) cfg.modules;
+          in
+          userModules;
+        expected = [ ];
+      };
       "cross-archformat home matching" = {
         expr =
           let
@@ -948,6 +975,83 @@ in
           in
           builtins.head cfg.modules;
         expected = /tmp;
+      };
+      "declares purr.skipSystem option" = {
+        expr =
+          let
+            fakeInputs = {
+              nixpkgs.lib.nixosSystem = { modules, system }: { inherit modules system; };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux"."myhost" = /tmp;
+              };
+              discoveredHomes = { };
+              inputs = fakeInputs;
+            };
+            cfg = result.nixosConfigurations.myhost;
+            hasSkip = builtins.any (
+              m: builtins.isAttrs m && m ? options && m.options ? purr && m.options.purr ? skipSystem
+            ) cfg.modules;
+          in
+          hasSkip;
+        expected = true;
+      };
+    };
+  };
+
+  # ---- excludeSkippedSystems ----
+  excludeSkippedSystems = {
+    tests = {
+      "removes hosts with purr.skipSystem = true" = {
+        expr =
+          let
+            systemConfigs = {
+              nixosConfigurations = {
+                keep = {
+                  config = {
+                    purr.skipSystem = false;
+                  };
+                };
+                drop = {
+                  config = {
+                    purr.skipSystem = true;
+                  };
+                };
+              };
+              darwinConfigurations = {
+                mac = {
+                  config = {
+                    purr.skipSystem = true;
+                  };
+                };
+              };
+            };
+          in
+          builtins.map (key: builtins.attrNames systemConfigs.${key}) [
+            "nixosConfigurations"
+            "darwinConfigurations"
+          ];
+        expected = [
+          [ "keep" ]
+          [ ]
+        ];
+      };
+      "keeps hosts without the option" = {
+        expr =
+          let
+            systemConfigs = {
+              nixosConfigurations = {
+                plain = { };
+              };
+            };
+          in
+          builtins.attrNames (excludeSkippedSystems systemConfigs).nixosConfigurations;
+        expected = [ "plain" ];
+      };
+      "returns empty for empty input" = {
+        expr = excludeSkippedSystems { };
+        expected = { };
       };
     };
   };
