@@ -224,7 +224,7 @@ let
       dirJobs = hydraJobsFromDir src hydraJobsDir hydraSystems systemPkgs lib namespace inputs extraArgs;
       mirrored = mirrorOutputs perSystemOutputs effectiveInclude hydraSystems;
       configMirrored = configOutputs systemConfigs homeConfigs effectiveInclude hydraSystems;
-      images = imagesFromConfigs systemConfigs hydraSystems;
+      images = imagesFromConfigs (systemConfigs.imageRecipes or { }) hydraSystems;
     in
     foldl' recursiveUpdate { } [
       dirJobs

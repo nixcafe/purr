@@ -579,7 +579,9 @@ in
         else
           { };
 
-      images = hj.imagesFromConfigs buildSystemConfigs (cfg.hydraJobs.systems or null);
+      images = hj.imagesFromConfigs (buildSystemConfigs.imageRecipes or { }) (
+        cfg.hydraJobs.systems or null
+      );
 
       hydraJobs =
         if cfg.hydraJobs.enable then
@@ -617,7 +619,7 @@ in
     in
     {
       flake =
-        buildSystemConfigs
+        lib.removeAttrs buildSystemConfigs [ "imageRecipes" ]
         // {
           inherit
             darwinModules

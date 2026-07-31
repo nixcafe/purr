@@ -352,9 +352,9 @@ let
         (optionalAttrs (packages != { }) { inherit packages; })
         (optionalAttrs (legacyPackages != { }) { inherit legacyPackages; })
         (optionalAttrs (apps != { }) { inherit apps; })
-        (optionalAttrs (discoveredSystems != { }) buildSystemConfigs)
+        (optionalAttrs (discoveredSystems != { }) (lib.removeAttrs buildSystemConfigs [ "imageRecipes" ]))
         (optionalAttrs (discoveredSystems != { }) {
-          images = confs.imagesFromConfigs buildSystemConfigs hjSystems;
+          images = confs.imagesFromConfigs (buildSystemConfigs.imageRecipes or { }) hjSystems;
         })
         (optionalAttrs (discoveredHomes != { }) { homeConfigurations = buildHomeConfigs; })
         (optionalAttrs hjEnabled { hydraJobs = hydraJobsOutput; })
