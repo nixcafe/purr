@@ -24,8 +24,11 @@ let
         name:
         let
           sysFiltered = if outputs ? ${name} then filterSystems outputs.${name} systems else { };
+          # Drop per-system shells that are empty (e.g. `{ x86_64-linux = { }; }`
+          # from a system with no packages) so an empty group is not emitted.
+          nonEmpty = filterAttrs (_: v: v != { }) sysFiltered;
         in
-        optionalAttrs (sysFiltered != { }) { ${name} = sysFiltered; };
+        optionalAttrs (nonEmpty != { }) { ${name} = nonEmpty; };
     in
     foldl' (acc: name: acc // include name) { } names;
 
