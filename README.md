@@ -41,11 +41,14 @@ Put your code in the right directories, and purr wires your entire flake:
 ├── flake.nix
 ├── modules/              → nixosModules, darwinModules, homeModules
 ├── packages/             → packages.<system>.*
+├── legacyPackages/       → legacyPackages.<system>.*
 ├── shells/               → devShells.<system>.*
 ├── checks/               → checks.<system>.*
 ├── apps/                 → apps.<system>.*
 ├── overlays/             → overlays.*
 ├── templates/            → templates.*
+├── formatters/           → formatter.<system>
+├── hydraJobs/            → hydraJobs.* (CI jobs, opt-in)
 ├── lib/                  → lib.<namespace>.* (shared across all modules)
 ├── systems/              → nixosConfigurations, darwinConfigurations
 └── homes/                → homeConfigurations
@@ -169,12 +172,13 @@ purr auto-discovers NixOS/darwin systems and home-manager homes using `<arch>-<f
 ```
 systems/
 ├── x86_64-linux/server/default.nix    → nixosConfigurations.server
-├── aarch64-darwin/macbook/default.nix → darwinConfigurations.macbook
-└── x86_64-iso/server/default.nix      → isoConfigurations.server
+└── aarch64-darwin/macbook/default.nix → darwinConfigurations.macbook
 
 homes/
 └── x86_64-linux/alice@server/default.nix  → homeConfigurations."alice@server"
 ```
+
+Hosts that declare `purr.images = [ ... ]` become **image-only recipes** (e.g. installer ISOs): they are excluded from `nixosConfigurations`/`darwinConfigurations` unless you also set `purr.deployable = true`. Their images are exposed as a top-level `images.<host>.<format>` output.
 
 Homes named `<user>@<host>` auto-link to matching hosts. No extra wiring needed.
 
@@ -189,12 +193,12 @@ Homes named `<user>@<host>` auto-link to matching hosts. No extra wiring needed.
 
 ### Namespace Bridge
 
-Forward home-manager config from any NixOS module via the namespace bridge:
+Forward home-manager config from any NixOS module via the namespace bridge — set `purr.users.<name>.homeConfig` on a host with linked homes:
 
 ```nix
-{ config, pkgs, lib, namespace, ... }:
+{ config, pkgs, lib, ... }:
 {
-  ${namespace}.users.alice.homeConfig = {
+  purr.users.alice.homeConfig = {
     home.packages = [ pkgs.cowsay ];
     programs.git.userName = "Alice";
   };
