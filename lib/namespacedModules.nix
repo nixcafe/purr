@@ -17,17 +17,20 @@ let
           lib // { ${namespace} = importedPurrLib; }
         else
           lib;
-      result =
-        if builtins.isFunction original then
-          original (
-            args
-            // {
-              inherit namespace;
-              lib = libWithNs;
-            }
-          )
-        else
-          original;
+      # Resolve each argument the original module declares, falling back to
+      # `config._module.args` exactly like the module system itself does in
+      # `applyModuleArgs`. A plain `args // { ... }` would drop args that are
+      # only provided via `_module.args` (e.g. `user`), because those are not
+      # physically present in `args` unless declared by the wrapper function.
+      forwardedArgs =
+        builtins.mapAttrs (name: _: args.${name} or config._module.args.${name}) (
+          builtins.functionArgs original
+        )
+        // {
+          inherit namespace;
+          lib = libWithNs;
+        };
+      result = if builtins.isFunction original then original forwardedArgs else original;
       _file = if builtins.isPath path then toString path else null;
     in
     if builtins.isAttrs result && _file != null then result // { inherit _file; } else result;

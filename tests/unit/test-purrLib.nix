@@ -144,6 +144,50 @@ in
           builtins.isAttrs result;
         expected = true;
       };
+      "plain attrset lib modules are not called as functions" = {
+        expr =
+          let
+            result = libBuilder.buildImportedPurrLib {
+              src = fixturesDir;
+              libDir = "plain-lib";
+              namespace = "demo";
+              inputs = { };
+              flattenLib = true;
+            };
+          in
+          {
+            root = result.rootKey;
+            data = result.theme;
+            fn = result.helper;
+          };
+        expected = {
+          root = "root";
+          data = "dark";
+          fn = "works";
+        };
+      };
+      "plain attrset lib modules keep nested layout when flattenLib is false" = {
+        expr =
+          let
+            result = libBuilder.buildImportedPurrLib {
+              src = fixturesDir;
+              libDir = "plain-lib";
+              namespace = "demo";
+              inputs = { };
+              flattenLib = false;
+            };
+          in
+          {
+            root = result.rootKey;
+            data = result.data.theme;
+            fn = result.fn.helper;
+          };
+        expected = {
+          root = "root";
+          data = "dark";
+          fn = "works";
+        };
+      };
     };
   };
 }

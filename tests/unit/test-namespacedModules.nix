@@ -156,6 +156,34 @@ in
           result.config.ns.hasPkgs;
         expected = true;
       };
+      "module receives args provided only via _module.args" = {
+        expr =
+          let
+            mod =
+              {
+                lib,
+                user,
+                ...
+              }:
+              {
+                options.value = lib.mkOption {
+                  type = lib.types.str;
+                };
+                config.value = user;
+              };
+            wrapped = nsm.wrapModule "ns" null mod;
+            result = lib.evalModules {
+              modules = [
+                {
+                  _module.args.user = "alice";
+                }
+                wrapped
+              ];
+            };
+          in
+          result.config.value;
+        expected = "alice";
+      };
       "attrset module with options is wrapped and importable" = {
         expr =
           let

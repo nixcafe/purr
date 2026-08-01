@@ -237,6 +237,24 @@ in
           length bridgesWithContent;
         expected = 0;
       };
+      "system-injected home exposes user arg and injects username" = {
+        expr =
+          let
+            users = server.config."home-manager".users;
+            shims = builtins.filter (m: builtins.isAttrs m && m ? _module) (users.alice.imports or [ ]);
+            shim = builtins.head shims;
+          in
+          {
+            user = shim._module.args.user;
+            username = shim.home.username;
+            homeDirectory = shim.home.homeDirectory;
+          };
+        expected = {
+          user = "alice";
+          username = lib.mkDefault "alice";
+          homeDirectory = lib.mkDefault "/home/alice";
+        };
+      };
       "users.users auto-created for non-root homes only" = {
         expr = attrNames (server.config.users.users or { });
         expected = [ "alice" ];

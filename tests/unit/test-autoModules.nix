@@ -59,6 +59,16 @@ in
         expr = autoMods.templateModules fixturesDir null false lib null { } { };
         expected = { };
       };
+      "non-function template files pass through as-is" = {
+        expr =
+          let
+            result = autoMods.templateModules fixturesDir "templates" false lib null { } { };
+          in
+          result.plain;
+        expected = {
+          plain = true;
+        };
+      };
     };
   };
 
@@ -87,6 +97,7 @@ in
           "extra-test"
           "hello"
           "lib-check"
+          "plain"
           "spread-test"
         ];
       };
@@ -102,8 +113,19 @@ in
           "extra-test"
           "hello"
           "lib-check"
+          "plain"
           "spread-test"
         ];
+      };
+      "non-function module files pass through as-is" = {
+        expr =
+          let
+            result = autoMods.autoModules fixturesDir mockPkgs lib null { } { } "packages" false;
+          in
+          result.plain;
+        expected = {
+          plain = true;
+        };
       };
       "module receives pkgs attributes spread" = {
         expr =
