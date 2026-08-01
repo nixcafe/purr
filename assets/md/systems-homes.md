@@ -151,15 +151,15 @@ nix build .#images.installer.iso
 
 ## Namespace Bridge (system -> home config forwarding)
 
-When a namespace is set (e.g. `namespace = "demo"`), purr defines `options.<ns>.users` and forwards `<ns>.users.<name>.homeConfig` to `home-manager.users.<name>`. This lets you inject home-manager config directly from any NixOS system module:
+On any host with linked homes (when home-manager is available as an input), purr defines the option `purr.users`. Setting `purr.users.<name>.homeConfig` from any NixOS module forwards that config to `home-manager.users.<name>`. This works whether or not a `namespace` is set:
 
 ```nix
 # systems/x86_64-linux/server/default.nix
-{ config, pkgs, lib, namespace, purr, ... }:
+{ config, pkgs, lib, purr, ... }:
 {
   networking.hostName = purr.name;
 
-  ${namespace}.users.alice.homeConfig = {
+  purr.users.alice.homeConfig = {
     home.packages = [ pkgs.cowsay ];
     programs.git.userName = "Alice";
   };
@@ -170,7 +170,7 @@ Keys inside `homeConfig` map directly to home-manager option paths (`home.packag
 
 ### Priority Order (lowest to highest)
 
-1. `<ns>.users.<name>.homeConfig` (bridge)
+1. `purr.users.<name>.homeConfig` (bridge)
 2. `home-manager.users.<name>` set directly in any NixOS module
 3. The home module file (`homes/.../default.nix`)
 

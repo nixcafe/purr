@@ -165,15 +165,17 @@ purr.outputsBuilder = { pkgs, system, lib, namespace, ... }: {
 
 ## Hydra CI (hydraJobs)
 
-Generate a `hydraJobs` output for Hydra that automatically mirrors every buildable output and adds custom jobs from a `hydraJobs/` directory:
+Generate a `hydraJobs` output for Hydra that mirrors your system/home configs and adds custom jobs from a `hydraJobs/` directory:
 
 ```nix
 purr.hydraJobs = {
   enable = true;
   systems = ["x86_64-linux"];
-  include = [ "checks" "packages" "nixosConfigs" ];
+  include = [ "nixosConfigs" "homeConfigs" ];
 };
 ```
+
+> In flake-parts mode, hydraJobs mirrors the config outputs (`nixosConfigs`, `darwinConfigs`, `homeConfigs`), images, directory jobs, and `extra`. Per-system outputs (`checks`, `packages`, `devShells`, `legacyPackages`, `formatter`) are only auto-mirrored in mkFlake mode — in flake-parts mode, add them via `purr.hydraJobs.extra` if needed.
 
 See the [hydraJobs](/hydrajobs) page for the full reference.
 

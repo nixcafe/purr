@@ -137,7 +137,7 @@ See the [Directory Structure](/directory-structure) page for the complete layout
 
 ## API Reference
 
-The full library API (35 functions) is documented on the [API Reference](/api) page.
+The full library API (40 functions) is documented on the [API Reference](/api) page.
 
 # flake-parts Integration
 
@@ -306,15 +306,17 @@ purr.outputsBuilder = { pkgs, system, lib, namespace, ... }: {
 
 ## Hydra CI (hydraJobs)
 
-Generate a `hydraJobs` output for Hydra that automatically mirrors every buildable output and adds custom jobs from a `hydraJobs/` directory:
+Generate a `hydraJobs` output for Hydra that mirrors your system/home configs and adds custom jobs from a `hydraJobs/` directory:
 
 ```nix
 purr.hydraJobs = {
   enable = true;
   systems = ["x86_64-linux"];
-  include = [ "checks" "packages" "nixosConfigs" ];
+  include = [ "nixosConfigs" "homeConfigs" ];
 };
 ```
+
+> In flake-parts mode, hydraJobs mirrors the config outputs (`nixosConfigs`, `darwinConfigs`, `homeConfigs`), images, directory jobs, and `extra`. Per-system outputs (`checks`, `packages`, `devShells`, `legacyPackages`, `formatter`) are only auto-mirrored in mkFlake mode — in flake-parts mode, add them via `purr.hydraJobs.extra` if needed.
 
 See the [hydraJobs](/hydrajobs) page for the full reference.
 
@@ -916,15 +918,15 @@ nix build .#images.installer.iso
 
 ## Namespace Bridge (system -> home config forwarding)
 
-When a namespace is set (e.g. `namespace = "demo"`), purr defines `options.<ns>.users` and forwards `<ns>.users.<name>.homeConfig` to `home-manager.users.<name>`. This lets you inject home-manager config directly from any NixOS system module:
+On any host with linked homes (when home-manager is available as an input), purr defines the option `purr.users`. Setting `purr.users.<name>.homeConfig` from any NixOS module forwards that config to `home-manager.users.<name>`. This works whether or not a `namespace` is set:
 
 ```nix
 # systems/x86_64-linux/server/default.nix
-{ config, pkgs, lib, namespace, purr, ... }:
+{ config, pkgs, lib, purr, ... }:
 {
   networking.hostName = purr.name;
 
-  ${namespace}.users.alice.homeConfig = {
+  purr.users.alice.homeConfig = {
     home.packages = [ pkgs.cowsay ];
     programs.git.userName = "Alice";
   };
@@ -935,7 +937,7 @@ Keys inside `homeConfig` map directly to home-manager option paths (`home.packag
 
 ### Priority Order (lowest to highest)
 
-1. `<ns>.users.<name>.homeConfig` (bridge)
+1. `purr.users.<name>.homeConfig` (bridge)
 2. `home-manager.users.<name>` set directly in any NixOS module
 3. The home module file (`homes/.../default.nix`)
 
@@ -1082,6 +1084,8 @@ When `hydraJobs.include = null` (default), purr auto-discovers **everything buil
 
 > **Note:** image-only hosts (hosts with `purr.images` set and no `purr.deployable = true`) are excluded from `nixosConfigs`/`darwinConfigs` and never get a `toplevel` job. Their images still show up under `images.<host>.<format>`. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
 
+> **Note (flake-parts only):** the *per-system* rows in the table above (`checks`, `packages`, `devShells`, `legacyPackages`, `formatter`) are only mirrored in **mkFlake** mode. In **flake-parts** mode, hydraJobs mirrors the config outputs (`nixosConfigs`, `darwinConfigs`, `homeConfigs`), images, directory jobs, and `extra` — but not the per-system outputs. Specify them with `include` in mkFlake mode; in flake-parts mode use `hydraJobs.extra` for anything beyond the config outputs.
+
 ### Manual control
 
 Set `include` to an explicit list to mirror only what you want, or `[]` to disable mirroring entirely:
@@ -1175,7 +1179,7 @@ The same declarations also feed `hydraJobs.images.<host>.<format>` when hydraJob
 
 # API Reference
 
-All library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
+All 40 library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
 
 ## Flake Builder
 
@@ -1404,6 +1408,8 @@ Mirror named per-system outputs (e.g. `checks`, `packages`) into `hydraJobs.<nam
 Scan `src/<dir>/<group>/<job>/default.nix` and produce `hydraJobs.<group>.<system>.<job>`. Each job is a function `{ pkgs, system, lib, inputs, namespace, ... }` returning a derivation, derivation attrset, or `null` (skipped).
 
 ### `configOutputs`
+
+> **Internal** — exported from `lib/hydraJobs.nix` but **not** re-exported from `inputs.purr.lib`.
 
 `configOutputs :: systemConfigs -> homeConfigs -> names -> systemsOrNull -> attrs`
 

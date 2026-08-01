@@ -1,6 +1,6 @@
 # API Reference
 
-All library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
+All 40 library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
 
 ## Flake Builder
 
@@ -229,6 +229,8 @@ Mirror named per-system outputs (e.g. `checks`, `packages`) into `hydraJobs.<nam
 Scan `src/<dir>/<group>/<job>/default.nix` and produce `hydraJobs.<group>.<system>.<job>`. Each job is a function `{ pkgs, system, lib, inputs, namespace, ... }` returning a derivation, derivation attrset, or `null` (skipped).
 
 ### `configOutputs`
+
+> **Internal** — exported from `lib/hydraJobs.nix` but **not** re-exported from `inputs.purr.lib`.
 
 `configOutputs :: systemConfigs -> homeConfigs -> names -> systemsOrNull -> attrs`
 

@@ -66,6 +66,8 @@ When `hydraJobs.include = null` (default), purr auto-discovers **everything buil
 
 > **Note:** image-only hosts (hosts with `purr.images` set and no `purr.deployable = true`) are excluded from `nixosConfigs`/`darwinConfigs` and never get a `toplevel` job. Their images still show up under `images.<host>.<format>`. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
 
+> **Note (flake-parts only):** the *per-system* rows in the table above (`checks`, `packages`, `devShells`, `legacyPackages`, `formatter`) are only mirrored in **mkFlake** mode. In **flake-parts** mode, hydraJobs mirrors the config outputs (`nixosConfigs`, `darwinConfigs`, `homeConfigs`), images, directory jobs, and `extra` — but not the per-system outputs. Specify them with `include` in mkFlake mode; in flake-parts mode use `hydraJobs.extra` for anything beyond the config outputs.
+
 ### Manual control
 
 Set `include` to an explicit list to mirror only what you want, or `[]` to disable mirroring entirely:
