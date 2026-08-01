@@ -211,6 +211,26 @@ Forward home-manager config from any NixOS module via the namespace bridge:
 | **Systems & homes** | Auto-discovered, auto-linked | Manual wiring |
 | **Custom lib** | `lib.<namespace>.*` propagated everywhere | Manual import passthrough |
 
+## Testing
+
+Tests live under `tests/` and are auto-discovered — drop a
+`test-*.nix` into `tests/unit/` (1:1 with a `lib/` module) or
+`tests/integration/` (real-project runs against `tests/integration/project`)
+and it is picked up automatically.
+
+```bash
+nix flake check                       # CI gate: pre-commit + purr-tests
+nix build .#checks.x86_64-linux.purr-tests && cat result   # full per-test report
+tests/run-tests.sh                    # run directly, live per-test output
+nix develop --command purr-test       # same, from the dev shell
+```
+
+The `purr-tests` check writes the full report into its `result`; if a test
+fails the build fails and `nix log` shows the failing cases. Unit tests run
+hermetically with `nixpkgs-lib`; integration tests mock `nixosSystem` /
+`homeManagerConfiguration` to evaluate the generated configs through the real
+`lib.evalModules` without pulling a full nixpkgs.
+
 ## Documentation
 
 Full documentation at **[purr.nixcafe.org](https://purr.nixcafe.org)** — flake-parts integration, full API reference, directory layout guide, and more.

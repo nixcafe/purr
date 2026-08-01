@@ -84,71 +84,118 @@ Modules use `lib.${namespace}.xxx` as before. No `_module.args.lib` overrides.
 
 **When adding a feature or fix, you MUST write tests.** Run `nix flake check` to verify.
 
-Tests use `lib.debug.runTests` (from nixpkgs-lib). Each test is `{ expr; expected; }`.
-Returned list of failures — empty = all pass.
+Tests live under `tests/` and use a custom runner (`tests/runner.nix`) — NOT
+`lib.debug.runTests` (which silently skips any group whose name does not start
+with "test", which is how the old suite always reported green). The runner
+executes every registered test and reports exceptions as failures.
 
-### How to add a test
+### Test file structure
 
-1. Create `tests/test-<lib-module>.nix` matching the lib file:
-   ```nix
-   { lib }:
-   {
-     groupName = {
-       tests = {
-         "test name" = {
-           expr = <expression>;
-           expected = <value>;
-         };
-       };
-     };
-   }
-   ```
-2. Register in `tests/default.nix`:
-   ```nix
-   testModule = import ./test-<lib-module>.nix { inherit lib; };
-   ```
-   Then add to `failures`:
-   ```nix
-   ++ (runGroup "<group>" testModule.<group>)
-   ```
-3. `git add tests/test-<lib-module>.nix && nix flake check`
+Each test module returns an attrset of groups:
 
-### Test file convention
-
-Each test file maps 1:1 to a `lib/` module:
-
-| Test file | Lib module tested |
-|---|---|
-| `test-attrs.nix` | `lib/attrs.nix` |
-| `test-systems.nix` | `lib/systems.nix` |
-| `test-fs.nix` | `lib/fs.nix` |
-| `test-modules.nix` | `lib/modules.nix` |
-| `test-namespacedModules.nix` | `lib/namespacedModules.nix` |
-| `test-configs.nix` | `lib/configs.nix` |
-| `test-mkFlake.nix` | `lib/mkFlake.nix` |
-| `test-resolveDir.nix` | `lib/resolveDir.nix` |
-| `test-purrLib.nix` | `lib/purrLib.nix` |
-| `test-autoModules.nix` | `lib/autoModules.nix` |
-
-### Integration testing with the demo
-
-The `tests/demo/` directory is a standalone flake that exercises all
-purr features end-to-end (modules, lib, packages, shells, checks,
-overlays, templates, apps, systems, homes, namespace bridge).
-
-```bash
-cd tests/demo && nix flake check
+```nix
+{ lib }:
+{
+  groupName = {
+    tests = {
+      "test name" = {
+        expr = <expression>;
+        expected = <value>;
+      };
+    };
+  };
+}
 ```
 
-### Fixtures
+A test passes when `expr == expected` (deep structural equality). A throwing
+`expr` is reported as a failure, not a crash.
 
-`tests/fixtures/` provides minimal directory trees for module-discovery
-unit tests.  System/home fixture files return `{ }`.  Lib fixture files
-return a function (`_: { someKey = ...; }`) because they are imported
-with arguments via `buildImportedPurrLib`.  Keep fixtures minimal —
-they are Git-tracked for reproducibility.
+### Test layout
 
-For module-arg tests, use `lib.evalModules` with `specialArgs = { pkgs = { ... }; }`
-to simulate module evaluation. For mkFlake integration tests, mock `nixosSystem`
-/ `homeManagerConfiguration` to avoid full nixpkgs evaluation — see
-`tests/test-mkFlake.nix` for examples.
+```
+tests/
+├── default.nix              # entry: { lib } -> list of failures (empty = pass)
+├── runner.nix               # custom runner (runTest / runGroup / runTestModule)
+├── list-tests.nix           # auto-discover every test-*.nix under unit/ + integration/
+├── report.nix               # one pure eval -> full PASS/FAIL report (used by the check)
+├── run-tests.sh             # run in the shell: live per-test output
+├── unit/                    # 1:1 unit tests for each lib/ module (auto-discovered)
+│   ├── test-attrs.nix
+│   ├── test-systems.nix
+│   ├── test-fs.nix
+│   ├── test-modules.nix
+│   ├── test-namespacedModules.nix
+│   ├── test-resolveDir.nix
+│   ├── test-purrLib.nix
+│   ├── test-autoModules.nix
+│   ├── test-configs.nix
+│   ├── test-hydraJobs.nix
+│   └── test-mkFlake.nix
+├── integration/             # real-project integration tests (auto-discovered)
+│   ├── harness.nix          # shared real-eval mocks (nixosSystem/darwin/home-manager)
+│   ├── mocks/nixpkgs/       # importable mock nixpkgs for per-system pkgs
+│   ├── project/             # full-featured purr project exercising every feature
+│   ├── test-mkFlake.nix     # mkFlake pipeline + mutual dependencies + special cases
+│   └── test-flakeParts.nix  # flake-parts module integration
+└── fixtures/                # minimal dir trees for discovery unit tests
+```
+
+### Adding a test
+
+Drop a new file `tests/unit/test-<name>.nix` (or `tests/integration/test-<name>.nix`)
+and it is **auto-discovered** by `list-tests.nix` — the shell runner, the Nix
+report, and the `purr-tests` check all pick it up. No registration needed.
+
+### Running the tests
+
+```bash
+# Via Nix — the check derivation writes the full report into its result:
+nix build .#checks.x86_64-linux.purr-tests && cat result   # all green -> report
+nix log .#checks.x86_64-linux.purr-tests                    # failures -> report in log
+nix flake check                                            # CI gate (pre-commit + purr-tests)
+
+# Via the dev shell — a live per-test runner:
+nix develop --command purr-test
+# or directly (no dev shell):
+tests/run-tests.sh
+
+# Fast iteration on one file:
+nix eval --json --impure --expr 'let
+  lib = (builtins.getFlake "github:nix-community/nixpkgs.lib").lib;
+  runner = import ./tests/runner.nix { inherit lib; };
+  t = import ./tests/unit/test-configs.nix { inherit lib; };
+in builtins.map (f: f.group + "." + f.testName) (runner.runTestModule t)'
+```
+
+`report.nix` computes the full report in a single pure evaluation, so the check
+derivation is fast. `run-tests.sh` instead evaluates each test individually
+(Nix is lazy, so a single eval cannot stream results) for live per-test
+progress.
+
+### Integration tests evaluate the real module system
+
+The integration tests run `mkFlake` on `tests/integration/project` and verify
+every output. `nixosSystem` / `darwinSystem` / `homeManagerConfiguration` are
+mocked to evaluate their module lists through the real `lib.evalModules` (with
+minimal shim options declared in `harness.nix`), so generated system/home
+configs are genuinely evaluated — auto-injection, the namespace bridge
+(`purr.users.<name>.homeConfig`), linked homes, image-only hosts, by-name
+packages, hydraJobs mirroring, and more are all asserted against real
+evaluation, not string inspection.
+
+### Gotchas (learned the hard way)
+
+- Never pass a path to a nonexistent directory into a function that calls
+  `builtins.readDir` — Nix's path-existence error is not caught by
+  `builtins.tryEval` and crashes the run.
+- Never deep-compare `lib` or large attrsets with `==` (forces huge lazy
+  values). Compare markers / keys instead.
+- Never compare functions with `==` — coerce with `builtins.isFunction`,
+  `builtins.attrNames`, or `toString` first.
+- `imagesFromConfigs` takes the `imageRecipes` shape
+  (`{ host = { system; images; cfg = { config = { system.build.images }; }; }; }`),
+  not the `nixosConfigurations` shape.
+- `buildSystemConfigs` reads `purr.images` / `purr.deployable` from the top
+  level of the host module's returned attrset (cheap metadata read with
+  placeholder args), so fixture host modules must not crash on placeholder
+  `config`/`pkgs`/`options`/`_module`.

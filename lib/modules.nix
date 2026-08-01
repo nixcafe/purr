@@ -98,9 +98,15 @@ let
           parts: val: if parts == [ ] then val else { ${head parts} = setNested (tail parts) val; };
         entryFromFile =
           file:
-          setNested (splitString "/" (
-            removePrefix (toString dir + "/") (removeSuffix "/default.nix" (toString file.path))
-          )) file.path;
+          let
+            # Relative path of the file's directory below `dir`.  The root
+            # `default.nix` (relPath == dir) is intentionally excluded here —
+            # callers import it separately (e.g. `buildImportedPurrLib`'s
+            # `rootModule`).
+            relPath = removePrefix (toString dir) (toString file.relPath);
+            parts = builtins.filter (p: p != "") (splitString "/" relPath);
+          in
+          if parts == [ ] then { } else setNested parts file.path;
       in
       builtins.foldl' (acc: item: acc // entryFromFile item) { } files
     else
