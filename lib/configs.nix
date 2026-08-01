@@ -338,6 +338,8 @@ let
         ) (builtins.attrNames systems)
       ) (builtins.attrNames discoveredSystems);
 
+      deployableEntries = builtins.filter (e: e.deployable) hostEntries;
+
       configs = mapAttrs (
         _outputKey: entries:
         listToAttrs (
@@ -346,10 +348,25 @@ let
             inherit value;
           }) entries
         )
-      ) (groupBy ({ outputKey, ... }: outputKey) (builtins.filter (e: e.deployable) hostEntries));
+      ) (groupBy ({ outputKey, ... }: outputKey) deployableEntries);
+
+      # host -> system, so hydraJobs can group configs by system without
+      # forcing `cfg.pkgs` (reading cfg.pkgs.system evaluates nixpkgs/stdenv
+      # just to obtain a string that is already known here).
+      configSystems = mapAttrs (
+        _outputKey: entries:
+        listToAttrs (
+          builtins.map ({ systemName, system, ... }: {
+            name = systemName;
+            value = system;
+          }) entries
+        )
+      ) (groupBy ({ outputKey, ... }: outputKey) deployableEntries);
     in
     configs
     // {
+      inherit configSystems;
+
       imageRecipes = listToAttrs (
         builtins.map (e: {
           name = e.systemName;
@@ -447,14 +464,20 @@ let
         else
           filterAttrs (_: recipe: elem recipe.system systems) imageRecipes;
 
+      # Build the structure from the *declared* formats (recipe.images) so that
+      # enumerating image jobs does not force the host's system config. The
+      # existence check is deferred to the leaf, which is only evaluated when
+      # that specific image is requested.
       scanHost =
         _host: recipe:
         foldl' (
           acc: format:
-          if recipe.cfg.config.system.build.images ? ${format} then
-            acc // { ${format} = recipe.cfg.config.system.build.images.${format}; }
-          else
-            acc
+          acc
+          // {
+            ${format} =
+              recipe.cfg.config.system.build.images.${format}
+                or (throw "image format '${format}' is declared in purr.images but not provided by the host config");
+          }
         ) { } recipe.images;
     in
     filterAttrs (_: v: v != { }) (builtins.mapAttrs scanHost filtered);

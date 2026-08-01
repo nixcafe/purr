@@ -30,24 +30,38 @@ let
     foldl' (acc: name: acc // include name) { } names;
 
   configOutputs =
-    systemConfigs: homeConfigs: names: systems:
+    systemConfigs: homeConfigs: names: systems: homeSystems:
     let
       nixosConfigurations = systemConfigs.nixosConfigurations or { };
       darwinConfigurations = systemConfigs.darwinConfigurations or { };
+      configSystems = systemConfigs.configSystems or { };
+      nixosSystems = configSystems.nixosConfigurations or { };
+      darwinSystems = configSystems.darwinConfigurations or { };
+      homeSystems' = homeSystems;
+
+      # The system per config is metadata known when the configs were built
+      # (buildSystemConfigs.configSystems / the homeSystems map), so grouping is
+      # a plain string lookup. Reading it from cfg.* would force nixpkgs/stdenv
+      # evaluation just to obtain a string we already have.
+      systemOf = systemsMap: name: systemsMap.${name};
 
       filterBySystem =
-        attrs': f: if systems == null then attrs' else filterAttrs (_: cfg: elem (f cfg) systems) attrs';
+        attrs': systemsMap:
+        if systems == null then
+          attrs'
+        else
+          filterAttrs (name: _: elem (systemOf systemsMap name) systems) attrs';
 
       groupNixos =
         let
-          filtered = filterBySystem nixosConfigurations (cfg: cfg.pkgs.system);
+          filtered = filterBySystem nixosConfigurations nixosSystems;
         in
         optionalAttrs (filtered != { }) {
           nixosConfigs = foldl' (
             acc: name:
             let
               cfg = nixosConfigurations.${name};
-              sys = cfg.pkgs.system;
+              sys = systemOf nixosSystems name;
             in
             acc
             // {
@@ -60,14 +74,14 @@ let
 
       groupDarwin =
         let
-          filtered = filterBySystem darwinConfigurations (cfg: cfg.pkgs.system);
+          filtered = filterBySystem darwinConfigurations darwinSystems;
         in
         optionalAttrs (filtered != { }) {
           darwinConfigs = foldl' (
             acc: name:
             let
               cfg = darwinConfigurations.${name};
-              sys = cfg.pkgs.system;
+              sys = systemOf darwinSystems name;
             in
             acc
             // {
@@ -80,14 +94,14 @@ let
 
       groupHome =
         let
-          filtered = filterBySystem homeConfigs (cfg: cfg.pkgs.system);
+          filtered = filterBySystem homeConfigs homeSystems';
         in
         optionalAttrs (filtered != { }) {
           homeConfigs = foldl' (
             acc: name:
             let
               cfg = homeConfigs.${name};
-              sys = cfg.pkgs.system;
+              sys = systemOf homeSystems' name;
             in
             acc
             // {
@@ -192,6 +206,7 @@ let
       perSystemOutputs,
       systemConfigs,
       homeConfigs ? { },
+      homeSystems ? { },
       lib,
       namespace,
       inputs,
@@ -223,7 +238,7 @@ let
 
       dirJobs = hydraJobsFromDir src hydraJobsDir hydraSystems systemPkgs lib namespace inputs extraArgs;
       mirrored = mirrorOutputs perSystemOutputs effectiveInclude hydraSystems;
-      configMirrored = configOutputs systemConfigs homeConfigs effectiveInclude hydraSystems;
+      configMirrored = configOutputs systemConfigs homeConfigs effectiveInclude hydraSystems homeSystems;
       images = imagesFromConfigs (systemConfigs.imageRecipes or { }) hydraSystems;
     in
     foldl' recursiveUpdate { } [

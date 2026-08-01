@@ -583,6 +583,11 @@ in
         cfg.hydraJobs.systems or null
       );
 
+      homeSystems = builtins.foldl' (
+        acc: archFormat:
+        acc // builtins.mapAttrs (userHost: _: archFormat) (discoveredHomes.${archFormat} or { })
+      ) { } (builtins.attrNames discoveredHomes);
+
       hydraJobs =
         if cfg.hydraJobs.enable then
           let
@@ -613,13 +618,17 @@ in
             perSystemOutputs = { };
             systemConfigs = buildSystemConfigs;
             homeConfigs = buildHomeConfigs;
+            inherit homeSystems;
           }
         else
           { };
     in
     {
       flake =
-        lib.removeAttrs buildSystemConfigs [ "imageRecipes" ]
+        lib.removeAttrs buildSystemConfigs [
+          "configSystems"
+          "imageRecipes"
+        ]
         // {
           inherit
             darwinModules

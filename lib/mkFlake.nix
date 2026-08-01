@@ -300,6 +300,13 @@ let
         else
           { };
 
+      # The home config's system is the arch-format directory name; carrying it
+      # here lets hydraJobs group homeConfigs without forcing cfg.pkgs.system.
+      homeSystems = lib.foldl' (
+        acc: archFormat:
+        acc // lib.mapAttrs (userHost: _: archFormat) (discoveredHomes.${archFormat} or { })
+      ) { } (builtins.attrNames discoveredHomes);
+
       perSysForHJ = {
         inherit
           checks
@@ -330,6 +337,7 @@ let
             perSystemOutputs = perSysForHJ;
             systemConfigs = buildSystemConfigs;
             homeConfigs = buildHomeConfigs;
+            inherit homeSystems;
             lib = mergedLib;
           }
         else
@@ -352,7 +360,12 @@ let
         (optionalAttrs (packages != { }) { inherit packages; })
         (optionalAttrs (legacyPackages != { }) { inherit legacyPackages; })
         (optionalAttrs (apps != { }) { inherit apps; })
-        (optionalAttrs (discoveredSystems != { }) (lib.removeAttrs buildSystemConfigs [ "imageRecipes" ]))
+        (optionalAttrs (discoveredSystems != { }) (
+          lib.removeAttrs buildSystemConfigs [
+            "configSystems"
+            "imageRecipes"
+          ]
+        ))
         (optionalAttrs (discoveredSystems != { }) {
           images = confs.imagesFromConfigs (buildSystemConfigs.imageRecipes or { }) hjSystems;
         })

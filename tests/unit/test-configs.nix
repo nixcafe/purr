@@ -208,23 +208,51 @@ in
           };
         };
       };
-      "skips formats not built by the config" = {
-        expr = imagesFromConfigs {
-          host = {
-            cfg = {
-              config.system.build.images.iso = "iso-drv";
-            };
-            images = [
-              "iso"
-              "qemu"
-            ];
-            system = "x86_64-linux";
+      "structure is lazy: enumerating names does not force the config" = {
+        expr =
+          let
+            result = imagesFromConfigs {
+              host = {
+                cfg = {
+                  config.system.build.images.iso = "iso-drv";
+                };
+                images = [
+                  "iso"
+                  "qemu"
+                ];
+                system = "x86_64-linux";
+              };
+            } null;
+          in
+          {
+            names = builtins.attrNames result.host;
+            iso = result.host.iso;
           };
-        } null;
         expected = {
-          host = {
-            iso = "iso-drv";
-          };
+          names = [
+            "iso"
+            "qemu"
+          ];
+          iso = "iso-drv";
+        };
+      };
+      "declared format missing from config throws on force" = {
+        expr =
+          let
+            result = imagesFromConfigs {
+              host = {
+                cfg = {
+                  config.system.build.images.iso = "iso-drv";
+                };
+                images = [ "qemu" ];
+                system = "x86_64-linux";
+              };
+            } null;
+          in
+          builtins.tryEval result.host.qemu;
+        expected = {
+          success = false;
+          value = false;
         };
       };
       "skips hosts with no declared images" = {
@@ -468,6 +496,7 @@ in
           };
         expected = {
           outputKeys = [
+            "configSystems"
             "imageRecipes"
             "nixosConfigurations"
           ];
@@ -489,6 +518,7 @@ in
           };
         expected = {
           outputKeys = [
+            "configSystems"
             "darwinConfigurations"
             "imageRecipes"
           ];
@@ -752,7 +782,7 @@ in
           recipeCfgSystem = "x86_64-linux";
         };
       };
-      "empty discoveredSystems yields only imageRecipes" = {
+      "empty discoveredSystems yields only metadata keys" = {
         expr =
           let
             result = buildSystemConfigs {
@@ -766,7 +796,10 @@ in
             inherit (result) imageRecipes;
           };
         expected = {
-          outputKeys = [ "imageRecipes" ];
+          outputKeys = [
+            "configSystems"
+            "imageRecipes"
+          ];
           imageRecipes = { };
         };
       };
