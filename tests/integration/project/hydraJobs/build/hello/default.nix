@@ -1,0 +1,9 @@
+{
+  pkgs,
+  system,
+  lib,
+  inputs,
+  namespace,
+  ...
+}:
+"job-${system}"

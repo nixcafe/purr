@@ -579,7 +579,7 @@ in
         else
           { };
 
-      images = hj.imagesFromConfigs (buildSystemConfigs.imageRecipes or { }) (
+      images = confs.imagesFromConfigs (buildSystemConfigs.imageRecipes or { }) (
         cfg.hydraJobs.systems or null
       );
 

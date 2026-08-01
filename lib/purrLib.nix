@@ -44,19 +44,17 @@ let
 
           flatMerge =
             let
-              collectLeaf =
-                v:
-                if builtins.isAttrs v then
-                  let
-                    direct = v."default.nix" or null;
-                    rest = builtins.removeAttrs v [ "default.nix" ];
-                    sub = concatMap collectLeaf (builtins.attrValues rest);
-                  in
-                  (if direct != null then [ direct ] else [ ]) ++ sub
-                else
-                  [ ];
+              collectLeafPaths =
+                v: if builtins.isAttrs v then concatMap collectLeafPaths (builtins.attrValues v) else [ v ];
+              importedLeaves = builtins.map (
+                path:
+                import path {
+                  inherit inputs namespace;
+                  lib = mergedLib // optionalAttrs (namespace != null) { ${namespace} = self; };
+                }
+              ) (collectLeafPaths subModules);
             in
-            foldl' (a: b: a // b) rootModule (collectLeaf importedSubModules);
+            foldl' (a: b: a // b) rootModule importedLeaves;
         in
         if flattenLib then flatMerge else nested
       )

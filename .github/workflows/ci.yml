@@ -21,5 +21,10 @@ jobs:
       - name: lint + tests
         run: nix flake check
 
+      - name: test report
+        run: |
+          nix build .#checks.x86_64-linux.purr-tests
+          tail -n 2 result
+
       - name: flake show
         run: nix flake show

@@ -22,5 +22,6 @@
 - [ ] I have read the contributing guidelines
 - [ ] My code follows the code style of this project
 - [ ] I have tested my changes locally with `nix flake check`
-- [ ] I have tested my changes locally with `nix flake show`
+- [ ] I have added/updated tests under `tests/unit/` or `tests/integration/` for my changes
+- [ ] All tests pass (`tests/run-tests.sh` or `nix develop --command purr-test`)
 - [ ] My changes generate no new errors
