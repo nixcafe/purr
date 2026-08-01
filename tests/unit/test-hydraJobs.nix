@@ -114,6 +114,22 @@ in
         } [ "checks" ] [ "aarch64-linux" ];
         expected = { };
       };
+      "drops mirrors whose per-system content is empty" = {
+        expr =
+          mirrorOutputs
+            {
+              packages."x86_64-linux" = { };
+              checks."x86_64-linux".lint = "pass";
+            }
+            [
+              "packages"
+              "checks"
+            ]
+            null;
+        expected = {
+          checks."x86_64-linux".lint = "pass";
+        };
+      };
       "empty names returns empty attrs" = {
         expr = mirrorOutputs {
           checks."x86_64-linux".a = 1;
