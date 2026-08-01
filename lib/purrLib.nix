@@ -22,23 +22,30 @@ let
         let
           mergedLib = lib;
 
-          rootModule =
-            if builtins.pathExists (src + "/${libDir}/default.nix") then
-              import (src + "/${libDir}/default.nix") {
+          # Import a lib module and only call it with arguments when it is a
+          # function. Plain attrset modules (e.g. static data) are returned
+          # as-is — snowfall behaves the same way.
+          call =
+            path:
+            let
+              module = import path;
+            in
+            if builtins.isFunction module then
+              module {
                 inherit inputs namespace;
                 lib = mergedLib // optionalAttrs (namespace != null) { ${namespace} = self; };
               }
             else
+              module;
+
+          rootModule =
+            if builtins.pathExists (src + "/${libDir}/default.nix") then
+              call (src + "/${libDir}/default.nix")
+            else
               { };
 
           subModules = modules.findModulesLib src libDir;
-          importedSubModules = namespacedModules.deepMapAttrs (
-            path:
-            import path {
-              inherit inputs namespace;
-              lib = mergedLib // optionalAttrs (namespace != null) { ${namespace} = self; };
-            }
-          ) subModules;
+          importedSubModules = namespacedModules.deepMapAttrs call subModules;
 
           nested = rootModule // importedSubModules;
 
@@ -46,13 +53,7 @@ let
             let
               collectLeafPaths =
                 v: if builtins.isAttrs v then concatMap collectLeafPaths (builtins.attrValues v) else [ v ];
-              importedLeaves = builtins.map (
-                path:
-                import path {
-                  inherit inputs namespace;
-                  lib = mergedLib // optionalAttrs (namespace != null) { ${namespace} = self; };
-                }
-              ) (collectLeafPaths subModules);
+              importedLeaves = builtins.map call (collectLeafPaths subModules);
             in
             foldl' (a: b: a // b) rootModule importedLeaves;
         in

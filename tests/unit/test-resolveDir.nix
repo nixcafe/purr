@@ -84,7 +84,6 @@ in
             checks = result.checksDir;
             shells = result.shellsDir;
             apps = result.appsDir;
-            templates = result.templatesDir;
             formatter = result.formatterDir;
             legacyPackages = result.legacyPackagesDir;
           };
@@ -92,7 +91,6 @@ in
           checks = null;
           shells = null;
           apps = null;
-          templates = null;
           formatter = null;
           legacyPackages = null;
         };

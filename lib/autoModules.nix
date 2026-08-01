@@ -2,15 +2,21 @@
 let
   importMod =
     pkgs: purrLib: namespace: inputs: extraArgs: module:
-    import module (
-      pkgs
-      // extraArgs
-      // {
-        inherit inputs pkgs namespace;
-        inherit (pkgs) system;
-        lib = purrLib;
-      }
-    );
+    let
+      raw = import module;
+    in
+    if builtins.isFunction raw then
+      raw (
+        pkgs
+        // extraArgs
+        // {
+          inherit inputs pkgs namespace;
+          inherit (pkgs) system;
+          lib = purrLib;
+        }
+      )
+    else
+      raw;
 
   autoModules =
     src: pkgs: purrLib: namespace: inputs: extraArgs: dir: packagesByName:
@@ -59,13 +65,19 @@ let
       in
       builtins.mapAttrs (
         _: module:
-        import module (
-          extraArgs
-          // {
-            inherit inputs namespace;
-            lib = purrLib;
-          }
-        )
+        let
+          raw = import module;
+        in
+        if builtins.isFunction raw then
+          raw (
+            extraArgs
+            // {
+              inherit inputs namespace;
+              lib = purrLib;
+            }
+          )
+        else
+          raw
       ) mods
     else
       { };

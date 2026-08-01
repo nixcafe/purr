@@ -248,6 +248,14 @@ let
                               {
                                 config = nsUsers.${h.user}.homeConfig or { };
                               }
+                              # Expose the user as a module arg and auto-inject
+                              # username/home (mirrors the standalone
+                              # `homeConfigurations` path in `buildHomeConfigs`).
+                              {
+                                _module.args.user = h.user;
+                                home.username = mkDefault h.user;
+                                home.homeDirectory = mkDefault (if isDarwin then "/Users/${h.user}" else "/home/${h.user}");
+                              }
                               h.path
                             ];
                           };

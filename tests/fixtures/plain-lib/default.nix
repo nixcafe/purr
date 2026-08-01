@@ -1,0 +1,3 @@
+{
+  rootKey = "root";
+}

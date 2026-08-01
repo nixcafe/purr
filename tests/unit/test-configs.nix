@@ -901,6 +901,11 @@ in
               home.packages = [ "cowsay" ];
             };
           }
+          {
+            _module.args.user = "alice";
+            home.username = lib.mkDefault "alice";
+            home.homeDirectory = lib.mkDefault "/home/alice";
+          }
           homeFixture
         ];
       };
