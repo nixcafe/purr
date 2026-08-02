@@ -23,6 +23,10 @@
         enable = true;
         systems = [ "x86_64-linux" ];
       };
+      hosts.server.meta = {
+        tier = "prod";
+        region = "us-east";
+      };
       outputsBuilder =
         { system, ... }:
         {

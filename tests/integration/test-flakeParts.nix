@@ -39,6 +39,10 @@ let
         purr.namespace = "demo";
         purr.bundleModules = true;
         purr.packagesByName = true;
+        purr.hosts.server.meta = {
+          tier = "prod";
+          region = "us-east";
+        };
       }
     ];
     specialArgs = {
@@ -127,10 +131,14 @@ in
         expr = {
           namespace = flake.nixosConfigurations.server.specialArgs.namespace;
           purrName = flake.nixosConfigurations.server.specialArgs.purr.name;
+          metaTier = flake.nixosConfigurations.server.specialArgs.purr.meta.tier;
+          metaRegion = flake.nixosConfigurations.server.specialArgs.purr.meta.region;
         };
         expected = {
           namespace = "demo";
           purrName = "server";
+          metaTier = "prod";
+          metaRegion = "us-east";
         };
       };
     };

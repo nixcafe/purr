@@ -388,6 +388,41 @@ in
       '';
     };
 
+    hosts = mkOption {
+      type = types.attrsOf (
+        types.submodule {
+          options.meta = mkOption {
+            type = types.attrs;
+            default = { };
+            description = ''
+              Per-host metadata, deep-merged on top of the host's
+              `meta.nix` (if any). Behaviour keys `images` (list of image
+              formats) and `deployable` (bool) drive purr's `images` output
+              and `nixosConfigurations`/`darwinConfigurations` exposure; any
+              other key is exposed to the host's modules as `purr.meta.<key>`.
+              Auto-generated keys (name, arch, archFormat, format, isDarwin,
+              isLinux, system, homes) cannot be overridden — setting them emits
+              a warning and the value is ignored.
+            '';
+          };
+        }
+      );
+      default = { };
+      description = ''
+        Per-host configuration, keyed by host name. Only `meta` is supported
+        today. Referencing a host that has no matching
+        `systems/<arch>-<format>/<name>/default.nix` is an error.
+      '';
+      example = lib.literalExpression ''
+        {
+          server.meta = {
+            images = [ "qemu" ];
+            tier = "prod";
+          };
+        }
+      '';
+    };
+
     hydraJobs = {
       enable = mkEnableOption "hydraJobs flake output with automatic derivation discovery";
 
@@ -555,6 +590,7 @@ in
               namespace
               nixpkgsConfig
               ;
+            hostsMeta = builtins.mapAttrs (_: v: v.meta or { }) cfg.hosts;
             extraModules = extraModulesWithLocal;
             lib = mergedLib;
             sharedOverlays = builtins.attrValues discoveredOverlays;

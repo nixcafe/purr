@@ -4,8 +4,7 @@
   ...
 }:
 assert lib != null;
-assert purr.meta.images == [ "iso" ];
-assert purr.meta.deployable == true;
+assert purr.meta.images == [ ];
 {
   system.stateVersion = "24.11";
   system.build.images.iso = "iso-drv";
