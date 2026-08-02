@@ -80,6 +80,7 @@ let
       autoInject ? true,
       packagesByName ? false,
       extraArgs ? { },
+      hosts ? { },
       hydraJobs ? { },
       ...
     }:
@@ -276,6 +277,7 @@ let
               nixpkgsConfig
               sharedOverlays
               ;
+            hostsMeta = builtins.mapAttrs (_: v: v.meta or { }) hosts;
             inputs = allInputs;
             extraModules = extraModulesWithLocal;
             lib = mergedLib;

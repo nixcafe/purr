@@ -20,6 +20,10 @@ let
   sysImageFixture = ./fixtures/system-image/default.nix;
   sysImageDeployableFixture = ./fixtures/system-image-deployable/default.nix;
   sysDarwinFixture = ./fixtures/system-darwin/default.nix;
+  sysMetaFunctionFixture = ./fixtures/system-meta-function/default.nix;
+  sysMetaReservedFixture = ./fixtures/system-meta-reserved/default.nix;
+  sysMetaMergeFixture = ./fixtures/system-meta-merge/default.nix;
+  sysMetaNotAttrsFixture = ./fixtures/system-meta-not-attrs/default.nix;
 
   homeManagerInput = {
     lib.homeManagerConfiguration = args: {
@@ -567,6 +571,18 @@ in
           isDarwin = false;
           isLinux = true;
           name = "myhost";
+          meta = {
+            arch = "x86_64";
+            archFormat = "x86_64-linux";
+            deployable = true;
+            format = "linux";
+            homes = [ ];
+            images = [ ];
+            isDarwin = false;
+            isLinux = true;
+            name = "myhost";
+            system = "x86_64-linux";
+          };
         };
       };
       "passes purr metadata to darwin specialArgs" = {
@@ -587,6 +603,18 @@ in
           isDarwin = true;
           isLinux = false;
           name = "mac1";
+          meta = {
+            arch = "aarch64";
+            archFormat = "aarch64-darwin";
+            deployable = true;
+            format = "darwin";
+            homes = [ ];
+            images = [ ];
+            isDarwin = true;
+            isLinux = false;
+            name = "mac1";
+            system = "aarch64-darwin";
+          };
         };
       };
       "passes system host namespace and inputs to specialArgs" = {
@@ -641,11 +669,11 @@ in
           in
           {
             noHostNameModule = builtins.filter (m: builtins.isAttrs m && m ? networking) modules == [ ];
-            firstDeclaresPurrOptions = (builtins.head modules).options.purr ? images;
+            metaInjected = result.nixosConfigurations.myhost.specialArgs.purr.meta.images == [ ];
           };
         expected = {
           noHostNameModule = true;
-          firstDeclaresPurrOptions = true;
+          metaInjected = true;
         };
       };
       "injects nixpkgsConfig as a mkDefault nixpkgs.config module" = {
@@ -908,6 +936,251 @@ in
           }
           homeFixture
         ];
+      };
+    };
+  };
+
+  # ---- host meta (meta.nix / hostsMeta config) ----
+  hostMeta = {
+    tests = {
+      "meta.nix images and custom keys flow into purr.meta and imageRecipes" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysImageFixture;
+              discoveredHomes = { };
+              inputs = nixosInputs;
+            };
+            meta = result.imageRecipes.myhost.cfg.specialArgs.purr.meta;
+            recipe = result.imageRecipes.myhost;
+          in
+          {
+            inherit (meta)
+              arch
+              deployable
+              format
+              images
+              isLinux
+              name
+              system
+              ;
+            cfgImages = recipe.images;
+          };
+        expected = {
+          images = [ "iso" ];
+          deployable = false;
+          name = "myhost";
+          arch = "x86_64";
+          format = "linux";
+          system = "x86_64-linux";
+          isLinux = true;
+          cfgImages = [ "iso" ];
+        };
+      };
+      "meta.nix function receives inputs and structural args" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysMetaFunctionFixture;
+              discoveredHomes = { };
+              inputs = nixosInputs;
+            };
+            meta = result.imageRecipes.myhost.cfg.specialArgs.purr.meta;
+          in
+          {
+            inherit (meta) images tier;
+            isDeployable = result ? nixosConfigurations;
+          };
+        expected = {
+          images = [ "iso" ];
+          tier = "from-function-x86_64";
+          isDeployable = false;
+        };
+      };
+      "hostsMeta deep-merges over meta.nix" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysMetaMergeFixture;
+              discoveredHomes = { };
+              inputs = nixosInputs;
+              hostsMeta.myhost = {
+                labels = {
+                  env = "prod";
+                  extra = true;
+                };
+              };
+            };
+            meta = result.imageRecipes.myhost.cfg.specialArgs.purr.meta;
+          in
+          {
+            inherit (meta) images;
+            labelsEnv = meta.labels.env;
+            labelsTeam = meta.labels.team;
+            labelsExtra = meta.labels.extra;
+          };
+        expected = {
+          images = [ "iso" ];
+          labelsEnv = "prod";
+          labelsTeam = "core";
+          labelsExtra = true;
+        };
+      };
+      "hostsMeta leaf overrides meta.nix" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysMetaMergeFixture;
+              discoveredHomes = { };
+              inputs = nixosInputs;
+              hostsMeta.myhost.images = [ "qemu" ];
+            };
+            meta = result.imageRecipes.myhost.cfg.specialArgs.purr.meta;
+          in
+          meta.images;
+        expected = [ "qemu" ];
+      };
+      "reserved meta keys are dropped and auto value kept" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysMetaReservedFixture;
+              discoveredHomes = { };
+              inputs = nixosInputs;
+            };
+            meta = result.imageRecipes.myhost.cfg.specialArgs.purr.meta;
+          in
+          {
+            inherit (meta)
+              arch
+              images
+              name
+              system
+              ;
+          };
+        expected = {
+          name = "myhost";
+          arch = "x86_64";
+          system = "x86_64-linux";
+          images = [ "iso" ];
+        };
+      };
+      "reserved keys in hostsMeta are dropped too" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              discoveredHomes = { };
+              inputs = nixosInputs;
+              hostsMeta.myhost.name = "evil";
+            };
+            meta = result.nixosConfigurations.myhost.specialArgs.purr.meta;
+          in
+          meta.name;
+        expected = "myhost";
+      };
+      "non-list images in meta throws" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              discoveredHomes = { };
+              inputs = nixosInputs;
+              hostsMeta.myhost.images = "iso";
+            };
+          in
+          (builtins.tryEval result.imageRecipes).success;
+        expected = false;
+      };
+      "meta.nix returning a non-attrset throws" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysMetaNotAttrsFixture;
+              discoveredHomes = { };
+              inputs = nixosInputs;
+            };
+          in
+          (builtins.tryEval result.imageRecipes).success;
+        expected = false;
+      };
+      "hostsMeta referencing unknown host throws" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              discoveredHomes = { };
+              inputs = nixosInputs;
+              hostsMeta.ghost = { };
+            };
+          in
+          (builtins.tryEval result.nixosConfigurations).success;
+        expected = false;
+      };
+      "darwin images are ignored in imageRecipes" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."aarch64-darwin".mac1 = sysDarwinFixture;
+              discoveredHomes = { };
+              inputs = darwinInputs;
+              hostsMeta.mac1.images = [ "iso" ];
+            };
+          in
+          builtins.attrNames result.imageRecipes;
+        expected = [ ];
+      };
+      "deployable derived from images only when unset" = {
+        expr =
+          let
+            base =
+              extraConfig:
+              {
+                discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+                discoveredHomes = { };
+                inputs = nixosInputs;
+              }
+              // extraConfig;
+            withImages = buildSystemConfigs (base {
+              hostsMeta.myhost.images = [ "iso" ];
+            });
+            withImagesDeployable = buildSystemConfigs (base {
+              hostsMeta.myhost = {
+                images = [ "iso" ];
+                deployable = true;
+              };
+            });
+          in
+          {
+            imageOnlyNotDeployable = withImages ? nixosConfigurations;
+            explicitDeployable = withImagesDeployable.nixosConfigurations ? myhost;
+            inImageRecipes = withImagesDeployable.imageRecipes ? myhost;
+          };
+        expected = {
+          imageOnlyNotDeployable = false;
+          explicitDeployable = true;
+          inImageRecipes = true;
+        };
+      };
+      "purr.meta is injected into darwin specialArgs too" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."aarch64-darwin".mac1 = sysDarwinFixture;
+              discoveredHomes = { };
+              inputs = darwinInputs;
+              hostsMeta.mac1.customKey = "darwin-value";
+            };
+            meta = result.darwinConfigurations.mac1.specialArgs.purr.meta;
+          in
+          {
+            inherit (meta) customKey deployable name;
+          };
+        expected = {
+          name = "mac1";
+          customKey = "darwin-value";
+          deployable = true;
+        };
       };
     };
   };

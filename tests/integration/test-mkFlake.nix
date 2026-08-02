@@ -37,6 +37,10 @@ let
       enable = true;
       systems = [ "x86_64-linux" ];
     };
+    hosts.server.meta = {
+      tier = "prod";
+      region = "us-east";
+    };
     outputsBuilder =
       { system, ... }:
       {
@@ -499,6 +503,36 @@ in
         expr = result.images.iso or { };
         expected = {
           iso = "iso-drv";
+        };
+      };
+    };
+  };
+
+  # ---- host meta (hosts.<name>.meta config) ----
+  hostMeta = {
+    tests = {
+      "hosts meta config flows into server purr.meta" = {
+        expr = {
+          tier = server.specialArgs.purr.meta.tier;
+          region = server.specialArgs.purr.meta.region;
+          images = server.specialArgs.purr.meta.images;
+          deployable = server.specialArgs.purr.meta.deployable;
+        };
+        expected = {
+          tier = "prod";
+          region = "us-east";
+          images = [ ];
+          deployable = true;
+        };
+      };
+      "iso host meta.nix function evaluates and drives images output" = {
+        expr = {
+          image = result.images.iso.iso;
+          hydraImage = result.hydraJobs.images.iso.iso;
+        };
+        expected = {
+          image = "iso-drv";
+          hydraImage = "iso-drv";
         };
       };
     };

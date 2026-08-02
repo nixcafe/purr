@@ -80,6 +80,51 @@ purrLib = lib                   # standard nixpkgs lib
 
 Modules use `lib.${namespace}.xxx` as before. No `_module.args.lib` overrides.
 
+## Host Metadata (meta)
+
+Hosts can carry metadata that purr reads at flake-evaluation time (cheap, no
+nixpkgs/system eval) and re-exposes to the host's modules via `purr.meta`.
+
+### Sources (merged in increasing priority)
+
+1. **Auto-generated** — `name`, `arch`, `archFormat`, `format`, `isDarwin`,
+   `isLinux`, `system`, `homes` (derived from the host's directory path and
+   matched homes).
+2. **`meta.nix`** next to the host's `systems/<arch>-<format>/<name>/default.nix`.
+   A plain attrset or a function called with
+   `{ inputs, lib, namespace, extraArgs, host, name, system, arch, archFormat,
+   format, isDarwin, isLinux, homes, ... }` (all lazily bound, so cheap
+   conditionals like `if inputs ? nix-darwin then ...` are free).
+3. **Flake config** — `hosts.<name>.meta` in `mkFlake` /
+   `purr.hosts.<name>.meta` in flake-parts. Deep-merged (leaf wins) on top of
+   `meta.nix`.
+
+### Reserved keys
+
+The auto-generated keys listed above **cannot be overridden**. Setting one in
+any user meta source emits a warning and the value is silently dropped, so the
+auto structure is guaranteed to win. Referencing an unknown host via
+`hosts.<name>.meta` is an error.
+
+### Behaviour keys purr consumes
+
+- `images` — list of image formats, driving the `flake.images` / hydraJobs
+  `images` output (`config.system.build.images.<format>`).
+- `deployable` — whether the host is exposed as a
+  `nixosConfigurations`/`darwinConfigurations` output. Defaults to `true` when
+  `images == []` or the host is darwin; a host with `images` is image-only by
+  default (excluded from config outputs and config hydraJobs groups).
+
+Everything else in the merged meta is a free-form custom key exposed as
+`purr.meta.<key>` for user automation.
+
+### `purr.meta` injection
+
+The merged meta (always containing the 8 auto keys + normalized `images` +
+derived `deployable`) is threaded to host modules as `purr.meta` in
+`nixosSystem`/`darwinSystem` `specialArgs` and the home-manager bridge
+`extraSpecialArgs`. Standalone `homeConfigurations` do not receive `purr.meta`.
+
 ## Testing
 
 **When adding a feature or fix, you MUST write tests.** Run `nix flake check` to verify.
@@ -195,7 +240,6 @@ evaluation, not string inspection.
 - `imagesFromConfigs` takes the `imageRecipes` shape
   (`{ host = { system; images; cfg = { config = { system.build.images }; }; }; }`),
   not the `nixosConfigurations` shape.
-- `buildSystemConfigs` reads `purr.images` / `purr.deployable` from the top
-  level of the host module's returned attrset (cheap metadata read with
-  placeholder args), so fixture host modules must not crash on placeholder
-  `config`/`pkgs`/`options`/`_module`.
+- Host metadata is read from `meta.nix` / `hosts.<name>.meta`, never from the
+  host module — host modules must not (and need not) declare `purr.images` /
+  `purr.deployable`.
