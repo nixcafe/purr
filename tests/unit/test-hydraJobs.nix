@@ -157,7 +157,7 @@ in
   # ---- configOutputs ----
   configOutputs = {
     tests = {
-      "groups nixosConfigs by the configSystems map" = {
+      "groups nixosConfigurations by the configSystems map" = {
         expr =
           let
             sysCfg = {
@@ -175,7 +175,7 @@ in
               };
             };
           in
-          (configOutputs sysCfg { } [ "nixosConfigs" ] null { }).nixosConfigs;
+          (configOutputs sysCfg { } [ "nixosConfigurations" ] null { }).nixosConfigurations;
         expected = {
           "x86_64-linux" = {
             host1 = "toplevel-host1";
@@ -185,7 +185,7 @@ in
           };
         };
       };
-      "filters nixosConfigs by systems" = {
+      "filters nixosConfigurations by systems" = {
         expr =
           let
             sysCfg = {
@@ -203,14 +203,14 @@ in
               };
             };
           in
-          (configOutputs sysCfg { } [ "nixosConfigs" ] [ "x86_64-linux" ] { }).nixosConfigs;
+          (configOutputs sysCfg { } [ "nixosConfigurations" ] [ "x86_64-linux" ] { }).nixosConfigurations;
         expected = {
           "x86_64-linux" = {
             host1 = "toplevel-host1";
           };
         };
       };
-      "groups darwinConfigs by the configSystems map" = {
+      "groups darwinConfigurations by the configSystems map" = {
         expr =
           let
             sysCfg = {
@@ -228,7 +228,7 @@ in
               };
             };
           in
-          (configOutputs sysCfg { } [ "darwinConfigs" ] null { }).darwinConfigs;
+          (configOutputs sysCfg { } [ "darwinConfigurations" ] null { }).darwinConfigurations;
         expected = {
           "aarch64-darwin" = {
             mac1 = "darwin-mac1";
@@ -238,7 +238,7 @@ in
           };
         };
       };
-      "groups homeConfigs by the homeSystems map" = {
+      "groups homeConfigurations by the homeSystems map" = {
         expr =
           let
             homes = {
@@ -250,10 +250,10 @@ in
               };
             };
           in
-          (configOutputs { } homes [ "homeConfigs" ] null {
+          (configOutputs { } homes [ "homeConfigurations" ] null {
             "alice@host1" = "x86_64-linux";
             "bob@host2" = "aarch64-linux";
-          }).homeConfigs;
+          }).homeConfigurations;
         expected = {
           "x86_64-linux" = {
             "alice@host1" = "activation-alice";
@@ -263,7 +263,7 @@ in
           };
         };
       };
-      "filters homeConfigs by systems" = {
+      "filters homeConfigurations by systems" = {
         expr =
           let
             homes = {
@@ -275,10 +275,10 @@ in
               };
             };
           in
-          (configOutputs { } homes [ "homeConfigs" ] [ "x86_64-linux" ] {
+          (configOutputs { } homes [ "homeConfigurations" ] [ "x86_64-linux" ] {
             "alice@host1" = "x86_64-linux";
             "bob@host2" = "aarch64-linux";
-          }).homeConfigs;
+          }).homeConfigurations;
         expected = {
           "x86_64-linux" = {
             "alice@host1" = "activation-alice";
@@ -312,9 +312,9 @@ in
             result =
               configOutputs sysCfg homes
                 [
-                  "nixosConfigs"
-                  "darwinConfigs"
-                  "homeConfigs"
+                  "nixosConfigurations"
+                  "darwinConfigurations"
+                  "homeConfigurations"
                 ]
                 null
                 {
@@ -322,9 +322,9 @@ in
                 };
           in
           {
-            nixos = result.nixosConfigs."x86_64-linux".host1 or null;
-            darwin = result.darwinConfigs."aarch64-darwin".mac1 or null;
-            home = result.homeConfigs."x86_64-linux"."alice@host1" or null;
+            nixos = result.nixosConfigurations."x86_64-linux".host1 or null;
+            darwin = result.darwinConfigurations."aarch64-darwin".mac1 or null;
+            home = result.homeConfigurations."x86_64-linux"."alice@host1" or null;
           };
         expected = {
           nixos = "toplevel-host1";
@@ -358,8 +358,8 @@ in
             result =
               configOutputs sysCfg homes
                 [
-                  "nixosConfigs"
-                  "homeConfigs"
+                  "nixosConfigurations"
+                  "homeConfigurations"
                 ]
                 null
                 {
@@ -367,8 +367,8 @@ in
                 };
           in
           {
-            nixos = result.nixosConfigs."x86_64-linux".host1;
-            home = result.homeConfigs."x86_64-linux"."alice@host1";
+            nixos = result.nixosConfigurations."x86_64-linux".host1;
+            home = result.homeConfigurations."x86_64-linux"."alice@host1";
           };
         expected = {
           nixos = "toplevel-host1";
@@ -389,9 +389,11 @@ in
             };
           in
           {
-            shown = (configOutputs sysCfg { } [ "nixosConfigs" ] [ "x86_64-linux" ] { }).nixosConfigs;
+            shown =
+              (configOutputs sysCfg { } [ "nixosConfigurations" ] [ "x86_64-linux" ] { }).nixosConfigurations;
             filteredOut =
-              (configOutputs sysCfg { } [ "nixosConfigs" ] [ "aarch64-linux" ] { }).nixosConfigs or { };
+              (configOutputs sysCfg { } [ "nixosConfigurations" ] [ "aarch64-linux" ] { }).nixosConfigurations
+                or { };
           };
         expected = {
           shown = {
@@ -407,7 +409,7 @@ in
         expected = { };
       };
       "empty configs return empty" = {
-        expr = configOutputs { } { } [ "nixosConfigs" ] null { };
+        expr = configOutputs { } { } [ "nixosConfigurations" ] null { };
         expected = { };
       };
     };
@@ -595,7 +597,7 @@ in
               hydraSystems = [ "x86_64-linux" ];
               hydraJobsInclude = [
                 "checks"
-                "nixosConfigs"
+                "nixosConfigurations"
               ];
               hydraJobsExtra = {
                 extraTop = {
@@ -635,7 +637,7 @@ in
           {
             dirJob = result.build."x86_64-linux".hello or null;
             check = result.checks."x86_64-linux".myCheck or null;
-            nixos = result.nixosConfigs."x86_64-linux".host1 or null;
+            nixos = result.nixosConfigurations."x86_64-linux".host1 or null;
             image = result.images.iso.iso or null;
             extra = result.extraTop."x86_64-linux".custom or null;
           };
@@ -690,14 +692,14 @@ in
           {
             checks = result.checks."x86_64-linux".myCheck or null;
             packages = result.packages."x86_64-linux".myPkg or null;
-            nixosConfigs = result.nixosConfigs."x86_64-linux".host1 or null;
-            homeConfigs = result.homeConfigs."x86_64-linux"."alice@host1" or null;
+            nixosConfigurations = result.nixosConfigurations."x86_64-linux".host1 or null;
+            homeConfigurations = result.homeConfigurations."x86_64-linux"."alice@host1" or null;
           };
         expected = {
           checks = "check-pass";
           packages = "pkg-pass";
-          nixosConfigs = "toplevel-host1";
-          homeConfigs = "activation-alice";
+          nixosConfigurations = "toplevel-host1";
+          homeConfigurations = "activation-alice";
         };
       };
       "explicit include overrides auto-detection" = {

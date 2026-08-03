@@ -53,6 +53,39 @@ let
   flake = eval.config.flake;
 
   perSystem = system: (eval.config.perSystem { inherit system; }).config;
+
+  hydraEval = lib.evalModules {
+    modules = [
+      flakeModule
+      {
+        options.flake = lib.mkOption {
+          type = lib.types.raw;
+        };
+        options.perSystem = lib.mkOption {
+          type = lib.types.raw;
+        };
+      }
+      {
+        purr.enable = true;
+        purr.src = projectDir;
+        purr.namespace = "demo";
+        purr.hosts.server.meta = {
+          tier = "prod";
+          region = "us-east";
+        };
+        purr.hydraJobs = {
+          enable = true;
+          as = "builds";
+          systems = [ "x86_64-linux" ];
+        };
+      }
+    ];
+    specialArgs = {
+      inherit inputs;
+    };
+  };
+
+  hydraFlake = hydraEval.config.flake;
 in
 {
   flakeOutputs = {
@@ -200,6 +233,25 @@ in
           in
           length bridge;
         expected = 1;
+      };
+    };
+  };
+
+  hydraJobsAs = {
+    tests = {
+      "renamed output present, hydraJobs absent" = {
+        expr = {
+          hasBuilds = hydraFlake ? "builds";
+          hasHydraJobs = hydraFlake ? "hydraJobs";
+        };
+        expected = {
+          hasBuilds = true;
+          hasHydraJobs = false;
+        };
+      };
+      "renamed output carries mirrored jobs" = {
+        expr = hydraFlake.builds.nixosConfigurations."x86_64-linux".server;
+        expected = "toplevel-server";
       };
     };
   };

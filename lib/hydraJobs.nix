@@ -60,7 +60,7 @@ let
           filtered = filterBySystem nixosConfigurations nixosSystems;
         in
         optionalAttrs (filtered != { }) {
-          nixosConfigs = foldl' (
+          nixosConfigurations = foldl' (
             acc: name:
             let
               cfg = nixosConfigurations.${name};
@@ -80,7 +80,7 @@ let
           filtered = filterBySystem darwinConfigurations darwinSystems;
         in
         optionalAttrs (filtered != { }) {
-          darwinConfigs = foldl' (
+          darwinConfigurations = foldl' (
             acc: name:
             let
               cfg = darwinConfigurations.${name};
@@ -100,7 +100,7 @@ let
           filtered = filterBySystem homeConfigs homeSystems';
         in
         optionalAttrs (filtered != { }) {
-          homeConfigs = foldl' (
+          homeConfigurations = foldl' (
             acc: name:
             let
               cfg = homeConfigs.${name};
@@ -117,11 +117,11 @@ let
 
       include =
         name:
-        if name == "nixosConfigs" then
+        if name == "nixosConfigurations" then
           groupNixos
-        else if name == "darwinConfigs" then
+        else if name == "darwinConfigurations" then
           groupDarwin
-        else if name == "homeConfigs" then
+        else if name == "homeConfigurations" then
           groupHome
         else
           { };
@@ -231,9 +231,9 @@ let
           fromPerSystem = builtins.filter (
             name: perSystemOutputs ? ${name} && perSystemOutputs.${name} != { }
           ) perSystemNames;
-          fromNixos = optional (nixosConfigurations != { }) "nixosConfigs";
-          fromDarwin = optional (darwinConfigurations != { }) "darwinConfigs";
-          fromHome = optional (homeConfigs != { }) "homeConfigs";
+          fromNixos = optional (nixosConfigurations != { }) "nixosConfigurations";
+          fromDarwin = optional (darwinConfigurations != { }) "darwinConfigurations";
+          fromHome = optional (homeConfigs != { }) "homeConfigurations";
         in
         fromPerSystem ++ fromNixos ++ fromDarwin ++ fromHome;
 
