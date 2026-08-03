@@ -426,6 +426,19 @@ in
     hydraJobs = {
       enable = mkEnableOption "hydraJobs flake output with automatic derivation discovery";
 
+      as = mkOption {
+        type = types.str;
+        default = "hydraJobs";
+        description = ''
+          Name of the flake output that carries the Hydra CI jobs.
+          Set to something else (e.g. `"builds"`) when the flake must
+          not expose a `hydraJobs` output — `nix flake check` evaluates
+          a `hydraJobs` output with import-from-derivation disabled.
+          A separate flake can then re-export this output as
+          `hydraJobs` for Hydra to pick up.
+        '';
+      };
+
       dir = mkOption {
         type = types.nullOr types.str;
         default = null;
@@ -458,7 +471,7 @@ in
           Set to `[]` to disable mirroring, or explicitly list names.
           Valid per-system names: checks, packages, devShells, apps,
           legacyPackages, formatter.
-          Valid config names: nixosConfigs, darwinConfigs, homeConfigs.
+          Valid config names: nixosConfigurations, darwinConfigurations, homeConfigurations.
           Note: apps are not included by auto-detection even if present
           because they are not derivations.
         '';
@@ -676,7 +689,9 @@ in
           homeConfigurations = buildHomeConfigs;
         }
         // lib.optionalAttrs (images != { }) { inherit images; }
-        // lib.optionalAttrs cfg.hydraJobs.enable { inherit hydraJobs; }
+        // lib.optionalAttrs cfg.hydraJobs.enable {
+          ${cfg.hydraJobs.as} = hydraJobs;
+        }
         // lib.optionalAttrs (importedPurrLib != null) (
           if cfg.namespace != null then
             {

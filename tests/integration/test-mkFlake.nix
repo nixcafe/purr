@@ -50,6 +50,21 @@ let
 
   server = result.nixosConfigurations.server;
   macbook = result.darwinConfigurations.macbook;
+
+  renamed = mkFlake {
+    inherit inputs;
+    src = projectDir;
+    namespace = "demo";
+    hosts.server.meta = {
+      tier = "prod";
+      region = "us-east";
+    };
+    hydraJobs = {
+      enable = true;
+      as = "builds";
+      systems = [ "x86_64-linux" ];
+    };
+  };
 in
 {
   outputShape = {
@@ -571,12 +586,12 @@ in
         expr = result.hydraJobs.packages."x86_64-linux".hello._type;
         expected = "package";
       };
-      "mirrored nixosConfigs included" = {
-        expr = result.hydraJobs.nixosConfigs."x86_64-linux".server;
+      "mirrored nixosConfigurations included" = {
+        expr = result.hydraJobs.nixosConfigurations."x86_64-linux".server;
         expected = "toplevel-server";
       };
-      "mirrored homeConfigs included" = {
-        expr = result.hydraJobs.homeConfigs."x86_64-linux"."alice@server";
+      "mirrored homeConfigurations included" = {
+        expr = result.hydraJobs.homeConfigurations."x86_64-linux"."alice@server";
         expected = "activation-alice";
       };
       "image jobs included in hydraJobs" = {
@@ -585,9 +600,29 @@ in
           iso = "iso-drv";
         };
       };
-      "image-only host not mirrored as nixosConfigs" = {
-        expr = result.hydraJobs.nixosConfigs."x86_64-linux" ? "iso";
+      "image-only host not mirrored as nixosConfigurations" = {
+        expr = result.hydraJobs.nixosConfigurations."x86_64-linux" ? "iso";
         expected = false;
+      };
+    };
+  };
+
+  # ---- hydraJobs.as ----
+  hydraJobsAs = {
+    tests = {
+      "renamed output present, hydraJobs absent" = {
+        expr = {
+          hasBuilds = renamed ? "builds";
+          hasHydraJobs = renamed ? "hydraJobs";
+        };
+        expected = {
+          hasBuilds = true;
+          hasHydraJobs = false;
+        };
+      };
+      "renamed output carries the jobs" = {
+        expr = renamed.builds.nixosConfigurations."x86_64-linux".server;
+        expected = "toplevel-server";
       };
     };
   };

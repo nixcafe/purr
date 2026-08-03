@@ -87,6 +87,7 @@ let
     let
       hjCfg = hydraJobs;
       hjEnabled = hjCfg.enable or false;
+      hjName = hjCfg.as or "hydraJobs";
       hjDir = hjCfg.dir or null;
       hjSystems = hjCfg.systems or null;
       hjInclude = hjCfg.include or null;
@@ -372,7 +373,7 @@ let
           images = confs.imagesFromConfigs (buildSystemConfigs.imageRecipes or { }) hjSystems;
         })
         (optionalAttrs (discoveredHomes != { }) { homeConfigurations = buildHomeConfigs; })
-        (optionalAttrs hjEnabled { hydraJobs = hydraJobsOutput; })
+        (optionalAttrs hjEnabled { ${hjName} = hydraJobsOutput; })
         (optionalAttrs (importedPurrLib != null) (
           if namespace != null then
             {
