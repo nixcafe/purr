@@ -9,8 +9,13 @@
 }:
 assert lib != null;
 assert namespace == "demo";
-assert purr != null && purr.name == "macbook" && purr.arch == "aarch64" && purr.format == "darwin";
-assert purr.isDarwin == true && purr.isLinux == false;
+assert
+  purr != null
+  && purr.meta.name == "macbook"
+  && purr.meta.arch == "aarch64"
+  && purr.meta.format == "darwin";
+assert purr.meta.isDarwin == true && purr.meta.isLinux == false;
+assert purr.systemMetas.server.name == "server";
 assert host == "macbook";
 assert builtins.isString system;
 {

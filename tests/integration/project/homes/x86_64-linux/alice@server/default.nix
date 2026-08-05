@@ -3,7 +3,6 @@
   lib,
   namespace,
   purr,
-  purrLib,
   host,
   user,
   system,
@@ -12,9 +11,14 @@
 }:
 assert lib != null;
 assert namespace == "demo";
-assert purr != null && purr.user == "alice" && purr.host == "server";
-assert purr.arch == "x86_64" && purr.format == "linux";
-assert purrLib != null && (purrLib ? "demo");
+assert purr != null && purr.meta.user == "alice" && purr.meta.host == "server";
+assert purr.meta.arch == "x86_64" && purr.meta.format == "linux";
+assert purr.systemMeta != null && purr.systemMeta.name == "server";
+assert purr.systemMeta.tier == "prod";
+assert purr.systemMetas.server.name == "server";
+# The merged namespace lib is uniformly available as `purr.lib` in both
+# standalone and bridged homes (bridged homes keep home-manager's own `lib`).
+assert purr.lib != null && (purr.lib ? "demo");
 assert host == "server";
 assert user == "alice";
 assert builtins.isString system;

@@ -28,6 +28,8 @@ let
 
   attrs = import ./lib/attrs.nix;
 
+  inherit (import ./lib/args.nix) purrArgs;
+
   resolver = import ./lib/resolveDir.nix {
     inherit lib;
   };
@@ -49,7 +51,7 @@ let
   systemsMod = import ./lib/systems.nix;
 
   inherit (resolver) resolveDirs;
-  inherit (libBuilder) buildImportedPurrLib mergePurrLib;
+  inherit (libBuilder) buildImportedPurrLib buildMergedLib;
   inherit (autoMods)
     autoFormatter
     autoModules
@@ -517,7 +519,11 @@ in
         inherit (resolved) libDir;
       };
 
-      mergedLib = mergePurrLib lib importedPurrLib cfg.namespace;
+      mergedLib = buildMergedLib {
+        inherit inputs importedPurrLib;
+        inherit (cfg) namespace;
+        lib = lib;
+      };
 
       wrap =
         modules:
@@ -614,13 +620,14 @@ in
       buildHomeConfigs =
         if discoveredHomes != { } then
           confs.buildHomeConfigs {
-            inherit discoveredHomes inputs;
+            inherit discoveredHomes discoveredSystems inputs;
             inherit (cfg)
               autoInject
               extraArgs
               namespace
               nixpkgsConfig
               ;
+            hostsMeta = builtins.mapAttrs (_: v: v.meta or { }) cfg.hosts;
             extraModules = extraModulesWithLocal;
             lib = mergedLib;
             sharedOverlays = builtins.attrValues discoveredOverlays;
@@ -722,13 +729,14 @@ in
               resolved.formatterDir;
           legacyPackagesModules = mod resolved.legacyPackagesDir cfg.legacyPackagesByName;
           extraOutputs = cfg.outputsBuilder (
-            cfg.extraArgs
+            (purrArgs {
+              inherit inputs;
+              inherit (cfg) extraArgs namespace;
+              lib = mergedLib;
+            })
             // {
               inherit pkgs;
               inherit (pkgs) system;
-              lib = mergedLib;
-              inherit inputs;
-              inherit (cfg) namespace;
             }
           );
         in

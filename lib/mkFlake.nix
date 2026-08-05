@@ -21,11 +21,13 @@ let
 
   inherit (attrs) optionalAttrs;
 
+  inherit (import ./args.nix) purrArgs;
+
   inherit (systems) defaultSystems eachSystem;
 
   inherit (resolveDir) resolveDirs;
 
-  inherit (purrLib) buildImportedPurrLib mergePurrLib;
+  inherit (purrLib) buildImportedPurrLib buildMergedLib;
 
   inherit (autoMods)
     autoFormatter
@@ -93,22 +95,6 @@ let
       hjInclude = hjCfg.include or null;
       hjExtra = hjCfg.extra or { };
 
-      allInputs =
-        inputs
-        // builtins.foldl' (
-          acc: input:
-          let
-            transitive = builtins.filter (k: !(acc ? ${k})) (builtins.attrNames (input.inputs or { }));
-          in
-          acc
-          // builtins.listToAttrs (
-            builtins.map (k: {
-              name = k;
-              value = input.inputs.${k};
-            }) transitive
-          )
-        ) { } (builtins.attrValues inputs);
-
       listModules =
         list:
         builtins.listToAttrs (
@@ -165,7 +151,12 @@ let
         inherit (resolved) libDir;
       };
 
-      mergedLib = mergePurrLib lib importedPurrLib namespace;
+      mergedLib = buildMergedLib {
+        inherit inputs;
+        inherit lib;
+        importedPurrLib = importedPurrLib;
+        inherit namespace;
+      };
 
       makeModuleSet = name: nsm.wrapModuleSet namespace importedPurrLib (allModules.${name} or { });
 
@@ -198,14 +189,16 @@ let
       perSystem = forAllSystems (
         system:
         outputsBuilder (
-          extraArgs
-          // {
+          (purrArgs {
             inherit
-              system
+              extraArgs
               inputs
               namespace
               ;
             lib = mergedLib;
+          })
+          // {
+            inherit system;
             pkgs = pkgs.${system};
           }
         )
@@ -279,7 +272,7 @@ let
               sharedOverlays
               ;
             hostsMeta = builtins.mapAttrs (_: v: v.meta or { }) hosts;
-            inputs = allInputs;
+            inputs = inputs;
             extraModules = extraModulesWithLocal;
             lib = mergedLib;
           }
@@ -291,12 +284,14 @@ let
             inherit
               autoInject
               discoveredHomes
+              discoveredSystems
               extraArgs
               namespace
               nixpkgsConfig
               sharedOverlays
               ;
-            inputs = allInputs;
+            hostsMeta = builtins.mapAttrs (_: v: v.meta or { }) hosts;
+            inputs = inputs;
             extraModules = extraModulesWithLocal;
             lib = mergedLib;
           }

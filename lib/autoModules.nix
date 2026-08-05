@@ -1,5 +1,7 @@
 { modules }:
 let
+  inherit (import ./args.nix) purrArgs;
+
   importMod =
     pkgs: purrLib: namespace: inputs: extraArgs: module:
     let
@@ -8,11 +10,17 @@ let
     if builtins.isFunction raw then
       raw (
         pkgs
-        // extraArgs
-        // {
-          inherit inputs pkgs namespace;
-          inherit (pkgs) system;
+        // (purrArgs {
+          inherit
+            extraArgs
+            inputs
+            namespace
+            ;
           lib = purrLib;
+        })
+        // {
+          inherit pkgs;
+          inherit (pkgs) system;
         }
       )
     else
@@ -69,13 +77,14 @@ let
           raw = import module;
         in
         if builtins.isFunction raw then
-          raw (
-            extraArgs
-            // {
-              inherit inputs namespace;
-              lib = purrLib;
-            }
-          )
+          raw (purrArgs {
+            inherit
+              extraArgs
+              inputs
+              namespace
+              ;
+            lib = purrLib;
+          })
         else
           raw
       ) mods

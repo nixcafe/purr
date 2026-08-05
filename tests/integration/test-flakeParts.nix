@@ -163,7 +163,7 @@ in
       "system specialArgs carry namespace and purr metadata" = {
         expr = {
           namespace = flake.nixosConfigurations.server.specialArgs.namespace;
-          purrName = flake.nixosConfigurations.server.specialArgs.purr.name;
+          purrName = flake.nixosConfigurations.server.specialArgs.purr.meta.name;
           metaTier = flake.nixosConfigurations.server.specialArgs.purr.meta.tier;
           metaRegion = flake.nixosConfigurations.server.specialArgs.purr.meta.region;
         };

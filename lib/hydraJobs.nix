@@ -13,6 +13,8 @@ let
     ;
   inherit (attrs) optionalAttrs;
 
+  inherit (import ./args.nix) purrArgs;
+
   filterSystems =
     attrs': systems:
     if systems == null then attrs' else filterAttrs (system: _: elem system systems) attrs';
@@ -162,15 +164,17 @@ let
                   jobPath = groupPath + "/${jobName}/default.nix";
                   result = builtins.tryEval (
                     import jobPath (
-                      extraArgs
-                      // {
+                      (purrArgs {
                         inherit
+                          extraArgs
                           inputs
                           namespace
-                          pkgs
                           ;
-                        inherit (pkgs) system;
                         lib = lib';
+                      })
+                      // {
+                        inherit pkgs;
+                        inherit (pkgs) system;
                       }
                     )
                   );

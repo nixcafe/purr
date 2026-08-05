@@ -61,7 +61,7 @@ let
   nixpkgsInput = {
     outPath = ../integration/mocks/nixpkgs;
     __toString = self: self.outPath;
-    lib = {
+    lib = lib // {
       inherit nixosSystem;
     };
   };
@@ -152,8 +152,8 @@ in
           {
             inherit (special) host;
             namespace = special.namespace or null;
-            purrName = special.purr.name;
-            archFormat = special.purr.archFormat;
+            purrName = special.purr.meta.name;
+            archFormat = special.purr.meta.archFormat;
           };
         expected = {
           host = "myhost";
@@ -211,8 +211,8 @@ in
           {
             hasModules = cfg ? modules;
             pkgsSystem = cfg.pkgs.system;
-            user = cfg.extraSpecialArgs.purr.user;
-            host = cfg.extraSpecialArgs.purr.host;
+            user = cfg.extraSpecialArgs.purr.meta.user;
+            host = cfg.extraSpecialArgs.purr.meta.host;
           };
         expected = {
           hasModules = true;
@@ -251,7 +251,7 @@ in
               autoInject = false;
             };
           in
-          (result.nixosConfigurations.myhost.specialArgs.purr or { }).homes;
+          (result.nixosConfigurations.myhost.specialArgs.purr or { }).meta.homes;
         expected = [
           {
             user = "alice";
@@ -384,7 +384,7 @@ in
           (result.nixosConfigurations.myhost.specialArgs.lib or { }) ? "demo";
         expected = true;
       };
-      "home extraSpecialArgs carries purrLib" = {
+      "home extraSpecialArgs carries merged lib" = {
         expr =
           let
             result = mkFlake {
@@ -399,7 +399,7 @@ in
               autoInject = false;
             };
           in
-          (result.homeConfigurations."alice@myhost".extraSpecialArgs.purrLib or { }) ? "demo";
+          (result.homeConfigurations."alice@myhost".extraSpecialArgs.lib or { }) ? "demo";
         expected = true;
       };
     };

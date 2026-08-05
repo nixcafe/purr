@@ -178,7 +178,16 @@ homes/
 └── x86_64-linux/alice@server/default.nix  → homeConfigurations."alice@server"
 ```
 
-Hosts that declare `purr.images = [ ... ]` become **image-only recipes** (e.g. installer ISOs): they are excluded from `nixosConfigurations`/`darwinConfigurations` unless you also set `purr.deployable = true`. Their images are exposed as a top-level `images.<host>.<format>` output.
+Each host can carry **host meta** — a `meta.nix` next to its `default.nix`, or `hosts.<name>.meta` in the flake config. Declaring `images` in the meta makes the host an **image-only recipe** (e.g. installer ISOs): it is excluded from `nixosConfigurations`/`darwinConfigurations` unless you also set `deployable = true`. Its images are exposed as a top-level `images.<host>.<format>` output:
+
+```nix
+# systems/x86_64-linux/installer/meta.nix
+{
+  images = [ "iso" ];
+}
+```
+
+The merged meta (auto-generated keys + your custom keys) is injected into the host's modules as `purr.meta`.
 
 Homes named `<user>@<host>` auto-link to matching hosts. No extra wiring needed.
 
@@ -186,7 +195,7 @@ Homes named `<user>@<host>` auto-link to matching hosts. No extra wiring needed.
 # systems/x86_64-linux/server/default.nix
 { config, pkgs, lib, purr, ... }:
 {
-  networking.hostName = purr.name;  # "server"
+  networking.hostName = purr.meta.name;  # "server"
   # ...auto-injects home-manager config for alice@server automatically
 }
 ```

@@ -41,6 +41,7 @@ always go through `inputs.purr.lib.xxx`.
 lib.nix                  # rec attrset — the public API
 lib/
   attrs.nix              # optionalAttrs
+  args.nix               # purrArgs — shared module-arg merge (extraArgs + purr keys)
   systems.nix            # defaultSystems, eachSystem, eachDefaultSystem
   fs.nix                 # getDefaultNixFiles
   modules.nix            # module discovery (findModules, discoverModules, etc.)
@@ -60,25 +61,41 @@ The three new files below eliminate ~120 lines of duplication between
 | File | Purpose |
 |------|---------|
 | `lib/resolveDir.nix` | Dir resolution (`resolveDir`, `resolveDirs`) |
-| `lib/purrLib.nix` | Lib construction with fix recursion (`buildImportedPurrLib`, `mergePurrLib`) |
+| `lib/purrLib.nix` | Lib construction (`buildImportedPurrLib`, `mergePurrLib`, `buildMergedLib`) |
 | `lib/autoModules.nix` | Per-system auto-discovery (`autoModules`, `overlayModules`, `templateModules`) |
 
 ### Namespace Lib Merging
 
-`purrLib` is built at flake evaluation time from the standard `lib` (nixpkgs-lib)
-plus the flake's own namespace lib. Other input libs are NOT auto-merged—modules
-access them directly via `inputs.xxx.lib`.
-
-`purrLib` is passed via `specialArgs.lib` to `nixosSystem` and as
-`extraSpecialArgs.purrLib` to home-manager, providing `lib.${namespace}.xxx` to
-all modules.
+The merged lib is built at flake evaluation time via `buildMergedLib`. Its base
+is the flake's real `inputs.nixpkgs.lib` when available (falling back to purr's
+nixpkgs-lib / the host module-system lib otherwise), plus the flake's own
+namespace lib. Other input libs are NOT auto-merged — modules access them
+directly via `inputs.xxx.lib`.
 
 ```nix
-purrLib = lib                   # standard nixpkgs lib
-  // { ${namespace} = ownLib }  # flake's own namespace lib
+mergedLib = inputs.nixpkgs.lib            # base: the user's real nixpkgs
+  // { ${namespace} = ownLib }            # flake's own namespace lib
 ```
 
-Modules use `lib.${namespace}.xxx` as before. No `_module.args.lib` overrides.
+`mergedLib` is passed via `specialArgs.lib` to `nixosSystem`/`darwinSystem`.
+Standalone `homeConfigurations` get the merged lib under `lib` too —
+home-manager's `lib.hm` extension is re-added so its internals keep working:
+`homeLib = mergedLib // { hm = inputs.home-manager.lib.hm; }`. This replaces
+the old `purrLib` arg. No `_module.args.lib` overrides.
+
+**Bridged homes** (home-manager embedded in a system) do NOT get a `lib`
+override: home-manager evaluates them through `types.submoduleWith`, and
+overriding `lib` there breaks its internal module collection (`lib.hm` goes
+missing). They keep home-manager's own extended lib. The merged namespace lib
+is therefore exposed uniformly in BOTH standalone and bridged homes as
+`purr.lib` (== `homeLib`, merged lib + `hm`), so `purr.lib.<namespace>.xxx`
+works everywhere. Standalone homes additionally get it as `lib`.
+
+> TODO: this `purr.lib` workaround exists because of a home-manager upstream
+> regression — with `types.submoduleWith`, overriding `lib` via
+> `extraSpecialArgs` breaks its internal module collection (`lib.hm` goes
+> missing during option collection). Once fixed upstream, bridged homes can get
+> `lib = homeLib` directly and `purr.lib` can be dropped.
 
 ## Host Metadata (meta)
 
@@ -118,12 +135,27 @@ auto structure is guaranteed to win. Referencing an unknown host via
 Everything else in the merged meta is a free-form custom key exposed as
 `purr.meta.<key>` for user automation.
 
-### `purr.meta` injection
+### `purr` injection
 
 The merged meta (always containing the 8 auto keys + normalized `images` +
 derived `deployable`) is threaded to host modules as `purr.meta` in
 `nixosSystem`/`darwinSystem` `specialArgs` and the home-manager bridge
-`extraSpecialArgs`. Standalone `homeConfigurations` do not receive `purr.meta`.
+`extraSpecialArgs`. There are no top-level purr shortcuts — everything about
+the host itself lives under `purr.meta.*`.
+
+Every discovered host is registered — pure metadata, never config values — in a
+registry built by `buildSystemRegistry` and exposed as `purr.systemMetas`
+(`<hostName> -> <that host's merged meta>`, including self, across all
+arch-formats).
+
+- **System modules**: `purr = { meta, systemMetas }`.
+- **Home modules** (standalone and bridged): `purr = { meta, systemMeta, systemMetas, lib }`
+  where `meta` is `{ user, host, system, arch, archFormat, format, isDarwin,
+  isLinux }`, `systemMeta` is the merged meta of the system named by the home's
+  host (or `null` when no matching system exists), `systemMetas` is the same
+  registry, and `lib` is the merged namespace lib (see the bridged-home note
+  above). Home configs can be built independently of systems — an empty
+  registry yields `systemMetas = { }` and `systemMeta = null`.
 
 ## Testing
 

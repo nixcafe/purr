@@ -16,6 +16,8 @@ let
 
   baseLib = lib;
 
+  inherit (import ./args.nix) purrArgs;
+
   parseArchFormat =
     archFormat:
     let
@@ -76,6 +78,7 @@ let
   # the auto-generated value is kept.
   reservedMetaKeys = [
     "name"
+    "host"
     "arch"
     "archFormat"
     "format"
@@ -156,25 +159,29 @@ let
       inherit deployable images;
     };
 
-  buildSystemConfigs =
+  # Build the per-host metadata registry. Pure metadata only — it never
+  # touches system config `value`s, so it is cycle-free and safe to build
+  # independently from the configs themselves (and reusable by home configs).
+  #
+  # Returns:
+  #   - `hostMeta`: list of per-host records containing the system string,
+  #     output key, arch/format info, `deployable`/`images` and the merged
+  #     `meta`.
+  #   - `registry`: `name -> meta` for every discovered host, used as
+  #     `purr.systemMetas`.
+  buildSystemRegistry =
     {
       discoveredSystems,
       discoveredHomes,
       inputs,
       namespace ? null,
-      nixpkgsConfig ? { },
-      extraModules ? { },
       extraArgs ? { },
       hostsMeta ? { },
-      autoInject ? true,
       lib ? baseLib,
-      sharedOverlays ? [ ],
     }:
     let
       hm = inputs.home-manager or inputs.homeManager or null;
-      nd = inputs.nix-darwin or inputs.darwin or null;
       hasHomeManager = hm != null;
-      hasNixDarwin = nd != null;
 
       knownHosts = concatMap (archFormat: builtins.attrNames (discoveredSystems.${archFormat} or { })) (
         builtins.attrNames discoveredSystems
@@ -189,7 +196,7 @@ let
           throw "purr: hosts.<${name}>.meta refers to no discovered system; expected a systems/<arch>-<format>/${name}/default.nix"
       ) true (builtins.attrNames hostsMeta);
 
-      hostEntries = builtins.seq checkHostsMeta (
+      hostMeta = builtins.seq checkHostsMeta (
         concatMap (
           archFormat:
           let
@@ -203,9 +210,8 @@ let
               else
                 throw "unsupported format '${format}' in systems directory: purr only supports 'linux' and 'darwin'. Put your system configs under systems/<arch>-linux/ or systems/<arch>-darwin/.";
             systems = discoveredSystems.${archFormat};
-            outputKey = formatOutputKey format;
             isDarwin = lib.hasSuffix "darwin" archFormat;
-            extraSystemModules = extraModules.${if format == "darwin" then "darwin" else "nixos"} or [ ];
+            outputKey = formatOutputKey format;
           in
           builtins.map (
             systemName:
@@ -215,6 +221,7 @@ let
 
               autoMeta = {
                 name = systemName;
+                host = systemName;
                 inherit
                   arch
                   archFormat
@@ -243,173 +250,289 @@ let
               };
 
               inherit (metaInfo) deployable images meta;
-
-              purr = {
-                name = metaInfo.meta.name;
-                inherit
-                  arch
-                  archFormat
-                  format
-                  isDarwin
-                  ;
-                isLinux = !isDarwin;
-                inherit (metaInfo.meta) homes;
-                inherit meta;
-              };
-
-              hmModule =
-                if format == "darwin" then hm.darwinModules.home-manager else hm.nixosModules.home-manager;
-              nonRootHomes = builtins.filter (h: h.user != "root") matchingHomes;
-              homeModules =
-                if matchingHomes != [ ] then
-                  [
-                    {
-                      options.purr.users = lib.mkOption {
-                        type = lib.types.attrs;
-                        default = { };
-                        description = ''
-                          Per-user home-manager config forwarded via namespace bridge.
-                          Set `purr.users.<name>.homeConfig = { ... }` from any
-                          NixOS module to inject home-manager settings for that
-                          user.  Keys inside `homeConfig` map directly to
-                          home-manager option paths (home.packages, programs.*,
-                          services.*, etc.).
-                        '';
-                      };
-                    }
-                  ]
-                  ++ [
-                    hmModule
-                    (
-                      {
-                        config,
-                        lib,
-                        ...
-                      }:
-                      let
-                        nsUsers = config.purr.users or { };
-                      in
-                      {
-                        home-manager.useGlobalPkgs = mkDefault true;
-                        home-manager.useUserPackages = mkDefault true;
-                        home-manager.extraSpecialArgs = extraArgs // {
-                          inherit
-                            inputs
-                            namespace
-                            purr
-                            system
-                            ;
-                          purrLib = lib;
-                          host = systemName;
-                        };
-                        home-manager.users = builtins.listToAttrs (
-                          builtins.map (h: {
-                            name = h.user;
-                            value = {
-                              imports = extraModules.home or [ ] ++ [
-                                # Bridge: forward <ns>.users.<name>.homeConfig as
-                                # home-manager defaults.  Placed before h.path
-                                # so the home module takes priority.
-                                {
-                                  config = nsUsers.${h.user}.homeConfig or { };
-                                }
-                                # Expose the user as a module arg and auto-inject
-                                # username/home (mirrors the standalone
-                                # `homeConfigurations` path in `buildHomeConfigs`).
-                                {
-                                  _module.args.user = h.user;
-                                  home.username = mkDefault h.user;
-                                  home.homeDirectory = mkDefault (if isDarwin then "/Users/${h.user}" else "/home/${h.user}");
-                                }
-                                h.path
-                              ];
-                            };
-                          }) matchingHomes
-                        );
-                      }
-                    )
-                  ]
-                  ++ lib.optional (format == "linux" && nonRootHomes != [ ]) {
-                    users.users = builtins.listToAttrs (
-                      builtins.map (h: {
-                        name = h.user;
-                        value = {
-                          isNormalUser = mkDefault true;
-                        };
-                      }) nonRootHomes
-                    );
-                  }
-                else
-                  [ ];
-              systemModules = [
-                {
-                  nixpkgs.config = mkDefault nixpkgsConfig;
-                  nixpkgs.overlays = mkDefault sharedOverlays;
-                }
-                {
-                  options.nixpkgs.system = lib.mkOption {
-                    type = lib.types.str;
-                    internal = true;
-                    visible = false;
-                  };
-                }
-              ];
-              autoInjectModules = lib.optional autoInject {
-                networking.hostName = mkDefault systemName;
-              };
-
-              baseModules =
-                autoInjectModules ++ systemModules ++ extraSystemModules ++ [ sysModule ] ++ homeModules;
-              value =
-                if format == "linux" then
-                  inputs.nixpkgs.lib.nixosSystem {
-                    inherit system;
-                    modules = baseModules;
-                    specialArgs = extraArgs // {
-                      inherit
-                        inputs
-                        lib
-                        namespace
-                        purr
-                        system
-                        ;
-                      host = systemName;
-                    };
-                  }
-                else if format == "darwin" then
-                  if hasNixDarwin then
-                    nd.lib.darwinSystem {
-                      inherit system;
-                      modules = baseModules;
-                      specialArgs = extraArgs // {
-                        inherit
-                          inputs
-                          lib
-                          namespace
-                          purr
-                          system
-                          ;
-                        host = systemName;
-                      };
-                    }
-                  else
-                    throw "darwin system '${systemName}' requires nix-darwin input (add inputs.nix-darwin or inputs.darwin to your flake)"
-                else
-                  throw "unsupported format '${format}' for system '${systemName}'";
             in
             {
               inherit
+                arch
+                archFormat
                 deployable
+                format
                 images
+                isDarwin
+                matchingHomes
+                meta
                 outputKey
                 system
                 systemName
-                value
                 ;
             }
           ) (builtins.attrNames systems)
         ) (builtins.attrNames discoveredSystems)
       );
+
+      registry = listToAttrs (
+        builtins.map (e: {
+          name = e.systemName;
+          value = e.meta;
+        }) hostMeta
+      );
+    in
+    {
+      inherit hostMeta registry;
+    };
+
+  # The lib handed to home-manager modules. Starts from the merged lib and
+  # re-adds home-manager's own `hm` extension, since home-manager evaluates
+  # with its own extended lib as `lib`.
+  homeLibFor =
+    hm: lib':
+    lib'
+    // {
+      hm = hm.lib.hm or { };
+    };
+
+  buildSystemConfigs =
+    {
+      discoveredSystems,
+      discoveredHomes,
+      inputs,
+      namespace ? null,
+      nixpkgsConfig ? { },
+      extraModules ? { },
+      extraArgs ? { },
+      hostsMeta ? { },
+      autoInject ? true,
+      lib ? baseLib,
+      sharedOverlays ? [ ],
+    }:
+    let
+      hm = inputs.home-manager or inputs.homeManager or null;
+      nd = inputs.nix-darwin or inputs.darwin or null;
+      hasHomeManager = hm != null;
+      hasNixDarwin = nd != null;
+
+      registryInfo = buildSystemRegistry {
+        inherit
+          discoveredHomes
+          discoveredSystems
+          extraArgs
+          hostsMeta
+          inputs
+          lib
+          namespace
+          ;
+      };
+      inherit (registryInfo) hostMeta registry;
+
+      homeLib = homeLibFor hm lib;
+
+      # Second pass: build the actual system config values. Reads only metadata
+      # from `hostMeta` plus the registry for `purr.systemMetas` — no cycles.
+      hostEntries = builtins.map (
+        {
+          arch,
+          archFormat,
+          deployable,
+          format,
+          images,
+          isDarwin,
+          matchingHomes,
+          meta,
+          outputKey,
+          system,
+          systemName,
+          ...
+        }:
+        let
+          sysModule = discoveredSystems.${archFormat}.${systemName};
+
+          purr = {
+            inherit meta;
+            systemMetas = registry;
+          };
+
+          hmModule =
+            if format == "darwin" then hm.darwinModules.home-manager else hm.nixosModules.home-manager;
+          nonRootHomes = builtins.filter (h: h.user != "root") matchingHomes;
+          homeModules =
+            if matchingHomes != [ ] then
+              [
+                {
+                  options.purr.users = lib.mkOption {
+                    type = lib.types.attrs;
+                    default = { };
+                    description = ''
+                      Per-user home-manager config forwarded via namespace bridge.
+                      Set `purr.users.<name>.homeConfig = { ... }` from any
+                      NixOS module to inject home-manager settings for that
+                      user.  Keys inside `homeConfig` map directly to
+                      home-manager option paths (home.packages, programs.*,
+                      services.*, etc.).
+                    '';
+                  };
+                }
+              ]
+              ++ [
+                hmModule
+                (
+                  {
+                    config,
+                    lib,
+                    ...
+                  }:
+                  let
+                    nsUsers = config.purr.users or { };
+                  in
+                  {
+                    home-manager.useGlobalPkgs = mkDefault true;
+                    home-manager.useUserPackages = mkDefault true;
+                    # NOTE: do NOT set `lib = homeLib` here. Home-manager's
+                    # NixOS module evaluates bridged homes through
+                    # `types.submoduleWith`; overriding `lib` via
+                    # extraSpecialArgs breaks its internal module evaluation
+                    # (e.g. `lib.hm` goes missing during option collection).
+                    # Bridged homes keep home-manager's own extended lib; the
+                    # merged namespace lib is exposed via `purr.lib` instead.
+                    #
+                    # TODO: home-manager upstream regression — once
+                    # submoduleWith + `lib` override stops breaking internal
+                    # module collection, bridged homes can get `lib =
+                    # homeLib` directly and `purr.lib` can be dropped.
+                    home-manager.extraSpecialArgs = extraArgs // {
+                      inherit
+                        inputs
+                        namespace
+                        system
+                        ;
+                      host = systemName;
+                      # Bridged homes get the host's purr, plus a
+                      # `systemMeta` back-link (so the same home module file
+                      # works both standalone and linked to a system) and the
+                      # merged namespace lib as `purr.lib`.
+                      purr = purr // {
+                        systemMeta = purr.meta;
+                        lib = homeLib;
+                      };
+                    };
+                    home-manager.users = builtins.listToAttrs (
+                      builtins.map (h: {
+                        name = h.user;
+                        value = {
+                          imports = extraModules.home or [ ] ++ [
+                            # Bridge: forward <ns>.users.<name>.homeConfig as
+                            # home-manager defaults.  Placed before h.path
+                            # so the home module takes priority.
+                            {
+                              config = nsUsers.${h.user}.homeConfig or { };
+                            }
+                            # Expose the user as a module arg and auto-inject
+                            # username/home (mirrors the standalone
+                            # `homeConfigurations` path in `buildHomeConfigs`).
+                            {
+                              _module.args.user = h.user;
+                              home.username = mkDefault h.user;
+                              home.homeDirectory = mkDefault (if isDarwin then "/Users/${h.user}" else "/home/${h.user}");
+                            }
+                            h.path
+                          ];
+                        };
+                      }) matchingHomes
+                    );
+                  }
+                )
+              ]
+              ++ lib.optional (format == "linux" && nonRootHomes != [ ]) {
+                users.users = builtins.listToAttrs (
+                  builtins.map (h: {
+                    name = h.user;
+                    value = {
+                      isNormalUser = mkDefault true;
+                    };
+                  }) nonRootHomes
+                );
+              }
+            else
+              [ ];
+          systemModules = [
+            {
+              nixpkgs.config = mkDefault nixpkgsConfig;
+              nixpkgs.overlays = mkDefault sharedOverlays;
+            }
+            {
+              options.nixpkgs.system = lib.mkOption {
+                type = lib.types.str;
+                internal = true;
+                visible = false;
+              };
+            }
+          ];
+          autoInjectModules = lib.optional autoInject {
+            networking.hostName = mkDefault systemName;
+          };
+          extraSystemModules = extraModules.${if format == "darwin" then "darwin" else "nixos"} or [ ];
+
+          baseModules =
+            autoInjectModules ++ systemModules ++ extraSystemModules ++ [ sysModule ] ++ homeModules;
+          value =
+            if format == "linux" then
+              inputs.nixpkgs.lib.nixosSystem {
+                inherit system;
+                modules = baseModules;
+                specialArgs =
+                  (purrArgs {
+                    inherit
+                      extraArgs
+                      inputs
+                      namespace
+                      ;
+                    lib = lib;
+                  })
+                  // {
+                    inherit
+                      purr
+                      system
+                      ;
+                    host = systemName;
+                  };
+              }
+            else if format == "darwin" then
+              if hasNixDarwin then
+                nd.lib.darwinSystem {
+                  inherit system;
+                  modules = baseModules;
+                  specialArgs =
+                    (purrArgs {
+                      inherit
+                        extraArgs
+                        inputs
+                        namespace
+                        ;
+                      lib = lib;
+                    })
+                    // {
+                      inherit
+                        purr
+                        system
+                        ;
+                      host = systemName;
+                    };
+                }
+              else
+                throw "darwin system '${systemName}' requires nix-darwin input (add inputs.nix-darwin or inputs.darwin to your flake)"
+            else
+              throw "unsupported format '${format}' for system '${systemName}'";
+        in
+        {
+          inherit
+            deployable
+            images
+            outputKey
+            system
+            systemName
+            value
+            ;
+        }
+      ) hostMeta;
 
       deployableEntries = builtins.filter (e: e.deployable) hostEntries;
 
@@ -454,11 +577,13 @@ let
   buildHomeConfigs =
     {
       discoveredHomes,
+      discoveredSystems ? { },
       inputs,
       namespace ? null,
       nixpkgsConfig ? { },
       extraModules ? { },
       extraArgs ? { },
+      hostsMeta ? { },
       autoInject ? true,
       lib ? baseLib,
       sharedOverlays ? [ ],
@@ -467,6 +592,21 @@ let
       hm = inputs.home-manager or inputs.homeManager or null;
     in
     if hm != null then
+      let
+        registryInfo = buildSystemRegistry {
+          inherit
+            discoveredHomes
+            discoveredSystems
+            extraArgs
+            hostsMeta
+            inputs
+            lib
+            namespace
+            ;
+        };
+        inherit (registryInfo) registry;
+        homeLib = homeLibFor hm lib;
+      in
       builtins.listToAttrs (
         concatMap (
           archFormat:
@@ -498,30 +638,46 @@ let
                     if isDarwin then "/Users/${hostParsed.user}" else "/home/${hostParsed.user}"
                   );
                 };
-              in
-              hm.lib.homeManagerConfiguration {
-                inherit pkgs;
-                modules =
-                  autoInjectModules ++ extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
-                extraSpecialArgs = extraArgs // {
-                  inherit
-                    inputs
-                    namespace
-                    system
-                    ;
-                  inherit (hostParsed) host user;
-                  purrLib = lib;
-                  purr = {
+                purr = {
+                  meta = {
                     inherit (hostParsed) user host;
                     inherit
                       arch
                       archFormat
                       format
                       isDarwin
+                      system
                       ;
                     isLinux = !isDarwin;
                   };
+                  systemMeta = registry.${hostParsed.host} or null;
+                  systemMetas = registry;
+                  # The merged namespace lib, uniformly available in both
+                  # standalone and bridged homes (bridged homes can't get it
+                  # as `lib` — see the TODO above).
+                  lib = homeLib;
                 };
+              in
+              hm.lib.homeManagerConfiguration {
+                inherit pkgs;
+                modules =
+                  autoInjectModules ++ extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
+                extraSpecialArgs =
+                  (purrArgs {
+                    inherit
+                      extraArgs
+                      inputs
+                      namespace
+                      ;
+                    lib = homeLib;
+                  })
+                  // {
+                    inherit
+                      purr
+                      system
+                      ;
+                    inherit (hostParsed) host user;
+                  };
               };
           }) (builtins.attrNames discoveredHomes.${archFormat} or { })
         ) (builtins.attrNames discoveredHomes)
@@ -559,6 +715,7 @@ in
   inherit
     buildHomeConfigs
     buildSystemConfigs
+    buildSystemRegistry
     findMatchingHomes
     formatOutputKey
     imagesFromConfigs
