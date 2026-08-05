@@ -349,19 +349,33 @@ in
               discoveredHomes."x86_64-linux"."alice@myhost" = homeFixture;
               inputs.home-manager = homeManagerInput;
             };
+            purr = result."alice@myhost".extraSpecialArgs.purr;
           in
-          result."alice@myhost".extraSpecialArgs.purr;
+          {
+            fields = builtins.removeAttrs purr [ "lib" ];
+            hasLib = purr ? lib;
+            libHasAttrNames = purr.lib ? attrNames;
+          };
         expected = {
-          arch = "x86_64";
-          archFormat = "x86_64-linux";
-          format = "linux";
-          host = "myhost";
-          isDarwin = false;
-          isLinux = true;
-          user = "alice";
+          fields = {
+            meta = {
+              arch = "x86_64";
+              archFormat = "x86_64-linux";
+              format = "linux";
+              host = "myhost";
+              isDarwin = false;
+              isLinux = true;
+              system = "x86_64-linux";
+              user = "alice";
+            };
+            systemMeta = null;
+            systemMetas = { };
+          };
+          hasLib = true;
+          libHasAttrNames = true;
         };
       };
-      "carries namespace system inputs and purrLib in extraSpecialArgs" = {
+      "carries namespace system inputs and merged lib in extraSpecialArgs" = {
         expr =
           let
             result = buildHomeConfigs {
@@ -375,13 +389,17 @@ in
             inherit (args) namespace;
             inherit (args) system;
             hasInputs = args ? inputs;
-            purrLibMarker = args.purrLib ? attrNames;
+            hasLib = args ? lib;
+            libMarker = args.lib ? attrNames;
+            noPurrLib = !(args ? purrLib);
           };
         expected = {
           namespace = "my-ns";
           system = "x86_64-linux";
           hasInputs = true;
-          purrLibMarker = true;
+          hasLib = true;
+          libMarker = true;
+          noPurrLib = true;
         };
       };
       "auto-injects home.username and homeDirectory on linux" = {
@@ -472,11 +490,79 @@ in
           in
           {
             hasAlice = result ? "alice@myhost";
-            user = result."alice@myhost".extraSpecialArgs.purr.user;
+            user = result."alice@myhost".extraSpecialArgs.purr.meta.user;
           };
         expected = {
           hasAlice = true;
           user = "alice";
+        };
+      };
+      "purr.systemMeta back-links to the matching system meta" = {
+        expr =
+          let
+            result = buildHomeConfigs {
+              discoveredHomes."x86_64-linux"."alice@myhost" = homeFixture;
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              inputs.home-manager = homeManagerInput;
+            };
+          in
+          result."alice@myhost".extraSpecialArgs.purr.systemMeta;
+        expected = {
+          arch = "x86_64";
+          archFormat = "x86_64-linux";
+          deployable = true;
+          format = "linux";
+          homes = [
+            {
+              user = "alice";
+              host = "myhost";
+            }
+          ];
+          images = [ ];
+          isDarwin = false;
+          isLinux = true;
+          name = "myhost";
+          host = "myhost";
+          system = "x86_64-linux";
+        };
+      };
+      "purr.systemMeta is null without a matching system" = {
+        expr =
+          let
+            result = buildHomeConfigs {
+              discoveredHomes."x86_64-linux"."alice@somewhere" = homeFixture;
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              inputs.home-manager = homeManagerInput;
+            };
+          in
+          result."alice@somewhere".extraSpecialArgs.purr.systemMeta;
+        expected = null;
+      };
+      "purr.systemMetas carries the registry into homes" = {
+        expr =
+          let
+            result = buildHomeConfigs {
+              discoveredHomes."x86_64-linux"."alice@myhost" = homeFixture;
+              discoveredSystems."x86_64-linux" = {
+                myhost = sysLinuxFixture;
+                other = sysLinuxFixture;
+              };
+              inputs.home-manager = homeManagerInput;
+            };
+            purr = result."alice@myhost".extraSpecialArgs.purr;
+          in
+          {
+            keys = builtins.attrNames purr.systemMetas;
+            self = purr.systemMetas.myhost.name;
+            other = purr.systemMetas.other.name;
+          };
+        expected = {
+          keys = [
+            "myhost"
+            "other"
+          ];
+          self = "myhost";
+          other = "other";
         };
       };
     };
@@ -564,13 +650,6 @@ in
           in
           result.nixosConfigurations.myhost.specialArgs.purr;
         expected = {
-          arch = "x86_64";
-          archFormat = "x86_64-linux";
-          format = "linux";
-          homes = [ ];
-          isDarwin = false;
-          isLinux = true;
-          name = "myhost";
           meta = {
             arch = "x86_64";
             archFormat = "x86_64-linux";
@@ -581,7 +660,23 @@ in
             isDarwin = false;
             isLinux = true;
             name = "myhost";
+            host = "myhost";
             system = "x86_64-linux";
+          };
+          systemMetas = {
+            myhost = {
+              arch = "x86_64";
+              archFormat = "x86_64-linux";
+              deployable = true;
+              format = "linux";
+              homes = [ ];
+              images = [ ];
+              isDarwin = false;
+              isLinux = true;
+              name = "myhost";
+              host = "myhost";
+              system = "x86_64-linux";
+            };
           };
         };
       };
@@ -596,13 +691,6 @@ in
           in
           result.darwinConfigurations.mac1.specialArgs.purr;
         expected = {
-          arch = "aarch64";
-          archFormat = "aarch64-darwin";
-          format = "darwin";
-          homes = [ ];
-          isDarwin = true;
-          isLinux = false;
-          name = "mac1";
           meta = {
             arch = "aarch64";
             archFormat = "aarch64-darwin";
@@ -613,8 +701,59 @@ in
             isDarwin = true;
             isLinux = false;
             name = "mac1";
+            host = "mac1";
             system = "aarch64-darwin";
           };
+          systemMetas = {
+            mac1 = {
+              arch = "aarch64";
+              archFormat = "aarch64-darwin";
+              deployable = true;
+              format = "darwin";
+              homes = [ ];
+              images = [ ];
+              isDarwin = true;
+              isLinux = false;
+              name = "mac1";
+              host = "mac1";
+              system = "aarch64-darwin";
+            };
+          };
+        };
+      };
+      "purr.systemMetas registers all discovered hosts and includes self" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems = {
+                "x86_64-linux" = {
+                  myhost = sysLinuxFixture;
+                  other = sysLinuxFixture;
+                };
+                "aarch64-darwin".mac1 = sysDarwinFixture;
+              };
+              discoveredHomes = { };
+              inputs = nixosInputs;
+            };
+            registry = result.nixosConfigurations.myhost.specialArgs.purr.systemMetas;
+          in
+          {
+            keys = builtins.attrNames registry;
+            self = registry.myhost.name;
+            other = registry.other.name;
+            darwin = registry.mac1.name;
+            hasNoValue = !(registry ? myhost.value) && !(registry ? myhost.cfg);
+          };
+        expected = {
+          keys = [
+            "mac1"
+            "myhost"
+            "other"
+          ];
+          self = "myhost";
+          other = "other";
+          darwin = "mac1";
+          hasNoValue = true;
         };
       };
       "passes system host namespace and inputs to specialArgs" = {
@@ -891,7 +1030,7 @@ in
               inputs = nixosWithHmInputs;
             };
           in
-          sortByUser result.nixosConfigurations.myhost.specialArgs.purr.homes;
+          sortByUser result.nixosConfigurations.myhost.specialArgs.purr.meta.homes;
         expected = [
           {
             host = "myhost";
@@ -1216,7 +1355,7 @@ in
           {
             inherit (spec) namespace;
             inherit (spec) host;
-            purrName = spec.purr.name;
+            purrName = spec.purr.meta.name;
           };
         expected = {
           namespace = "my-ns";
@@ -1249,8 +1388,8 @@ in
           in
           {
             inherit (args) namespace;
-            user = args.purr.user;
-            host = args.purr.host;
+            user = args.purr.meta.user;
+            host = args.purr.meta.host;
           };
         expected = {
           namespace = "my-ns";

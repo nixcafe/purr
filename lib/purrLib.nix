@@ -68,7 +68,23 @@ let
       if namespace != null then lib // { ${namespace} = importedPurrLib; } else lib // importedPurrLib
     else
       lib;
+
+  # Resolve the merged lib handed to modules. The base is the user's real
+  # `inputs.nixpkgs.lib` when available (keeping everything on one nixpkgs,
+  # which pairs naturally with home-manager), otherwise it falls back to the
+  # caller-provided lib. Namespace/libDir are then merged on top.
+  buildMergedLib =
+    {
+      inputs,
+      lib,
+      importedPurrLib,
+      namespace,
+    }:
+    let
+      base = if inputs ? nixpkgs then inputs.nixpkgs.lib else lib;
+    in
+    mergePurrLib base importedPurrLib namespace;
 in
 {
-  inherit buildImportedPurrLib mergePurrLib;
+  inherit buildImportedPurrLib buildMergedLib mergePurrLib;
 }

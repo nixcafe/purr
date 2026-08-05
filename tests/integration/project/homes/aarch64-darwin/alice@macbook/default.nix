@@ -3,7 +3,6 @@
   lib,
   namespace,
   purr,
-  purrLib,
   host,
   user,
   system,
@@ -11,10 +10,12 @@
 }:
 assert lib != null;
 assert namespace == "demo";
-assert purr != null && purr.user == "alice" && purr.host == "macbook";
-assert purr.arch == "aarch64" && purr.format == "darwin";
-assert purr.isDarwin == true && purr.isLinux == false;
-assert purrLib != null && (purrLib ? "demo");
+assert purr != null && purr.meta.user == "alice" && purr.meta.host == "macbook";
+assert purr.meta.arch == "aarch64" && purr.meta.format == "darwin";
+assert purr.meta.isDarwin == true && purr.meta.isLinux == false;
+assert purr.systemMeta != null && purr.systemMeta.name == "macbook";
+assert purr.systemMetas.server.name == "server";
+assert purr.lib != null && (purr.lib ? "demo");
 assert host == "macbook";
 assert user == "alice";
 {

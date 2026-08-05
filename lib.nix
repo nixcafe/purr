@@ -82,6 +82,7 @@ rec {
   inherit (confs)
     buildHomeConfigs
     buildSystemConfigs
+    buildSystemRegistry
     findMatchingHomes
     formatOutputKey
     imagesFromConfigs
@@ -93,7 +94,7 @@ rec {
   inherit (resolver) resolveDir resolveDirs;
 
   # ---- library construction ----
-  inherit (libBuilder) buildImportedPurrLib mergePurrLib;
+  inherit (libBuilder) buildImportedPurrLib buildMergedLib mergePurrLib;
 
   # ---- auto-discovery ----
   inherit (autoMods)

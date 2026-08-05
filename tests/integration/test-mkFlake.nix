@@ -124,12 +124,12 @@ in
       };
       "server specialArgs purr metadata" = {
         expr = {
-          name = server.specialArgs.purr.name;
-          arch = server.specialArgs.purr.arch;
-          format = server.specialArgs.purr.format;
-          archFormat = server.specialArgs.purr.archFormat;
-          isLinux = server.specialArgs.purr.isLinux;
-          isDarwin = server.specialArgs.purr.isDarwin;
+          name = server.specialArgs.purr.meta.name;
+          arch = server.specialArgs.purr.meta.arch;
+          format = server.specialArgs.purr.meta.format;
+          archFormat = server.specialArgs.purr.meta.archFormat;
+          isLinux = server.specialArgs.purr.meta.isLinux;
+          isDarwin = server.specialArgs.purr.meta.isDarwin;
         };
         expected = {
           name = "server";
@@ -141,7 +141,7 @@ in
         };
       };
       "server purr.homes lists linked homes" = {
-        expr = sort (a: b: a.user < b.user) server.specialArgs.purr.homes;
+        expr = sort (a: b: a.user < b.user) server.specialArgs.purr.meta.homes;
         expected = [
           {
             user = "alice";
@@ -153,13 +153,33 @@ in
           }
         ];
       };
+      "server purr.systemMetas registers every host including self" = {
+        expr = {
+          keys = sort (a: b: a < b) (attrNames server.specialArgs.purr.systemMetas or { });
+          self = server.specialArgs.purr.systemMetas.server.name;
+          macbook = server.specialArgs.purr.systemMetas.macbook.name;
+          iso = server.specialArgs.purr.systemMetas.iso.name;
+          isoImages = server.specialArgs.purr.systemMetas.iso.images;
+        };
+        expected = {
+          keys = [
+            "iso"
+            "macbook"
+            "server"
+          ];
+          self = "server";
+          macbook = "macbook";
+          iso = "iso";
+          isoImages = [ "iso" ];
+        };
+      };
       "darwin specialArgs purr metadata" = {
         expr = {
-          name = macbook.specialArgs.purr.name;
-          arch = macbook.specialArgs.purr.arch;
-          format = macbook.specialArgs.purr.format;
-          isDarwin = macbook.specialArgs.purr.isDarwin;
-          isLinux = macbook.specialArgs.purr.isLinux;
+          name = macbook.specialArgs.purr.meta.name;
+          arch = macbook.specialArgs.purr.meta.arch;
+          format = macbook.specialArgs.purr.meta.format;
+          isDarwin = macbook.specialArgs.purr.meta.isDarwin;
+          isLinux = macbook.specialArgs.purr.meta.isLinux;
         };
         expected = {
           name = "macbook";
@@ -167,6 +187,16 @@ in
           format = "darwin";
           isDarwin = true;
           isLinux = false;
+        };
+      };
+      "darwin purr.systemMetas includes linux hosts" = {
+        expr = {
+          server = macbook.specialArgs.purr.systemMetas.server.name;
+          iso = macbook.specialArgs.purr.systemMetas.iso.name;
+        };
+        expected = {
+          server = "server";
+          iso = "iso";
         };
       };
     };
@@ -278,18 +308,26 @@ in
         expr = attrNames (server.config.users.users or { });
         expected = [ "alice" ];
       };
-      "home-manager extraSpecialArgs carry purr metadata" = {
+      "home-manager extraSpecialArgs carry purr metadata and merged lib" = {
         expr = {
           namespace = server.config."home-manager".extraSpecialArgs.namespace;
           host = server.config."home-manager".extraSpecialArgs.host;
-          purrName = server.config."home-manager".extraSpecialArgs.purr.name;
-          hasPurrLib = (server.config."home-manager".extraSpecialArgs.purrLib or { }) ? "demo";
+          purrName = server.config."home-manager".extraSpecialArgs.purr.meta.name;
+          # The bridge must NOT override home-manager's own `lib` — that breaks
+          # home-manager's internal submodule evaluation (TODO: upstream home-manager
+          # regression). Bridged homes keep home-manager's extended lib; the merged
+          # namespace lib is exposed uniformly as `purr.lib`.
+          noLibOverride = !(server.config."home-manager".extraSpecialArgs ? lib);
+          hasPurrLib = (server.config."home-manager".extraSpecialArgs.purr.lib or { }) ? "demo";
+          systemMetaName = server.config."home-manager".extraSpecialArgs.purr.systemMeta.name;
         };
         expected = {
           namespace = "demo";
           host = "server";
           purrName = "server";
+          noLibOverride = true;
           hasPurrLib = true;
+          systemMetaName = "server";
         };
       };
     };
@@ -324,19 +362,51 @@ in
       };
       "linux home extraSpecialArgs carry purr metadata" = {
         expr = {
-          user = result.homeConfigurations."alice@server".extraSpecialArgs.purr.user;
-          host = result.homeConfigurations."alice@server".extraSpecialArgs.purr.host;
-          arch = result.homeConfigurations."alice@server".extraSpecialArgs.purr.arch;
+          user = result.homeConfigurations."alice@server".extraSpecialArgs.purr.meta.user;
+          host = result.homeConfigurations."alice@server".extraSpecialArgs.purr.meta.host;
+          arch = result.homeConfigurations."alice@server".extraSpecialArgs.purr.meta.arch;
           namespace = result.homeConfigurations."alice@server".extraSpecialArgs.namespace;
-          hasPurrLib = (result.homeConfigurations."alice@server".extraSpecialArgs.purrLib or { }) ? "demo";
+          hasLib = (result.homeConfigurations."alice@server".extraSpecialArgs.lib or { }) ? "demo";
+          hasPurrLib = (result.homeConfigurations."alice@server".extraSpecialArgs.purr.lib or { }) ? "demo";
         };
         expected = {
           user = "alice";
           host = "server";
           arch = "x86_64";
           namespace = "demo";
+          hasLib = true;
           hasPurrLib = true;
         };
+      };
+      "linux home purr.systemMeta back-links to its system meta" = {
+        expr = {
+          name = result.homeConfigurations."alice@server".extraSpecialArgs.purr.systemMeta.name;
+          tier = result.homeConfigurations."alice@server".extraSpecialArgs.purr.systemMeta.tier;
+          deployable = result.homeConfigurations."alice@server".extraSpecialArgs.purr.systemMeta.deployable;
+        };
+        expected = {
+          name = "server";
+          tier = "prod";
+          deployable = true;
+        };
+      };
+      "linux home purr.systemMetas registers all hosts" = {
+        expr = sort (a: b: a < b) (
+          attrNames (result.homeConfigurations."alice@server".extraSpecialArgs.purr.systemMetas or { })
+        );
+        expected = [
+          "iso"
+          "macbook"
+          "server"
+        ];
+      };
+      "darwin home purr.systemMeta back-links to macbook" = {
+        expr = result.homeConfigurations."alice@macbook".extraSpecialArgs.purr.systemMeta.name;
+        expected = "macbook";
+      };
+      "standalone home has no purrLib arg" = {
+        expr = result.homeConfigurations."alice@server".extraSpecialArgs ? purrLib;
+        expected = false;
       };
       "home packages evaluated" = {
         expr = result.homeConfigurations."alice@server".config.home.packages;
