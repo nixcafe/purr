@@ -40,7 +40,11 @@ Homes named `<user>@<host>` are automatically injected into matching hosts. When
 }
 ```
 
-The home is auto-configured via `home-manager.users.alice` in the host's NixOS config. No additional wiring needed.
+The home is auto-configured via `home-manager.users.alice` in the host's NixOS config. No additional wiring needed. For every linked home, purr also:
+
+* sets `home-manager.useGlobalPkgs` and `home-manager.useUserPackages` to `mkDefault true`
+* auto-creates `users.users.<name>` (`isNormalUser = mkDefault true`) for non-root users on Linux hosts
+* injects the username as a module argument (`_module.args.user = "alice"`) and default `home.username` / `home.homeDirectory`
 
 ## Building Images (ISO, qemu, raw, cloud, …)
 
@@ -65,12 +69,12 @@ nix build .#nixosConfigurations.server.config.system.build.images.amazon
 
 ### Short `images.<host>.<format>` output
 
-Declare which formats to build for a host with the `purr.images` option, and purr exposes a top-level `images.<host>.<format>` output. This works regardless of whether [hydraJobs](/hydrajobs) is enabled:
+Declare which formats to build for a host in its [host meta](/meta) (a `meta.nix` file or `hosts.<name>.meta` config), and purr exposes a top-level `images.<host>.<format>` output. This works regardless of whether [hydraJobs](/hydrajobs) is enabled:
 
 ```nix
-# systems/x86_64-linux/server/default.nix
+# systems/x86_64-linux/server/meta.nix
 {
-  purr.images = [ "iso" "qemu" ];
+  images = [ "iso" "qemu" ];
 }
 ```
 
@@ -84,28 +88,28 @@ Available formats are the same as below. When hydraJobs is enabled, these same d
 
 ### Image-only hosts (not deployable)
 
-A host that sets `purr.images` is treated as an **image-only recipe** by default. It is excluded from `nixosConfigurations`/`darwinConfigurations` (and from the `hydraJobs` config groups), so its `system.build.toplevel` is never evaluated and it cannot be deployed with `nixos-rebuild`. Use this for hosts like installer ISOs that have no root file system and exist only to build images:
+A host that declares `images` in its meta is treated as an **image-only recipe** by default. It is excluded from `nixosConfigurations`/`darwinConfigurations` (and from the `hydraJobs` config groups), so its `system.build.toplevel` is never evaluated and it cannot be deployed with `nixos-rebuild`. Use this for hosts like installer ISOs that have no root file system and exist only to build images:
 
 ```nix
-# systems/x86_64-linux/installer/default.nix
+# systems/x86_64-linux/installer/meta.nix
 {
-  purr.images = [ "iso" ];
+  images = [ "iso" ];
 }
 ```
 
-`installer` will **not** show up in `nixosConfigurations`, but `nix build .#images.installer.iso` still works. The image declarations are read cheaply — nixpkgs and home-manager are never evaluated just to decide how a host is exposed, and the image derivations stay lazy until you actually build them.
+`installer` will **not** show up in `nixosConfigurations`, but `nix build .#images.installer.iso` still works. The image declarations are read cheaply from `meta.nix` — nixpkgs and home-manager are never evaluated just to decide how a host is exposed, and the image derivations stay lazy until you actually build them.
 
-To keep a host deployable **and** build images from it, set `purr.deployable = true`:
+To keep a host deployable **and** build images from it, set `deployable = true`:
 
 ```nix
-# systems/x86_64-linux/server/default.nix
+# systems/x86_64-linux/server/meta.nix
 {
-  purr.images = [ "iso" "qemu" ];
-  purr.deployable = true; # stays in nixosConfigurations AND builds images
+  images = [ "iso" "qemu" ];
+  deployable = true; # stays in nixosConfigurations AND builds images
 }
 ```
 
-> **Note:** `purr.deployable` is a system option. A host is deployable by default when `purr.images` is empty; setting `purr.images` without `purr.deployable = true` makes it image-only.
+> **Note:** `deployable` is a host meta key, not a system option. A host is deployable by default when `images` is empty; declaring `images` without `deployable = true` makes it image-only.
 
 ### Available image formats
 
@@ -137,9 +141,9 @@ systems/x86_64-linux/
 ```
 
 ```nix
-# systems/x86_64-linux/installer/default.nix
+# systems/x86_64-linux/installer/meta.nix
 {
-  purr.images = [ "iso" ];
+  images = [ "iso" ];
 }
 ```
 
@@ -157,7 +161,7 @@ On any host with linked homes (when home-manager is available as an input), purr
 # systems/x86_64-linux/server/default.nix
 { config, pkgs, lib, purr, ... }:
 {
-  networking.hostName = purr.name;
+  networking.hostName = purr.meta.name;
 
   purr.users.alice.homeConfig = {
     home.packages = [ pkgs.cowsay ];
@@ -182,27 +186,19 @@ Each system and home module receives a `purr` attrset with metadata about the cu
 
 | Field | Example | Description |
 |---|---|---|
-| `name` | `"server"` | System/host name |
-| `arch` | `"x86_64"` | Architecture |
-| `format` | `"linux"` | linux or darwin |
-| `archFormat` | `"x86_64-linux"` | Full arch-format string |
-| `isDarwin` | `false` | Whether the target is Darwin |
-| `isLinux` | `true` | Whether the target is Linux |
-| `homes` | `[{user="alice";host="server";}]` | Linked home configs |
+| `meta` | see [Host Meta](/meta) | Merged host metadata (contains `name`, `arch`, `format`, `isDarwin`, `isLinux`, `system`, `homes`, `images`, `deployable`, plus custom keys) |
+| `systemMetas` | `{ server = {...}; workstation = {...}; }` | Registry of **every** discovered host's merged meta, keyed by host name (including self) |
 
 ### Home Modules (`extraSpecialArgs.purr`)
 
 | Field | Example | Description |
 |---|---|---|
-| `user` | `"alice"` | Username |
-| `host` | `"server"` | Host name |
-| `arch` | `"x86_64"` | Architecture |
-| `format` | `"linux"` | linux or darwin |
-| `archFormat` | `"x86_64-linux"` | Full arch-format string |
-| `isDarwin` | `false` | Whether the target is Darwin |
-| `isLinux` | `true` | Whether the target is Linux |
+| `meta` | `{ user = "alice"; host = "server"; ... }` | Home metadata: `user`, `host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system` |
+| `systemMeta` | see [Host Meta](/meta) | Merged meta of the system named by the home's host, or `null` when no matching system exists |
+| `systemMetas` | `{ server = {...}; ... }` | The same global host registry as systems receive |
+| `lib` | `{ hm = {...}; ... }` | The merged namespace lib (with home-manager's `lib.hm` extension), also available as `lib` for standalone homes |
 
-> **Note:** The fields above apply to *standalone* homes (discovered from `homes/` but not linked to any system). When a home is auto-linked to a system (via `@host` matching), the home module receives the *system's* `purr` metadata instead.
+> **Note:** `purr.lib` is the merged namespace lib, available uniformly in **both** standalone and bridged homes — use `purr.lib.<namespace>.xxx` from any home module. Standalone homes additionally receive the same lib under `lib`.
 
 ### Usage Example
 
@@ -210,10 +206,21 @@ Each system and home module receives a `purr` attrset with metadata about the cu
 # systems/x86_64-linux/server/default.nix
 { config, pkgs, lib, purr, ... }:
 {
-  networking.hostName = purr.name;         # "server"
-  nixpkgs.hostPlatform = purr.archFormat;  # "x86_64-linux"
+  networking.hostName = purr.meta.name;       # "server"
+  nixpkgs.hostPlatform = purr.meta.archFormat;  # "x86_64-linux"
+  services.foo.enable = purr.meta.tier == "prod";  # custom meta key
+  services.bar.enable = purr.systemMetas.workstation.tier == "dev";
 }
 ```
+
+````nix
+# homes/x86_64-linux/alice@server/default.nix
+{ pkgs, lib, purr, ... }:
+{
+  home.packages = [ pkgs.neovim ];
+  # systemMeta is the meta of "server" (or null when not linked to a system)
+  programs.git.enable = purr.systemMeta != null;
+}
 
 ## Auto-Injection
 
@@ -221,7 +228,7 @@ By default (`autoInject = true`), purr auto-injects basic configuration using `l
 
 | Context | Injected config |
 |---|---|
-| System config | `networking.hostName = <purr.name>` |
+| System config | `networking.hostName = <purr.meta.name>` |
 | Home config (linux) | `home.username`, `home.homeDirectory = "/home/<user>"` |
 | Home config (darwin) | `home.username`, `home.homeDirectory = "/Users/<user>"` |
 
@@ -236,7 +243,7 @@ inputs.purr.lib.mkFlake {
   systemsDir = "systems";   # or "hosts", or null to auto-detect
   homesDir = "homes";
 }
-```
+````
 
 ## Usage in flake-parts
 

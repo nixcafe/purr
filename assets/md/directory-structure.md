@@ -62,7 +62,9 @@ src/
 │
 ├── systems/                          # auto-detect: "systems", "hosts"
 │   └── x86_64-linux/
-│       └── server/default.nix        # → nixosConfigurations.server
+│       ├── server/default.nix        # → nixosConfigurations.server
+│       └── server/meta.nix           #   optional host meta (see Host Meta)
+│                                     #   e.g. { images = ["iso"]; }
 │
 └── homes/                            # auto-detect: "homes"
     └── x86_64-linux/

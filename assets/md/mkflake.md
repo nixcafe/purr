@@ -39,6 +39,7 @@
 | `moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | Subdirectory mapping per output |
 | `extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` — raw module injection |
 | `extraArgs` | attrs | `{}` | Custom key-value pairs injected into all auto-discovered module args (packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`). Purr's own keys override `extraArgs` on conflict |
+| `hosts` | attrs | `{}` | Per-host config: `hosts.<name>.meta = { images = [...]; deployable = true; ... }`, deep-merged over the host's `meta.nix`. See [Host Meta](/meta) |
 | `bundleModules` | bool | `false` | Include `extraModules` in the auto-generated `default` bundle (the `default` module itself is always generated unless you define your own) |
 | `bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle (only when `bundleModules = true`) |
 | `checksDir` | nullOr str | `null` | auto-detects `checks/` |
@@ -55,7 +56,7 @@
 | `systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `homesDir` | nullOr str | `null` | auto-detects `homes/` |
 | `autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
-| `hydraJobs` | attrs | `{}` | Hydra CI options: `{ enable, dir, systems, include, extra }`. See below |
+| `hydraJobs` | attrs | `{}` | Hydra CI options: `{ enable, as, dir, systems, include, extra }`. See below |
 
 ## Hydra CI (hydraJobs)
 
@@ -68,7 +69,7 @@ inputs.purr.lib.mkFlake {
   hydraJobs = {
     enable = true;
     systems = ["x86_64-linux"];
-    include = [ "checks" "packages" "nixosConfigs" ];
+    include = [ "checks" "packages" "nixosConfigurations" ];
   };
 }
 ```

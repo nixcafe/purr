@@ -130,7 +130,11 @@ Build home-manager configurations from discovered homes.
 
 ### `buildSystemConfigs`
 
-Build nixos/darwin configurations from discovered systems. Hosts that set `purr.images` are image-only by default and are excluded from the returned `nixosConfigurations`/`darwinConfigurations`; set `purr.deployable = true` to keep them deployable. Also returns an `imageRecipes` attribute — `{ host = { system; images; cfg; }; }` — consumed by `imagesFromConfigs`.
+Build nixos/darwin configurations from discovered systems. Hosts whose [meta](/meta) declares `images` are image-only by default and are excluded from the returned `nixosConfigurations`/`darwinConfigurations`; set `deployable = true` in the host meta to keep them deployable. Also returns an `imageRecipes` attribute — `{ host = { system; images; cfg; }; }` — consumed by `imagesFromConfigs`. Accepts `hostsMeta` (`{ <name> = metaAttrs; }`) merged over each host's `meta.nix`.
+
+### `buildSystemRegistry`
+
+Build the global host metadata registry — a pure-metadata `name -> merged meta` map for every discovered host, cycle-free because it never touches config `value`s. Exposed to modules as `purr.systemMetas`. Used internally by both `buildSystemConfigs` and `buildHomeConfigs`.
 
 ### `parseArchFormat`
 
@@ -181,9 +185,15 @@ Build the project's custom lib (with fix recursion). Imports a `lib/` directory 
 Merge the project lib into nixpkgs lib under the namespace:
 
 ```nix
-purrLib = lib                   # standard nixpkgs lib
-  // { ${namespace} = ownLib }  # flake's own namespace lib
+mergedLib = lib                    # base: nixpkgs lib
+  // { ${namespace} = ownLib }     # flake's own namespace lib
 ```
+
+### `buildMergedLib`
+
+`buildMergedLib :: { inputs, lib, importedPurrLib, namespace } -> mergedLib`
+
+Resolve the merged lib handed to modules. The base is the flake's real `inputs.nixpkgs.lib` when available (keeping everything on one nixpkgs), falling back to the caller-provided lib otherwise; the namespace lib is then merged on top. Home configurations re-add home-manager's `lib.hm` extension so its internals keep working. This replaces the old `purrLib` module argument — modules access the merged lib via `lib`, and bridged homes via `purr.lib`.
 
 ## Auto-Discovery
 
@@ -232,12 +242,12 @@ Scan `src/<dir>/<group>/<job>/default.nix` and produce `hydraJobs.<group>.<syste
 
 > **Internal** — exported from `lib/hydraJobs.nix` but **not** re-exported from `inputs.purr.lib`.
 
-`configOutputs :: systemConfigs -> homeConfigs -> names -> systemsOrNull -> attrs`
+`configOutputs :: systemConfigurations -> homeConfigurations -> names -> systemsOrNull -> homeSystems -> attrs`
 
-Mirror system and home configurations into hydraJobs: `nixosConfigs` (toplevel), `darwinConfigs` (system), `homeConfigs` (activationPackage), grouped by system.
+Mirror system and home configurations into hydraJobs: `nixosConfigurations` (toplevel), `darwinConfigurations` (system), `homeConfigurations` (activationPackage), grouped by system.
 
 ### `buildHydraJobs`
 
-`buildHydraJobs :: { src, hydraJobsDir, hydraSystems, hydraJobsInclude, hydraJobsExtra, systemPkgs, perSystemOutputs, systemConfigs, homeConfigs, ... } -> attrs`
+`buildHydraJobs :: { src, hydraJobsDir, hydraSystems, hydraJobsInclude, hydraJobsExtra, systemPkgs, perSystemOutputs, systemConfigurations, homeConfigurations, ... } -> attrs`
 
 Combine all hydraJobs sources — directory jobs, mirrored per-system outputs, config outputs, images, and `hydraJobsExtra` (highest priority) — into the final `hydraJobs` flake output.

@@ -102,7 +102,7 @@ systems/
                                         (auto-linked to server)
 ```
 
-See the [Systems & Homes](/systems-homes) page for the namespace bridge, metadata, and image formats.
+See the [Systems & Homes](/systems-homes) page for the namespace bridge and image formats, and the [Host Meta](/meta) page for per-host metadata (`meta.nix`, `hosts.<name>.meta`, `purr.meta`).
 
 ### hydraJobs (CI)
 

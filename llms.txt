@@ -8,5 +8,6 @@ purr - Nix flake framework with automatic discovery and module system
 - [Module System](/modules): Module discovery, namespace support, and custom lib
 - [Directory Structure](/directory-structure): Full directory layout auto-discovered by purr
 - [Systems & Homes](/systems-homes): Auto-discovering NixOS/darwin systems and home-manager homes
+- [Host Meta](/meta): Per-host metadata — cheap to read, exposed as `purr.meta`
 - [hydraJobs](/hydrajobs): Hydra CI job sets with automatic derivation discovery
 - [API Reference](/api): Complete purr library API reference

@@ -29,6 +29,7 @@ purr = {
 ```nix
 hydraJobs = {
   enable = true;                  # bool, default false — output hydraJobs
+  as = "builds";                  # str, default "hydraJobs" — output name (see below)
   dir = "hydraJobs";              # nullOr str, default null — auto-detects "hydraJobs"
   systems = ["x86_64-linux"];     # nullOr [str], default null — filter CI systems
   include = null;                 # nullOr [str], default null — auto-detect all outputs
@@ -41,10 +42,50 @@ hydraJobs = {
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `purr.hydraJobs.enable` | bool | `false` | Enable the `hydraJobs` flake output |
+| `purr.hydraJobs.as` | str | `"hydraJobs"` | Name of the flake output carrying the jobs |
 | `purr.hydraJobs.dir` | nullOr str | `null` | Directory for custom jobs, auto-detects `hydraJobs/` |
 | `purr.hydraJobs.systems` | nullOr \[str] | `null` | Filter which systems get CI jobs |
 | `purr.hydraJobs.include` | nullOr \[str] | `null` | Which outputs to mirror (see below) |
 | `purr.hydraJobs.extra` | attrs | `{}` | Extra jobs merged last, can override anything |
+
+## Renaming the output (`as`)
+
+By default the jobs are exposed as `outputs.hydraJobs`, which is what Hydra looks
+for. `nix flake check` treats a `hydraJobs` output specially: it evaluates it
+**with import-from-derivation disabled**, so any host config that uses IFD (e.g.
+a palette/background rendered from a derivation) fails the check even if
+`allow-import-from-derivation` is enabled in your nix.conf.
+
+Set `hydraJobs.as = "builds"` to expose the same jobs under a different output
+name that `nix flake check` does not force-evaluate. Then a tiny second flake
+re-exports them as `hydraJobs` for Hydra:
+
+```nix
+# flake.nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  hydraJobs = {
+    enable = true;
+    as = "builds";
+    systems = [ "x86_64-linux" ];
+  };
+}
+```
+
+```nix
+# hydra/flake.nix — the flake Hydra evaluates (via ?dir=hydra)
+{
+  inputs.nix-config.url = "github:you/nix-config";
+  outputs = { self, nix-config }: {
+    hydraJobs = nix-config.builds;
+  };
+}
+```
+
+The `builds` output is fully lazy, so `nix flake check` on the main flake never
+evaluates it. Point the Hydra jobset at the re-exporting flake
+(`github:you/nix-config?dir=hydra`) and everything else stays identical.
 
 ## What Gets Mirrored
 
@@ -57,16 +98,16 @@ When `hydraJobs.include = null` (default), purr auto-discovers **everything buil
 | `devShells.<system>.<name>` | `shells/` | `devShells.<system>.<name>` |
 | `legacyPackages.<system>.<name>` | `legacyPackages/` | `legacyPackages.<system>.<name>` |
 | `formatter.<system>` | `formatters/` | `formatter.<system>` |
-| `nixosConfigs.<system>.<host>` | `systems/` | `config.system.build.toplevel` |
-| `darwinConfigs.<system>.<host>` | `systems/` | system derivation |
-| `homeConfigs.<system>.<user@host>` | `homes/` | `activationPackage` |
-| `images.<host>.<format>` | `purr.images` option | `config.system.build.images.<format>` |
+| `nixosConfigurations.<system>.<host>` | `systems/` | `config.system.build.toplevel` |
+| `darwinConfigurations.<system>.<host>` | `systems/` | system derivation |
+| `homeConfigurations.<system>.<user@host>` | `homes/` | `activationPackage` |
+| `images.<host>.<format>` | host [meta](/meta) `images` | `config.system.build.images.<format>` |
 
 > **Note:** `apps` are **not** mirrored, even when present, because apps are `{ type = "app"; program = ...; }` metadata rather than derivations — Hydra cannot build them.
 
-> **Note:** image-only hosts (hosts with `purr.images` set and no `purr.deployable = true`) are excluded from `nixosConfigs`/`darwinConfigs` and never get a `toplevel` job. Their images still show up under `images.<host>.<format>`. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
+> **Note:** image-only hosts (hosts with `images` set in their [meta](/meta) and no `deployable = true`) are excluded from `nixosConfigurations`/`darwinConfigurations` and never get a `toplevel` job. Their images still show up under `images.<host>.<format>`. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
 
-> **Note (flake-parts only):** the *per-system* rows in the table above (`checks`, `packages`, `devShells`, `legacyPackages`, `formatter`) are only mirrored in **mkFlake** mode. In **flake-parts** mode, hydraJobs mirrors the config outputs (`nixosConfigs`, `darwinConfigs`, `homeConfigs`), images, directory jobs, and `extra` — but not the per-system outputs. Specify them with `include` in mkFlake mode; in flake-parts mode use `hydraJobs.extra` for anything beyond the config outputs.
+> **Note (flake-parts only):** the *per-system* rows in the table above (`checks`, `packages`, `devShells`, `legacyPackages`, `formatter`) are only mirrored in **mkFlake** mode. In **flake-parts** mode, hydraJobs mirrors the config outputs (`nixosConfigurations`, `darwinConfigurations`, `homeConfigurations`), images, directory jobs, and `extra` — but not the per-system outputs. Specify them with `include` in mkFlake mode; in flake-parts mode use `hydraJobs.extra` for anything beyond the config outputs.
 
 ### Manual control
 
@@ -75,11 +116,11 @@ Set `include` to an explicit list to mirror only what you want, or `[]` to disab
 ```nix
 hydraJobs.include = [ "checks" "packages" ];          # only these two
 hydraJobs.include = [ ];                              # no mirroring at all
-hydraJobs.include = [ "checks" "nixosConfigs" "homeConfigs" ];
+hydraJobs.include = [ "checks" "nixosConfigurations" "homeConfigurations" ];
 ```
 
 Valid per-system names: `checks`, `packages`, `devShells`, `apps`, `legacyPackages`, `formatter`.
-Valid config names: `nixosConfigs`, `darwinConfigs`, `homeConfigs`.
+Valid config names: `nixosConfigurations`, `darwinConfigurations`, `homeConfigurations`.
 
 ### Architecture filter
 
@@ -134,20 +175,20 @@ hydraJobs
 ├── build.x86_64-linux.hello         # directory job
 ├── checks.x86_64-linux.good         # mirrored from checks/
 ├── packages.x86_64-linux.hello      # mirrored from packages/
-├── homeConfigs.x86_64-linux.alice@server   # activationPackage
-├── images.server.iso                # purr.images
-├── nixosConfigs.x86_64-linux.server # toplevel
+├── homeConfigurations.x86_64-linux.alice@server   # activationPackage
+├── images.server.iso                # meta images
+├── nixosConfigurations.x86_64-linux.server # toplevel
 └── test.x86_64-linux.unit           # directory job
 ```
 
 ## Related: the `images` Output
 
-`purr.images` is a **system option** — declare which image formats to build for a host. When set, purr exposes them as a top-level `images.<host>.<format>` output **regardless of whether hydraJobs is enabled**, so you can build an ISO directly:
+`images` is a **host meta key** — declare which image formats to build for a host in its [host meta](/meta). When set, purr exposes them as a top-level `images.<host>.<format>` output **regardless of whether hydraJobs is enabled**, so you can build an ISO directly:
 
 ```nix
-# systems/x86_64-linux/server/default.nix
+# systems/x86_64-linux/server/meta.nix
 {
-  purr.images = [ "iso" "qemu" ];
+  images = [ "iso" "qemu" ];
 }
 ```
 
@@ -155,6 +196,6 @@ hydraJobs
 nix build .#images.server.iso
 ```
 
-A host with `purr.images` is image-only by default: it is excluded from `nixosConfigurations` and from the `nixosConfigs`/`darwinConfigs` hydraJobs groups. Set `purr.deployable = true` to also expose it as a deployable configuration. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
+A host with `images` is image-only by default: it is excluded from `nixosConfigurations` and from the `nixosConfigurations`/`darwinConfigurations` hydraJobs groups. Set `deployable = true` in the host meta to also expose it as a deployable configuration. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
 
 The same declarations also feed `hydraJobs.images.<host>.<format>` when hydraJobs is enabled. See [Systems & Homes](/systems-homes) for available formats.

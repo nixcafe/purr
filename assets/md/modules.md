@@ -64,9 +64,9 @@ Each auto-discovered module receives different arguments depending on its direct
 | `overlays/` | `final: prev:` (Nix overlay convention) |
 | `templates/` | `{ inputs, namespace, lib }` |
 | `systems/` | `{ config, options, lib, pkgs, purr, host, namespace, system, inputs, ... }` |
-| `homes/` | `{ config, options, lib, pkgs, purr, purrLib, host, namespace, system, inputs, ... }` |
+| `homes/` | `{ config, options, lib, pkgs, purr, user, host, namespace, system, inputs, ... }` |
 
-> **Note:** `lib` in `packages/`, `legacyPackages/`, `shells/`, `checks/`, `apps/`, and `formatter/` includes the project's custom lib under `lib.<namespace>.*`, merged via `purrLib`. `systems/` and `homes/` receive a `purr` attrset with metadata about the current configuration context via `specialArgs` / `extraSpecialArgs`.
+> **Note:** `lib` in `packages/`, `legacyPackages/`, `shells/`, `checks/`, `apps/`, and `formatter/` includes the project's custom lib under `lib.<namespace>.*`, merged via the merged namespace lib. `systems/` and `homes/` receive a `purr` attrset with metadata about the current configuration context via `specialArgs` / `extraSpecialArgs`. See [Systems & Homes](/systems-homes#purr-metadata) for the full `purr` shape.
 
 ## Custom Lib
 

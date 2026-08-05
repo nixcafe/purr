@@ -84,6 +84,7 @@ Default `moduleTypes`:
 | `purr.nixpkgsConfig` | attrs | `{}` | nixpkgs config (`allowUnfree`, etc.) |
 | `purr.autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
 | `purr.outputsBuilder` | fn | `(_: {})` | Additional per-system outputs. Called for each system with `{ pkgs, system, lib, inputs, namespace }` plus all `extraArgs` keys; the returned attrset is **deep-merged** into the perSystem flake outputs |
+| `purr.hosts` | attrs | `{}` | Per-host config: `purr.hosts.<name>.meta = { images = [...]; deployable = true; ... }`, deep-merged over the host's `meta.nix`. See [Host Meta](/meta) |
 
 ### hydraJobs Options
 
@@ -92,6 +93,7 @@ All under `purr.hydraJobs.*`. See the [hydraJobs](/hydrajobs) page for details.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `purr.hydraJobs.enable` | bool | `false` | Enable the `hydraJobs` flake output |
+| `purr.hydraJobs.as` | str | `"hydraJobs"` | Name of the flake output carrying the jobs |
 | `purr.hydraJobs.dir` | nullOr str | `null` | Custom jobs directory, auto-detects `hydraJobs/` |
 | `purr.hydraJobs.systems` | nullOr \[str] | `null` | Filter which systems get CI jobs |
 | `purr.hydraJobs.include` | nullOr \[str] | `null` | Mirror outputs into hydraJobs (`null` = auto-detect all) |
@@ -171,11 +173,11 @@ Generate a `hydraJobs` output for Hydra that mirrors your system/home configs an
 purr.hydraJobs = {
   enable = true;
   systems = ["x86_64-linux"];
-  include = [ "nixosConfigs" "homeConfigs" ];
+  include = [ "nixosConfigurations" "homeConfigurations" ];
 };
 ```
 
-> In flake-parts mode, hydraJobs mirrors the config outputs (`nixosConfigs`, `darwinConfigs`, `homeConfigs`), images, directory jobs, and `extra`. Per-system outputs (`checks`, `packages`, `devShells`, `legacyPackages`, `formatter`) are only auto-mirrored in mkFlake mode — in flake-parts mode, add them via `purr.hydraJobs.extra` if needed.
+> In flake-parts mode, hydraJobs mirrors the config outputs (`nixosConfigurations`, `darwinConfigurations`, `homeConfigurations`), images, directory jobs, and `extra`. Per-system outputs (`checks`, `packages`, `devShells`, `legacyPackages`, `formatter`) are only auto-mirrored in mkFlake mode — in flake-parts mode, add them via `purr.hydraJobs.extra` if needed.
 
 See the [hydraJobs](/hydrajobs) page for the full reference.
 
