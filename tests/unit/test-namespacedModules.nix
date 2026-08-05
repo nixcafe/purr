@@ -93,7 +93,7 @@ in
                 };
                 config.${namespace}.marker = "wrapped";
               };
-            wrapped = nsm.wrapModule "ns" null mod;
+            wrapped = nsm.wrapModule "ns" null { } mod;
             result = lib.evalModules {
               modules = [ wrapped ];
             };
@@ -119,7 +119,7 @@ in
                 };
                 config.${namespace}.hasNsLib = lib.${namespace}.helper or null;
               };
-            wrapped = nsm.wrapModule "ns" importedPurrLib mod;
+            wrapped = nsm.wrapModule "ns" importedPurrLib { } mod;
             result = lib.evalModules {
               modules = [ wrapped ];
             };
@@ -143,7 +143,7 @@ in
                 };
                 config.${namespace}.hasPkgs = pkgs != null;
               };
-            wrapped = nsm.wrapModule "ns" null mod;
+            wrapped = nsm.wrapModule "ns" null { } mod;
             result = lib.evalModules {
               modules = [ wrapped ];
               specialArgs = {
@@ -171,7 +171,7 @@ in
                 };
                 config.value = user;
               };
-            wrapped = nsm.wrapModule "ns" null mod;
+            wrapped = nsm.wrapModule "ns" null { } mod;
             result = lib.evalModules {
               modules = [
                 {
@@ -190,7 +190,7 @@ in
             mod = {
               options.${"x"} = { };
             };
-            wrapped = nsm.wrapModule "ns" null mod;
+            wrapped = nsm.wrapModule "ns" null { } mod;
           in
           (wrapped ? options) && (wrapped ? imports);
         expected = true;
@@ -198,7 +198,7 @@ in
       "path modules get wrapped into functions" = {
         expr =
           let
-            wrapped = nsm.wrapModule "ns" null ./fixtures/empty-module.nix;
+            wrapped = nsm.wrapModule "ns" null { } ./fixtures/empty-module.nix;
           in
           builtins.isFunction wrapped;
         expected = true;
@@ -210,10 +210,44 @@ in
               plain = 1;
             };
           in
-          nsm.wrapModule "ns" null value;
+          nsm.wrapModule "ns" null { } value;
         expected = {
           plain = 1;
         };
+      };
+      "module receives defining flake's inputs, not consumer's" = {
+        expr =
+          let
+            mod =
+              {
+                inputs,
+                lib,
+                ...
+              }:
+              {
+                options.value = lib.mkOption {
+                  type = lib.types.str;
+                };
+                config.value = inputs.fromDefiningFlake;
+              };
+            # Defining flake declares `fromDefiningFlake`.
+            wrapped = nsm.wrapModule "ns" null {
+              fromDefiningFlake = "defining";
+            } mod;
+            result = lib.evalModules {
+              modules = [
+                # Consumer tries to override inputs.
+                {
+                  _module.args.inputs = {
+                    fromDefiningFlake = "consumer";
+                  };
+                }
+                wrapped
+              ];
+            };
+          in
+          result.config.value;
+        expected = "defining";
       };
     };
   };
@@ -229,7 +263,7 @@ in
               };
             };
           in
-          nsm.wrapModuleSet null null modules;
+          nsm.wrapModuleSet null null { } modules;
         expected = {
           a.b = {
             imports = [ ];
@@ -251,7 +285,7 @@ in
                 };
                 config.${namespace}.leaf = true;
               };
-            wrapped = nsm.wrapModuleSet "ns" null {
+            wrapped = nsm.wrapModuleSet "ns" null { } {
               group1.m1 = mod;
               group2.m2 = mod;
             };
@@ -266,7 +300,7 @@ in
         expected = true;
       };
       "empty attrs returns empty attrs" = {
-        expr = nsm.wrapModuleSet "ns" null { };
+        expr = nsm.wrapModuleSet "ns" null { } { };
         expected = { };
       };
       "module receives namespace and pkgs through wrapping" = {
@@ -285,7 +319,7 @@ in
                 };
                 config.${namespace}.ok = pkgs != null;
               };
-            wrapped = nsm.wrapModuleSet "test-ns" null {
+            wrapped = nsm.wrapModuleSet "test-ns" null { } {
               a.b = mod;
             };
             result = lib.evalModules {

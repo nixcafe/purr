@@ -527,7 +527,10 @@ in
 
       wrap =
         modules:
-        if cfg.namespace != null then nsm.wrapModuleSet cfg.namespace importedPurrLib modules else modules;
+        if cfg.namespace != null then
+          nsm.wrapModuleSet cfg.namespace importedPurrLib inputs modules
+        else
+          modules;
 
       makeLibExtension = if importedPurrLib != null then { _module.args.lib = mergedLib; } else null;
 
