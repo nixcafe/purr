@@ -158,7 +158,8 @@ let
         inherit namespace;
       };
 
-      makeModuleSet = name: nsm.wrapModuleSet namespace importedPurrLib (allModules.${name} or { });
+      makeModuleSet =
+        name: nsm.wrapModuleSet namespace importedPurrLib inputs (allModules.${name} or { });
 
       makeBundled =
         name:

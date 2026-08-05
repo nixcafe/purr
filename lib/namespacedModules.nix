@@ -1,13 +1,21 @@
+# Namespace wrapping: bind purr's own keys (namespace, namespace lib, and the
+# defining flake's inputs) into each module at definition time, while still
+# forwarding the module system's runtime args (pkgs, system, config,
+# _module.args users, etc.).
+#
+# The defining flake's `inputs` are captured here (not taken from the consumer's
+# args) so that a module can reference inputs its own flake declares — e.g. a
+# library flake's module using `inputs.develop-templates`. This mirrors
+# snowfall-lib's `create-modules`, which injects `inputs = user-inputs` when
+# instantiating each project module.
 let
   wrapPath =
-    namespace: importedPurrLib: path:
+    namespace: importedPurrLib: inputs: path:
     {
       config,
       lib,
       options,
       pkgs,
-      inputs,
-      system,
       ...
     }@args:
     let
@@ -22,12 +30,17 @@ let
       # `applyModuleArgs`. A plain `args // { ... }` would drop args that are
       # only provided via `_module.args` (e.g. `user`), because those are not
       # physically present in `args` unless declared by the wrapper function.
+      # `inputs` is forced to the defining flake's inputs rather than the
+      # consumer's, so modules see the inputs their own flake declared.
       forwardedArgs =
-        builtins.mapAttrs (name: _: args.${name} or config._module.args.${name}) (
+        (builtins.mapAttrs (name: _: args.${name} or config._module.args.${name}) (
           builtins.functionArgs original
-        )
+        ))
         // {
-          inherit namespace;
+          inherit
+            inputs
+            namespace
+            ;
           lib = libWithNs;
         };
       result = if builtins.isFunction original then original forwardedArgs else original;
@@ -36,16 +49,20 @@ let
     if builtins.isAttrs result && _file != null then result // { inherit _file; } else result;
 
   wrapModule =
-    namespace: importedPurrLib: module:
+    namespace: importedPurrLib: inputs: module:
     if builtins.isAttrs module && (module ? imports || module ? options || module ? config) then
       module
       // {
         imports = builtins.map (
-          m: if builtins.isPath m || builtins.isFunction m then wrapPath namespace importedPurrLib m else m
+          m:
+          if builtins.isPath m || builtins.isFunction m then
+            wrapPath namespace importedPurrLib inputs m
+          else
+            m
         ) (module.imports or [ ]);
       }
     else if builtins.isPath module || builtins.isFunction module then
-      wrapPath namespace importedPurrLib module
+      wrapPath namespace importedPurrLib inputs module
     else
       module;
 
@@ -61,8 +78,11 @@ let
       f value;
 
   wrapModuleSet =
-    namespace: importedPurrLib: modules:
-    if namespace == null then modules else deepMapAttrs (wrapModule namespace importedPurrLib) modules;
+    namespace: importedPurrLib: inputs: modules:
+    if namespace == null then
+      modules
+    else
+      deepMapAttrs (wrapModule namespace importedPurrLib inputs) modules;
 in
 {
   inherit
