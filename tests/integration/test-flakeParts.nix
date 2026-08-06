@@ -110,6 +110,7 @@ in
           "base"
           "common"
           "default"
+          "inputs-ref"
           "services"
         ];
       };
@@ -159,6 +160,10 @@ in
           stateVersion = "24.11";
           greeting = "HI";
         };
+      };
+      "module sees the defining flake's inputs" = {
+        expr = flake.nixosConfigurations.server.config.demo.inputsRef.hasDefiningInputs;
+        expected = true;
       };
       "system specialArgs carry namespace and purr metadata" = {
         expr = {

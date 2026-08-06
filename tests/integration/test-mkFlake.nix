@@ -229,6 +229,10 @@ in
         expr = server.config.demo.shared.marker;
         expected = true;
       };
+      "module sees the defining flake's inputs" = {
+        expr = server.config.demo.inputsRef.hasDefiningInputs;
+        expected = true;
+      };
       "darwin host evaluated" = {
         expr = {
           hostName = macbook.config.networking.hostName;
@@ -424,6 +428,7 @@ in
           "base"
           "common"
           "default"
+          "inputs-ref"
           "services"
         ];
       };
@@ -432,6 +437,7 @@ in
         expected = [
           "common"
           "default"
+          "inputs-ref"
         ];
       };
       "homeModules contains git + bundled default" = {
@@ -446,7 +452,7 @@ in
           let
             dflt = result.nixosModules.default or { };
           in
-          (dflt ? imports) && (length dflt.imports or 0) == 3;
+          (dflt ? imports) && (length dflt.imports or 0) == 4;
         expected = true;
       };
       "discovered module evaluates with namespace lib" = {
