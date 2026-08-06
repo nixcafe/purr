@@ -65,7 +65,9 @@ let
   mergePurrLib =
     lib: importedPurrLib: namespace:
     if importedPurrLib != null then
-      if namespace != null then lib // { ${namespace} = importedPurrLib; } else lib // importedPurrLib
+      lib.extend (
+        _self: _super: if namespace != null then { ${namespace} = importedPurrLib; } else importedPurrLib
+      )
     else
       lib;
 
