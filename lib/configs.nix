@@ -283,13 +283,17 @@ let
 
   # The lib handed to home-manager modules. Starts from the merged lib and
   # re-adds home-manager's own `hm` extension, since home-manager evaluates
-  # with its own extended lib as `lib`.
+  # with its own extended lib as `lib`. Built via `extend` (not `//`) so the
+  # merged namespace lib and `hm` survive further `extend`s — home-manager's
+  # manual/docs path extends the module lib again, and a plain `//` merged lib
+  # would silently drop both, breaking `lib.hm` inside the docs evaluation.
   homeLibFor =
     hm: lib':
-    lib'
-    // {
-      hm = hm.lib.hm or { };
-    };
+    lib'.extend (
+      _self: _super: {
+        hm = hm.lib.hm or { };
+      }
+    );
 
   buildSystemConfigs =
     {
@@ -660,6 +664,12 @@ let
               in
               hm.lib.homeManagerConfiguration {
                 inherit pkgs;
+                # home-manager defaults `lib` to `pkgs.lib`, which lacks the
+                # `hm` extension its own modules expect (e.g. mako.nix uses
+                # `lib.hm.deprecations.mkSettingsRenamedOptionModules`). Hand it
+                # the merged lib with `hm` re-added, mirroring standalone
+                # `purr.lib` in extraSpecialArgs.
+                lib = homeLib;
                 modules =
                   autoInjectModules ++ extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
                 extraSpecialArgs =

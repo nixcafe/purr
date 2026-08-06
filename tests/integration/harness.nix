@@ -177,11 +177,13 @@ let
       pkgs,
       modules,
       extraSpecialArgs,
-    }:
+      ...
+    }@args:
     let
+      hmLib = args.lib or null;
       eval = lib.evalModules {
         modules = [ homeShim ] ++ modules;
-        specialArgs = extraSpecialArgs;
+        specialArgs = if hmLib != null then extraSpecialArgs // { lib = hmLib; } else extraSpecialArgs;
       };
     in
     {
