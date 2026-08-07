@@ -50,6 +50,28 @@ in
           (result.custom final { }).custom;
         expected = "final-hello";
       };
+      "plain overlays pass through unwrapped (keep their own source location)" = {
+        expr =
+          let
+            result = autoMods.overlayModules fixturesDir "overlays";
+          in
+          {
+            isFunction = builtins.isFunction result.custom;
+            applied = (result.custom { hello = "h"; } { }).custom;
+          };
+        expected = {
+          isFunction = true;
+          applied = "h";
+        };
+      };
+      "function-returning overlays are still normalized" = {
+        expr =
+          let
+            result = autoMods.overlayModules fixturesDir "overlays";
+          in
+          (result.doubleApplied { hello = "double-hello"; } { }).doubleApplied;
+        expected = "double-hello";
+      };
     };
   };
 

@@ -59,8 +59,22 @@ let
             result = fn final prev;
           in
           if builtins.isFunction result then result prev else result;
+        # Pass plain `final: prev: attrs` overlays through unwrapped so they
+        # keep their own source position: nix-repl shows the user's overlay
+        # file (overlays/<name>/default.nix) instead of purr's wrapper lambda.
+        # Only wrap when normalization is actually needed — probing with dummy
+        # args yields a function (curried/function-returning overlays) or throws.
+        passThrough =
+          fn:
+          if !builtins.isFunction fn then
+            fn
+          else
+            let
+              probe = builtins.tryEval (builtins.isFunction (fn null null));
+            in
+            if probe.success && !probe.value then fn else normalizeOverlay fn;
       in
-      builtins.mapAttrs (_: path: normalizeOverlay (import path)) overlayMods
+      builtins.mapAttrs (_: path: passThrough (import path)) overlayMods
     else
       { };
 
