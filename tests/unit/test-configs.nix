@@ -815,7 +815,7 @@ in
           metaInjected = true;
         };
       };
-      "injects nixpkgsConfig as a mkDefault nixpkgs.config module" = {
+      "injects nixpkgsConfig as a default-priority nixpkgs.config module" = {
         expr =
           let
             result = buildSystemConfigs {
@@ -831,8 +831,10 @@ in
             nixpkgsMod = builtins.head (builtins.filter (m: builtins.isAttrs m && m ? nixpkgs) modules);
           in
           {
-            config = nixpkgsMod.nixpkgs.config.content;
-            overlays = nixpkgsMod.nixpkgs.overlays.content;
+            config = nixpkgsMod.nixpkgs.config;
+            overlays = nixpkgsMod.nixpkgs.overlays;
+            configWrapped = nixpkgsMod.nixpkgs.config._type or null;
+            overlaysWrapped = nixpkgsMod.nixpkgs.overlays._type or null;
           };
         expected = {
           config = {
@@ -840,9 +842,11 @@ in
             permittedInsecurePackages = [ "bad-1.0" ];
           };
           overlays = [ ];
+          configWrapped = null;
+          overlaysWrapped = null;
         };
       };
-      "injects sharedOverlays as a mkDefault nixpkgs.overlays module" = {
+      "injects sharedOverlays as a default-priority nixpkgs.overlays module" = {
         expr =
           let
             result = buildSystemConfigs {
@@ -857,7 +861,7 @@ in
             modules = result.nixosConfigurations.myhost.modules;
             nixpkgsMod = builtins.head (builtins.filter (m: builtins.isAttrs m && m ? nixpkgs) modules);
           in
-          nixpkgsMod.nixpkgs.overlays.content;
+          nixpkgsMod.nixpkgs.overlays;
         expected = [
           "overlay1"
           "overlay2"

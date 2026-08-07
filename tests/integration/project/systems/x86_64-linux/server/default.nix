@@ -41,6 +41,13 @@ assert inputs != null;
     services.openssh.enable = true;
     environment.systemPackages = [ (lib.${namespace}.strings.upper.upper "abc") ];
 
+    # host-level nixpkgs overrides at default priority must MERGE with purr's
+    # injected defaults (not silently replace them)
+    nixpkgs.overlays = [ "server-extra-overlay" ];
+    nixpkgs.config = {
+      permittedInsecurePackages = [ "host-extra" ];
+    };
+
     # namespace bridge: forward home-manager config for alice
     purr.users.alice.homeConfig = {
       home.packages = [ "cowsay" ];
