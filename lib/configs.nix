@@ -457,10 +457,15 @@ let
               }
             else
               [ ];
+          # Inject at default priority (not mkDefault): nixpkgs.config and
+          # nixpkgs.overlays both use merge-friendly types (deep merge / list
+          # concat), so a host/home module's own plain `nixpkgs.overlays` or
+          # `nixpkgs.config` at the same priority MERGES with these instead of
+          # silently replacing them. Use mkForce to fully replace.
           systemModules = [
             {
-              nixpkgs.config = mkDefault nixpkgsConfig;
-              nixpkgs.overlays = mkDefault sharedOverlays;
+              nixpkgs.config = nixpkgsConfig;
+              nixpkgs.overlays = sharedOverlays;
             }
             {
               options.nixpkgs.system = lib.mkOption {

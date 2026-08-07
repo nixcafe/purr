@@ -33,6 +33,9 @@ let
     bundleModules = true;
     bundleExtraModules = true;
     packagesByName = true;
+    nixpkgsConfig = {
+      allowUnfree = true;
+    };
     hydraJobs = {
       enable = true;
       systems = [ "x86_64-linux" ];
@@ -228,6 +231,30 @@ in
       "shared module merged into system config" = {
         expr = server.config.demo.shared.marker;
         expected = true;
+      };
+      "host nixpkgs.overlays merge with purr's shared overlays" = {
+        expr =
+          let
+            overlays = server.config.nixpkgs.overlays;
+            anyFunction = builtins.foldl' (acc: o: acc || builtins.isFunction o) false overlays;
+          in
+          {
+            length = builtins.length overlays;
+            hasServerExtra = builtins.elem "server-extra-overlay" overlays;
+            hasSharedCustom = anyFunction;
+          };
+        expected = {
+          length = 2;
+          hasServerExtra = true;
+          hasSharedCustom = true;
+        };
+      };
+      "host nixpkgs.config merges on top of purr's nixpkgsConfig" = {
+        expr = server.config.nixpkgs.config;
+        expected = {
+          allowUnfree = true;
+          permittedInsecurePackages = [ "host-extra" ];
+        };
       };
       "module sees the defining flake's inputs" = {
         expr = server.config.demo.inputsRef.hasDefiningInputs;

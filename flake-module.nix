@@ -329,10 +329,12 @@ in
         - nixpkgs imports for per-system packages, shells, and checks
         - `buildHomeConfigs` for home-manager nixpkgs import
         - `buildSystemConfigs` (injected as
-          `nixpkgs.config = lib.mkDefault nixpkgsConfig`
-          into each system module)
-        Settings can be overridden per-system via
-        `nixpkgs.config` in the host/home module.
+          `nixpkgs.config = nixpkgsConfig`
+          into each system module at default priority)
+        Per-system `nixpkgs.config` in the host/home module is deep-merged
+        on top of these settings. Same for overlays: per-host
+        `nixpkgs.overlays` are concatenated after purr's discovered
+        `overlays/`. Use `lib.mkForce` to fully replace either option.
       '';
     };
 
