@@ -186,7 +186,7 @@ Each system and home module receives a `purr` attrset with metadata about the cu
 
 | Field | Example | Description |
 |---|---|---|
-| `meta` | see [Host Meta](/meta) | Merged host metadata (contains `name`, `arch`, `format`, `isDarwin`, `isLinux`, `system`, `homes`, `images`, `deployable`, plus custom keys) |
+| `meta` | see [Host Meta](/meta) | Merged host metadata (contains `name`, `arch`, `format`, `isDarwin`, `isLinux`, `system`, `homes`, `images`, `deployable`, `roles`, plus custom keys) |
 | `systemMetas` | `{ server = {...}; workstation = {...}; }` | Registry of **every** discovered host's merged meta, keyed by host name (including self) |
 
 ### Home Modules (`extraSpecialArgs.purr`)

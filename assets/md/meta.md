@@ -127,8 +127,40 @@ These are consumed by purr itself:
 |---|---|---|
 | `images` | `[str]` | Image formats to build. Exposed as `images.<host>.<format>` (and `hydraJobs.images.<host>.<format>` when hydraJobs is enabled). Each format maps to `config.system.build.images.<format>`. Must be a list of strings. |
 | `deployable` | `bool` | Whether the host is exposed as a `nixosConfigurations`/`darwinConfigurations` output. Defaults to `true` when `images == []` or the host is darwin. |
+| `roles` | `attrs` | Maps a role name to a key of the **effective inputs** to build this host from, e.g. `roles.nixpkgs = "nixpkgs-stable"`. Never modifies your flake inputs. See [below](#roles-per-host-inputs). |
 
 A host with `images` and no explicit `deployable` is **image-only**: it is excluded from `nixosConfigurations`/`darwinConfigurations` (and the hydraJobs config groups), so its `system.build.toplevel` is never evaluated. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
+
+### roles (per-host inputs)
+
+Give different hosts different inputs (e.g. a second nixpkgs for some hosts, a
+different home-manager) without touching your flake inputs. Two pieces work
+together:
+
+1. **`inputsFor`** — filters/replaces the raw flake inputs into the *effective*
+   inputs purr builds from internally (see [mkFlake](/mkflake#per-host-inputs-multi-nixpkgs)
+   or [flake-parts](/flake-parts)). Default is the identity.
+2. **`meta.roles.<role>`** — points a host at a specific effective-input key.
+   The role names (`nixpkgs`, `home-manager`, `nix-darwin`) live under the
+   single nested `roles` key so they never collide with your free-form custom
+   meta keys. Absent roles fall back to the conventional input key
+   (`nixpkgs`, `home-manager`/`homeManager`, `nix-darwin`/`darwin`).
+
+```nix
+# systems/x86_64-linux/server/meta.nix
+{
+  roles.nixpkgs = "nixpkgs-stable";        # build from the nixpkgs-stable input
+  roles."home-manager" = "home-manager-stable";
+  tier = "prod";                            # still a normal custom key
+}
+```
+
+This is internal-only: it changes which input purr *consumes* to build pkgs,
+system configs, home configs, and the merged lib base. The `inputs` argument
+your modules receive is **never** modified — modules always see the raw flake
+inputs. Homes inherit their linked system's nixpkgs; unmatched homes use the
+effective-input default. Referencing an input missing from the effective
+inputs throws a clear error.
 
 ## `purr.meta`
 

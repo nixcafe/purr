@@ -121,4 +121,4 @@ See the [Directory Structure](/directory-structure) page for the complete layout
 
 ## API Reference
 
-The full library API (40 functions) is documented on the [API Reference](/api) page.
+The full library API (42 functions) is documented on the [API Reference](/api) page.

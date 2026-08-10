@@ -1,6 +1,6 @@
 # API Reference
 
-All 40 library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
+All 42 library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
 
 ## Flake Builder
 

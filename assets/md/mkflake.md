@@ -28,6 +28,7 @@
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `inputs` | attrs | *required* | Flake inputs. Required: `nixpkgs`. Optional: `home-manager` (or `homeManager`) for home-manager support, `nix-darwin` (or `darwin`) for darwin support |
+| `inputsFor` | nullOr fn | identity | Transform `{ inputs, ... } -> inputs'` (or a plain attrset) that filters/replaces the raw flake inputs into the **effective inputs** purr builds from internally. Modules always keep the raw `inputs`. See [Per-host inputs](#per-host-inputs-multi-nixpkgs) below |
 | `src` | path | *required* | Project root directory |
 | `namespace` | nullOr str | `null` | Module option namespace, also used as lib key (`lib.<namespace>`) |
 | `libDir` | nullOr str | `null` | Lib directory (relative to `src`), auto-detects `lib/` |
@@ -39,7 +40,7 @@
 | `moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | Subdirectory mapping per output |
 | `extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` — raw module injection |
 | `extraArgs` | attrs | `{}` | Custom key-value pairs injected into all auto-discovered module args (packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`). Purr's own keys override `extraArgs` on conflict |
-| `hosts` | attrs | `{}` | Per-host config: `hosts.<name>.meta = { images = [...]; deployable = true; ... }`, deep-merged over the host's `meta.nix`. See [Host Meta](/meta) |
+| `hosts` | attrs | `{}` | Per-host config: `hosts.<name>.meta = { images = [...]; deployable = true; roles.nixpkgs = "..."; ... }`, deep-merged over the host's `meta.nix`. See [Host Meta](/meta) |
 | `bundleModules` | bool | `false` | Include `extraModules` in the auto-generated `default` bundle (the `default` module itself is always generated unless you define your own) |
 | `bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle (only when `bundleModules = true`) |
 | `checksDir` | nullOr str | `null` | auto-detects `checks/` |
@@ -108,6 +109,43 @@ inputs.purr.lib.mkFlake {
   homesDir = "homes";
 }
 ```
+
+## Per-host inputs (multi-nixpkgs)
+
+Replace or filter which inputs purr builds with via `inputsFor`, then point
+individual hosts at a specific input through a `roles` meta key. Modules
+always keep the original `inputs` argument — replacement only affects how
+purr builds pkgs, system configs, home configs, and the merged lib. See
+[Host Meta — roles](/meta#roles) for the full role reference.
+
+```nix
+# flake.nix
+inputs = {
+  nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+  # ...
+};
+
+outputs = inputs:
+  inputs.purr.lib.mkFlake {
+    inherit inputs;
+    src = ./.;
+    inputsFor = { inputs, ... }: {
+      inherit (inputs) nixpkgs;
+      inherit (inputs) nixpkgs-unstable;
+    };
+    hosts.desktop.meta.roles.nixpkgs = "nixpkgs-unstable";
+  };
+```
+
+```nix
+# systems/x86_64-linux/server/meta.nix
+{ roles.nixpkgs = "nixpkgs-unstable"; }
+```
+
+Supported role keys: `nixpkgs`, `home-manager`, `nix-darwin`. Homes inherit
+their linked system's nixpkgs; unmatched homes use the effective-input
+default.
 
 ## Formatter
 
