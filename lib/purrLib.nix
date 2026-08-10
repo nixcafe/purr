@@ -71,19 +71,21 @@ let
     else
       lib;
 
-  # Resolve the merged lib handed to modules. The base is the user's real
-  # `inputs.nixpkgs.lib` when available (keeping everything on one nixpkgs,
-  # which pairs naturally with home-manager), otherwise it falls back to the
-  # caller-provided lib. Namespace/libDir are then merged on top.
+  # Resolve the merged lib handed to modules. The base is the effective
+  # `nixpkgs.lib` when available (keeping everything on one nixpkgs, which
+  # pairs naturally with home-manager), otherwise it falls back to the
+  # caller-provided lib. Namespace/libDir are then merged on top. Only the
+  # base is affected by `inputsFor` replacement — modules still receive the
+  # raw flake inputs as the `inputs` argument.
   buildMergedLib =
     {
-      inputs,
+      effectiveInputs,
       lib,
       importedPurrLib,
       namespace,
     }:
     let
-      base = if inputs ? nixpkgs then inputs.nixpkgs.lib else lib;
+      base = if effectiveInputs ? nixpkgs then effectiveInputs.nixpkgs.lib else lib;
     in
     mergePurrLib base importedPurrLib namespace;
 in

@@ -24,6 +24,7 @@ let
 
   confs = import ./lib/configs.nix {
     inherit lib;
+    inherit (libBuilder) mergePurrLib;
   };
 
   attrs = import ./lib/attrs.nix;
@@ -351,6 +352,26 @@ in
       '';
     };
 
+    inputsFor = mkOption {
+      type = types.nullOr types.raw;
+      default = null;
+      description = ''
+        Filter or replace the flake inputs before purr consumes them
+        internally. A function is called with `{ inputs }` (the raw flake
+        inputs) and must return the effective inputs attrset; a plain attrset
+        is used as-is. The `inputs` argument your modules receive is never
+        modified — replacement only affects how purr builds pkgs, system
+        configs, and home configs. Combine with the per-host meta keys
+        `nixpkgs` / `home-manager` / `nix-darwin` (which reference keys of the
+        effective inputs) to give different hosts different inputs.
+      '';
+      example = lib.literalExpression ''
+        { inputs, ... }: {
+          nixpkgs = inputs.nixpkgs-unstable;
+        }
+      '';
+    };
+
     extraArgs = mkOption {
       type = types.attrs;
       default = { };
@@ -512,6 +533,16 @@ in
         hydraJobsDir = cfg.hydraJobs.dir;
       };
 
+      # Effective inputs: the raw flake inputs after an optional `inputsFor`
+      # filter/replace. Internal only — modules still receive the raw `inputs`.
+      effectiveInputs =
+        if cfg.inputsFor == null then
+          inputs
+        else if builtins.isFunction cfg.inputsFor then
+          cfg.inputsFor { inherit inputs; }
+        else
+          cfg.inputsFor;
+
       modulesPath = cfg.src + "/${cfg.modulesDir}";
       discoveredModules = mods.discoverModules modulesPath cfg.moduleTypes;
 
@@ -522,9 +553,10 @@ in
       };
 
       mergedLib = buildMergedLib {
-        inherit inputs importedPurrLib;
+        inherit importedPurrLib;
         inherit (cfg) namespace;
         lib = lib;
+        effectiveInputs = effectiveInputs;
       };
 
       wrap =
@@ -614,8 +646,10 @@ in
               namespace
               nixpkgsConfig
               ;
+            effectiveInputs = effectiveInputs;
             hostsMeta = builtins.mapAttrs (_: v: v.meta or { }) cfg.hosts;
             extraModules = extraModulesWithLocal;
+            importedPurrLib = importedPurrLib;
             lib = mergedLib;
             sharedOverlays = builtins.attrValues discoveredOverlays;
           }
@@ -632,8 +666,10 @@ in
               namespace
               nixpkgsConfig
               ;
+            effectiveInputs = effectiveInputs;
             hostsMeta = builtins.mapAttrs (_: v: v.meta or { }) cfg.hosts;
             extraModules = extraModulesWithLocal;
+            importedPurrLib = importedPurrLib;
             lib = mergedLib;
             sharedOverlays = builtins.attrValues discoveredOverlays;
           }
@@ -655,7 +691,7 @@ in
             systemPkgs = builtins.listToAttrs (
               builtins.map (system: {
                 name = system;
-                value = import inputs.nixpkgs {
+                value = import effectiveInputs.nixpkgs {
                   inherit system;
                   config = cfg.nixpkgsConfig;
                   overlays = builtins.attrValues discoveredOverlays;
@@ -718,7 +754,7 @@ in
       perSystem =
         { system, ... }:
         let
-          pkgs = import inputs.nixpkgs {
+          pkgs = import effectiveInputs.nixpkgs {
             inherit system;
             config = cfg.nixpkgsConfig;
             overlays = builtins.attrValues discoveredOverlays;

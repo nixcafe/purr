@@ -1,5 +1,14 @@
 {
   lib,
+  mergePurrLib ? (
+    lib': importedPurrLib: namespace:
+    if importedPurrLib != null then
+      lib'.extend (
+        _self: _super: if namespace != null then { ${namespace} = importedPurrLib; } else importedPurrLib
+      )
+    else
+      lib'
+  ),
   ...
 }:
 let
@@ -17,6 +26,42 @@ let
   baseLib = lib;
 
   inherit (import ./args.nix) purrArgs;
+
+  inherit (import ./resolveInput.nix) defaultHomeManager defaultNixDarwin resolveRole;
+
+  # The internal inputs purr actually builds with. Defaults to the raw flake
+  # inputs when no `inputsFor` transform is in play (mkFlake always passes the
+  # computed effective inputs; direct builder callers can omit it).
+  withEffective =
+    inputs: effectiveInputs: if effectiveInputs == null then inputs else effectiveInputs;
+
+  # Effective-input key for a host role: the merged meta's explicit override,
+  # else the conventional default.
+  roleKey =
+    meta: role: default:
+    meta.${role} or default;
+
+  # The merged lib handed to a host's modules. Its base is that host's
+  # effective nixpkgs lib (real nixpkgs libs expose `attrNames`) re-merged with
+  # the flake's namespace lib, so a host that switched nixpkgs gets matching
+  # lib-derived metadata (`system.nixos.revision`, ...). Falls back to the
+  # caller-provided merged lib when the host's nixpkgs is missing or is a mock.
+  perHostLib =
+    {
+      effectiveInputs,
+      meta,
+      importedPurrLib,
+      namespace,
+      lib,
+    }:
+    let
+      key = roleKey meta "nixpkgs" "nixpkgs";
+      nixpkgsLib = if effectiveInputs ? ${key} then effectiveInputs.${key}.lib or null else null;
+    in
+    if nixpkgsLib != null && nixpkgsLib ? attrNames then
+      mergePurrLib nixpkgsLib importedPurrLib namespace
+    else
+      lib;
 
   parseArchFormat =
     archFormat:
@@ -174,13 +219,15 @@ let
       discoveredSystems,
       discoveredHomes,
       inputs,
+      effectiveInputs ? null,
       namespace ? null,
       extraArgs ? { },
       hostsMeta ? { },
       lib ? baseLib,
     }:
     let
-      hm = inputs.home-manager or inputs.homeManager or null;
+      einputs = withEffective inputs effectiveInputs;
+      hm = einputs.home-manager or einputs.homeManager or null;
       hasHomeManager = hm != null;
 
       knownHosts = concatMap (archFormat: builtins.attrNames (discoveredSystems.${archFormat} or { })) (
@@ -300,6 +347,7 @@ let
       discoveredSystems,
       discoveredHomes,
       inputs,
+      effectiveInputs ? null,
       namespace ? null,
       nixpkgsConfig ? { },
       extraModules ? { },
@@ -307,18 +355,17 @@ let
       hostsMeta ? { },
       autoInject ? true,
       lib ? baseLib,
+      importedPurrLib ? null,
       sharedOverlays ? [ ],
     }:
     let
-      hm = inputs.home-manager or inputs.homeManager or null;
-      nd = inputs.nix-darwin or inputs.darwin or null;
-      hasHomeManager = hm != null;
-      hasNixDarwin = nd != null;
+      einputs = withEffective inputs effectiveInputs;
 
       registryInfo = buildSystemRegistry {
         inherit
           discoveredHomes
           discoveredSystems
+          effectiveInputs
           extraArgs
           hostsMeta
           inputs
@@ -327,8 +374,6 @@ let
           ;
       };
       inherit (registryInfo) hostMeta registry;
-
-      homeLib = homeLibFor hm lib;
 
       # Second pass: build the actual system config values. Reads only metadata
       # from `hostMeta` plus the registry for `purr.systemMetas` — no cycles.
@@ -355,8 +400,49 @@ let
             systemMetas = registry;
           };
 
+          # Resolve this host's effective inputs for the roles purr consumes.
+          # `meta.<role>` wins when set; otherwise the conventional key from
+          # the effective inputs (the `inputsFor` result) is used.
+          nixpkgsInput = resolveRole {
+            effectiveInputs = einputs;
+            key = roleKey meta "nixpkgs" "nixpkgs";
+            context = "host '${systemName}'";
+          };
+          ndKey = roleKey meta "nix-darwin" (defaultNixDarwin einputs);
+          ndInput =
+            if ndKey == null then
+              null
+            else
+              resolveRole {
+                effectiveInputs = einputs;
+                key = ndKey;
+                context = "host '${systemName}'";
+              };
+          hmKey = roleKey meta "home-manager" (defaultHomeManager einputs);
+          hmInput =
+            if hmKey == null then
+              null
+            else
+              resolveRole {
+                effectiveInputs = einputs;
+                key = hmKey;
+                context = "host '${systemName}'";
+              };
+          # The lib handed to this host's modules follows the host's own
+          # nixpkgs (so lib-derived metadata matches), not the global default.
+          hostLib = perHostLib {
+            effectiveInputs = einputs;
+            inherit importedPurrLib namespace;
+            inherit meta;
+            inherit lib;
+          };
+          homeLib = if hmInput != null then homeLibFor hmInput hostLib else null;
+
           hmModule =
-            if format == "darwin" then hm.darwinModules.home-manager else hm.nixosModules.home-manager;
+            if format == "darwin" then
+              hmInput.darwinModules.home-manager
+            else
+              hmInput.nixosModules.home-manager;
           nonRootHomes = builtins.filter (h: h.user != "root") matchingHomes;
           homeModules =
             if matchingHomes != [ ] then
@@ -484,7 +570,7 @@ let
             autoInjectModules ++ systemModules ++ extraSystemModules ++ [ sysModule ] ++ homeModules;
           value =
             if format == "linux" then
-              inputs.nixpkgs.lib.nixosSystem {
+              nixpkgsInput.lib.nixosSystem {
                 inherit system;
                 modules = baseModules;
                 specialArgs =
@@ -494,7 +580,7 @@ let
                       inputs
                       namespace
                       ;
-                    lib = lib;
+                    lib = hostLib;
                   })
                   // {
                     inherit
@@ -505,8 +591,8 @@ let
                   };
               }
             else if format == "darwin" then
-              if hasNixDarwin then
-                nd.lib.darwinSystem {
+              if ndInput != null then
+                ndInput.lib.darwinSystem {
                   inherit system;
                   modules = baseModules;
                   specialArgs =
@@ -516,7 +602,7 @@ let
                         inputs
                         namespace
                         ;
-                      lib = lib;
+                      lib = hostLib;
                     })
                     // {
                       inherit
@@ -527,7 +613,7 @@ let
                     };
                 }
               else
-                throw "darwin system '${systemName}' requires nix-darwin input (add inputs.nix-darwin or inputs.darwin to your flake)"
+                throw "darwin system '${systemName}' requires a nix-darwin input (add inputs.nix-darwin or inputs.darwin, or set meta.nix-darwin)"
             else
               throw "unsupported format '${format}' for system '${systemName}'";
         in
@@ -588,6 +674,7 @@ let
       discoveredHomes,
       discoveredSystems ? { },
       inputs,
+      effectiveInputs ? null,
       namespace ? null,
       nixpkgsConfig ? { },
       extraModules ? { },
@@ -595,10 +682,12 @@ let
       hostsMeta ? { },
       autoInject ? true,
       lib ? baseLib,
+      importedPurrLib ? null,
       sharedOverlays ? [ ],
     }:
     let
-      hm = inputs.home-manager or inputs.homeManager or null;
+      einputs = withEffective inputs effectiveInputs;
+      hm = einputs.home-manager or einputs.homeManager or null;
     in
     if hm != null then
       let
@@ -606,6 +695,7 @@ let
           inherit
             discoveredHomes
             discoveredSystems
+            effectiveInputs
             extraArgs
             hostsMeta
             inputs
@@ -614,7 +704,6 @@ let
             ;
         };
         inherit (registryInfo) registry;
-        homeLib = homeLibFor hm lib;
       in
       builtins.listToAttrs (
         concatMap (
@@ -629,11 +718,6 @@ let
                 "${arch}-linux"
               else
                 throw "unsupported format '${format}' in homes directory: purr only supports 'linux' and 'darwin'.";
-            pkgs = import inputs.nixpkgs {
-              inherit system;
-              config = nixpkgsConfig;
-              overlays = sharedOverlays;
-            };
           in
           builtins.map (userHost: {
             name = userHost;
@@ -641,6 +725,31 @@ let
               let
                 hostParsed = parseUserHost userHost;
                 isDarwin = lib.hasSuffix "darwin" archFormat;
+                systemMeta = registry.${hostParsed.host} or null;
+                # A home inherits its linked system's nixpkgs role; without a
+                # matching system it falls back to the effective-input default.
+                nixpkgsInput = resolveRole {
+                  effectiveInputs = einputs;
+                  key = roleKey systemMeta "nixpkgs" "nixpkgs";
+                  context = "home '${userHost}'";
+                };
+                pkgs = import nixpkgsInput {
+                  inherit system;
+                  config = nixpkgsConfig;
+                  overlays = sharedOverlays;
+                };
+                # The lib purr exposes to home modules follows the home's own
+                # nixpkgs. home-manager's own evaluation lib stays on the
+                # caller-provided merged lib (matching home-manager's pinned
+                # nixpkgs), so per-host replacement only surfaces via `purr.lib`.
+                hostLib = perHostLib {
+                  effectiveInputs = einputs;
+                  meta = systemMeta;
+                  inherit importedPurrLib namespace;
+                  inherit lib;
+                };
+                hmEvalLib = homeLibFor hm lib;
+                purrLib = homeLibFor hm hostLib;
                 autoInjectModules = lib.optional autoInject {
                   home.username = mkDefault hostParsed.user;
                   home.homeDirectory = mkDefault (
@@ -659,12 +768,12 @@ let
                       ;
                     isLinux = !isDarwin;
                   };
-                  systemMeta = registry.${hostParsed.host} or null;
+                  inherit systemMeta;
                   systemMetas = registry;
                   # The merged namespace lib, uniformly available in both
                   # standalone and bridged homes (bridged homes can't get it
                   # as `lib` — see the TODO above).
-                  lib = homeLib;
+                  lib = purrLib;
                 };
               in
               hm.lib.homeManagerConfiguration {
@@ -672,9 +781,8 @@ let
                 # home-manager defaults `lib` to `pkgs.lib`, which lacks the
                 # `hm` extension its own modules expect (e.g. mako.nix uses
                 # `lib.hm.deprecations.mkSettingsRenamedOptionModules`). Hand it
-                # the merged lib with `hm` re-added, mirroring standalone
-                # `purr.lib` in extraSpecialArgs.
-                lib = homeLib;
+                # the merged lib with `hm` re-added.
+                lib = hmEvalLib;
                 modules =
                   autoInjectModules ++ extraModules.home or [ ] ++ [ discoveredHomes.${archFormat}.${userHost} ];
                 extraSpecialArgs =
@@ -684,7 +792,7 @@ let
                       inputs
                       namespace
                       ;
-                    lib = homeLib;
+                    lib = hmEvalLib;
                   })
                   // {
                     inherit

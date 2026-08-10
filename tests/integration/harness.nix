@@ -201,6 +201,27 @@ let
     };
   };
 
+  # Build a second nixpkgs-shaped mock that imports from `importTarget` and
+  # tags the nixosSystem result with a `nixpkgsMarker`, so tests can prove
+  # which input purr consumed to build a config (and for per-system pkgs).
+  makeNixpkgsMock =
+    { marker, importTarget }:
+    let
+      base = nixpkgsMock;
+    in
+    {
+      outPath = importTarget;
+      __toString = self: self.outPath;
+      lib = base.lib // {
+        nixosSystem =
+          args:
+          (base.lib.nixosSystem args)
+          // {
+            nixpkgsMarker = marker;
+          };
+      };
+    };
+
   homeManagerMock = {
     lib.homeManagerConfiguration = evalHomeConfiguration;
     nixosModules.home-manager = {
@@ -224,6 +245,7 @@ in
 {
   inherit
     inputs
+    makeNixpkgsMock
     mkFlakeLib
     moduleShim
     homeShim

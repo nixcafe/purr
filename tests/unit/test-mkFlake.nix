@@ -66,6 +66,14 @@ let
     };
   };
 
+  nixpkgsUnstableInput = {
+    outPath = ../integration/mocks/nixpkgs-unstable;
+    __toString = self: self.outPath;
+    lib = lib // {
+      inherit nixosSystem;
+    };
+  };
+
   homeManagerInput = {
     lib = {
       inherit homeManagerConfiguration;
@@ -97,6 +105,10 @@ let
     nixpkgs = nixpkgsInput;
     home-manager = homeManagerInput;
     nix-darwin = nixDarwinInput;
+  };
+
+  inputsWithUnstable = inputsBase // {
+    nixpkgs-unstable = nixpkgsUnstableInput;
   };
 in
 {
@@ -753,6 +765,99 @@ in
           in
           result.nixosConfigurations.myhost.specialArgs.namespace;
         expected = "my-ns";
+      };
+    };
+  };
+
+  # ---- inputsFor (effective inputs) ----
+  inputsFor = {
+    tests = {
+      "inputsFor replaces the nixpkgs used to build perSystem pkgs" = {
+        expr =
+          let
+            result = mkFlake {
+              inputs = inputsWithUnstable;
+              src = fixturesDir;
+              autoInject = false;
+              inputsFor =
+                { inputs, ... }:
+                {
+                  nixpkgs = inputs.nixpkgs-unstable;
+                };
+              outputsBuilder =
+                { pkgs, ... }:
+                {
+                  marker = pkgs.hello;
+                };
+            };
+          in
+          result.marker."x86_64-linux" or null;
+        expected = "hello-unstable-x86_64-linux";
+      };
+      "inputsFor may be a plain attrset" = {
+        expr =
+          let
+            result = mkFlake {
+              inputs = inputsWithUnstable;
+              src = fixturesDir;
+              autoInject = false;
+              inputsFor = {
+                nixpkgs = nixpkgsUnstableInput;
+              };
+              outputsBuilder =
+                { pkgs, ... }:
+                {
+                  marker = pkgs.hello;
+                };
+            };
+          in
+          result.marker."x86_64-linux" or null;
+        expected = "hello-unstable-x86_64-linux";
+      };
+      "modules still receive the raw flake inputs, not the effective ones" = {
+        expr =
+          let
+            result = mkFlake {
+              inputs = inputsWithUnstable // {
+                rawMarker = "raw";
+              };
+              src = fixturesDir;
+              packagesDir = "inputs-probe-packages";
+              autoInject = false;
+              inputsFor =
+                { inputs, ... }:
+                {
+                  nixpkgs = inputs.nixpkgs-unstable;
+                  effOnly = true;
+                };
+            };
+            pkg = result.packages."x86_64-linux"."inputs-probe" or { };
+          in
+          {
+            rawMarker = pkg.rawMarker or null;
+            seesEffectiveOnly = pkg.seesEffectiveOnly or null;
+          };
+        expected = {
+          rawMarker = "raw";
+          seesEffectiveOnly = false;
+        };
+      };
+      "default inputsFor is the identity transform" = {
+        expr =
+          let
+            result = mkFlake {
+              inputs = inputsWithUnstable;
+              src = fixturesDir;
+              autoInject = false;
+              outputsBuilder =
+                { pkgs, ... }:
+                {
+                  marker = pkgs.hello;
+                };
+            };
+          in
+          result.marker."x86_64-linux" or null;
+        expected = "hello-drv-x86_64-linux";
       };
     };
   };

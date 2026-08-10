@@ -49,6 +49,7 @@ lib/
   configs.nix            # system/home config builders
   mkFlake.nix            # standalone mkFlake
   resolveDir.nix         # directory resolution (shared by mkFlake + flake-module)
+  resolveInput.nix       # effective-input role resolution (resolveRole, defaults)
   purrLib.nix            # lib construction (buildImportedPurrLib, mergePurrLib)
   autoModules.nix        # per-system auto-discovery
 ```
@@ -97,6 +98,58 @@ works everywhere. Standalone homes additionally get it as `lib`.
 > missing during option collection). Once fixed upstream, bridged homes can get
 > `lib = homeLib` directly and `purr.lib` can be dropped.
 
+## Input Roles (`inputsFor` + meta role keys)
+
+purr lets users give different hosts different inputs (e.g. a second nixpkgs
+for some hosts, a different home-manager). This works as a two-stage pipeline,
+all pure, all lazy:
+
+1. **`inputsFor`** (`mkFlake { inputsFor }` / `purr.inputsFor`) — a function
+   `{ inputs, ... } -> inputs'` (or a plain attrset) that filters/replaces the
+   raw flake inputs into the **effective inputs**. Default is the identity.
+   This is internal only: it changes which input purr *consumes* to build
+   pkgs, system configs, home configs, and the merged lib base. The `inputs`
+   argument modules receive is NEVER modified — modules always see the raw
+   flake inputs.
+2. **Host meta role keys** — `meta.nixpkgs`, `meta.home-manager`,
+   `meta.nix-darwin` name a key of the effective inputs to use for that host.
+   Resolved in `buildSystemConfigs` / `buildHomeConfigs` via
+   `lib/resolveInput.nix`. A host sets the key and purr builds from that
+   input; `null`/absent falls back to the conventional key
+   (`nixpkgs`, `home-manager`/`homeManager`, `nix-darwin`/`darwin`) of the
+   effective inputs.
+
+Priority (total order, no conflict): host meta key > effective-input
+conventional key > raw input. Because meta is pure static metadata resolved
+before any config evaluation (see below), role resolution is a plain string
+lookup — no recursion.
+
+Consumption points that honor `effectiveInputs` / role resolution:
+
+- `nixosSystem` (linux host): `effectiveInputs.<meta.nixpkgs or "nixpkgs">.lib.nixosSystem`
+- `darwinSystem` (darwin host): `effectiveInputs.<meta.nix-darwin or auto>.lib.darwinSystem`
+- home-manager bridge: `effectiveInputs.<meta."home-manager" or auto>`
+- standalone homes: pkgs imported from the linked system's role (via
+  `systemMeta.nixpkgs`), or the effective-input default
+- per-system pkgs (packages/shells/checks/apps) + hydraJobs `systemPkgs`:
+  `effectiveInputs.nixpkgs`
+- merged lib base: `effectiveInputs.nixpkgs.lib`
+
+The merged lib handed to a system's modules **follows that host's own
+nixpkgs**: `perHostLib` re-merges the host's resolved nixpkgs lib with the
+flake's namespace lib, so lib-derived metadata (`system.nixos.revision`, ...)
+and `lib`/`pkgs` stay consistent even when the host switched nixpkgs. For
+homes, per-host replacement surfaces only through `purr.lib` — home-manager's
+own evaluation lib stays on the caller-provided merged lib (matching
+home-manager's pinned nixpkgs), which keeps its internals stable. Only the
+top-level `flake.lib` export stays the global namespace lib. When a host's
+nixpkgs is missing (or is a non-nixpkgs mock), the lib falls back to the
+caller-provided merged lib.
+
+Referencing an input missing from the effective inputs throws a clear error
+(`role input '<key>' is not a key of the effective inputs (the inputsFor
+result)`). Keep every input hosts may reference inside `inputsFor`.
+
 ## Host Metadata (meta)
 
 Hosts can carry metadata that purr reads at flake-evaluation time (cheap, no
@@ -131,6 +184,8 @@ auto structure is guaranteed to win. Referencing an unknown host via
   `nixosConfigurations`/`darwinConfigurations` output. Defaults to `true` when
   `images == []` or the host is darwin; a host with `images` is image-only by
   default (excluded from config outputs and config hydraJobs groups).
+- `nixpkgs` / `home-manager` / `nix-darwin` — input role keys (see "Input
+  Roles" above): a key of the effective inputs to build this host from.
 
 Everything else in the merged meta is a free-form custom key exposed as
 `purr.meta.<key>` for user automation.
