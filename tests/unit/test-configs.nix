@@ -1328,6 +1328,348 @@ in
     };
   };
 
+  # ---- role resolution (inputsFor / effective inputs) ----
+  roleResolution = {
+    tests = {
+      "meta.nixpkgs selects an alternate effective input for a linux host" = {
+        expr =
+          let
+            nixpkgsInput = marker: {
+              lib.nixosSystem =
+                {
+                  modules,
+                  system,
+                  specialArgs,
+                }:
+                {
+                  inherit modules specialArgs system;
+                  src = marker;
+                };
+            };
+            inputs = {
+              nixpkgs = nixpkgsInput "np-default";
+              nixpkgs-unstable = nixpkgsInput "np-unstable";
+            };
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              discoveredHomes = { };
+              inherit inputs;
+              hostsMeta.myhost.nixpkgs = "nixpkgs-unstable";
+            };
+          in
+          result.nixosConfigurations.myhost.src;
+        expected = "np-unstable";
+      };
+      "linux host defaults to the effective nixpkgs" = {
+        expr =
+          let
+            nixpkgsInput = marker: {
+              lib.nixosSystem =
+                {
+                  modules,
+                  system,
+                  specialArgs,
+                }:
+                {
+                  inherit modules specialArgs system;
+                  src = marker;
+                };
+            };
+            inputs = {
+              nixpkgs = nixpkgsInput "np-default";
+              nixpkgs-unstable = nixpkgsInput "np-unstable";
+            };
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              discoveredHomes = { };
+              inherit inputs;
+            };
+          in
+          result.nixosConfigurations.myhost.src;
+        expected = "np-default";
+      };
+      "effectiveInputs drive the build while modules still see raw inputs" = {
+        expr =
+          let
+            nixpkgsInput = marker: {
+              lib.nixosSystem =
+                {
+                  modules,
+                  system,
+                  specialArgs,
+                }:
+                {
+                  inherit modules specialArgs system;
+                  src = marker;
+                };
+            };
+            rawInputs = {
+              nixpkgs = nixpkgsInput "raw-np";
+              rawMarker = "raw-only";
+            };
+            effInputs = {
+              nixpkgs = nixpkgsInput "eff-np";
+              effOnly = true;
+            };
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              discoveredHomes = { };
+              inputs = rawInputs;
+              effectiveInputs = effInputs;
+            };
+            spec = result.nixosConfigurations.myhost.specialArgs;
+          in
+          {
+            src = result.nixosConfigurations.myhost.src;
+            rawMarkerVisibleToModules = spec.inputs.rawMarker or null;
+            effOnlyHiddenFromModules = spec.inputs ? effOnly;
+          };
+        expected = {
+          src = "eff-np";
+          rawMarkerVisibleToModules = "raw-only";
+          effOnlyHiddenFromModules = false;
+        };
+      };
+      "meta.home-manager selects an alternate home-manager for the bridge" = {
+        expr =
+          let
+            inputs = {
+              inherit (nixosInputs) nixpkgs;
+              home-manager = {
+                nixosModules.home-manager = "hm-one";
+                darwinModules.home-manager = "hm-one-d";
+              };
+              home-manager-unstable = {
+                nixosModules.home-manager = "hm-two";
+                darwinModules.home-manager = "hm-two-d";
+              };
+            };
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              discoveredHomes."x86_64-linux"."alice@myhost" = homeFixture;
+              inherit inputs;
+              hostsMeta.myhost."home-manager" = "home-manager-unstable";
+            };
+            modules = result.nixosConfigurations.myhost.modules;
+          in
+          {
+            hasHmTwo = builtins.elem "hm-two" modules;
+            hasHmOne = builtins.elem "hm-one" modules;
+          };
+        expected = {
+          hasHmTwo = true;
+          hasHmOne = false;
+        };
+      };
+      "meta.nix-darwin selects an alternate nix-darwin input" = {
+        expr =
+          let
+            darwinSystem = marker: {
+              lib.darwinSystem =
+                {
+                  modules,
+                  system,
+                  specialArgs,
+                }:
+                {
+                  inherit modules specialArgs system;
+                  src = marker;
+                };
+            };
+            inputs = {
+              nixpkgs = {
+                lib = { };
+              };
+              nix-darwin = darwinSystem "nd-one";
+              nix-darwin-unstable = darwinSystem "nd-two";
+            };
+            result = buildSystemConfigs {
+              discoveredSystems."aarch64-darwin".mac1 = sysDarwinFixture;
+              discoveredHomes = { };
+              inherit inputs;
+              hostsMeta.mac1.nix-darwin = "nix-darwin-unstable";
+            };
+          in
+          result.darwinConfigurations.mac1.src;
+        expected = "nd-two";
+      };
+      "meta.nixpkgs referencing an input missing from effective inputs throws" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              discoveredHomes = { };
+              inputs = nixosInputs;
+              hostsMeta.myhost.nixpkgs = "nixpkgs-stable";
+            };
+          in
+          (builtins.tryEval result.nixosConfigurations.myhost).success;
+        expected = false;
+      };
+      "non-string meta.nixpkgs throws" = {
+        expr =
+          let
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              discoveredHomes = { };
+              inputs = nixosInputs;
+              hostsMeta.myhost.nixpkgs = [ "nixpkgs" ];
+            };
+          in
+          (builtins.tryEval result.nixosConfigurations.myhost).success;
+        expected = false;
+      };
+      "standalone home inherits its linked system's nixpkgs role" = {
+        expr =
+          let
+            homeCapturingInput = {
+              lib.homeManagerConfiguration = args: {
+                inherit (args) modules extraSpecialArgs pkgs;
+              };
+            };
+            inputs = {
+              nixpkgs = ./fixtures/mock-nixpkgs;
+              home-manager = homeCapturingInput;
+            };
+            effectiveInputs = {
+              nixpkgs = ./fixtures/mock-nixpkgs;
+              nixpkgs-unstable = ./fixtures/mock-nixpkgs-unstable;
+              home-manager = homeCapturingInput;
+            };
+            result = buildHomeConfigs {
+              discoveredHomes."x86_64-linux"."alice@myhost" = homeFixture;
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              inherit inputs effectiveInputs;
+              hostsMeta.myhost.nixpkgs = "nixpkgs-unstable";
+            };
+          in
+          {
+            marker = result."alice@myhost".pkgs.marker;
+            system = result."alice@myhost".pkgs.system;
+          };
+        expected = {
+          marker = "np-unstable";
+          system = "x86_64-linux";
+        };
+      };
+      "home without a linked system uses the default effective nixpkgs" = {
+        expr =
+          let
+            homeCapturingInput = {
+              lib.homeManagerConfiguration = args: {
+                inherit (args) modules extraSpecialArgs pkgs;
+              };
+            };
+            inputs = {
+              nixpkgs = ./fixtures/mock-nixpkgs;
+              home-manager = homeCapturingInput;
+            };
+            effectiveInputs = {
+              nixpkgs = ./fixtures/mock-nixpkgs;
+              nixpkgs-unstable = ./fixtures/mock-nixpkgs-unstable;
+              home-manager = homeCapturingInput;
+            };
+            result = buildHomeConfigs {
+              discoveredHomes."x86_64-linux"."alice@somewhere" = homeFixture;
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              inherit inputs effectiveInputs;
+            };
+          in
+          {
+            marker = result."alice@somewhere".pkgs.marker;
+            system = result."alice@somewhere".pkgs.system;
+          };
+        expected = {
+          marker = "np-default";
+          system = "x86_64-linux";
+        };
+      };
+      "system lib follows the host's effective nixpkgs" = {
+        expr =
+          let
+            nixpkgsInput = marker: {
+              lib = lib // {
+                libMarker = marker;
+                nixosSystem =
+                  {
+                    modules,
+                    system,
+                    specialArgs,
+                  }:
+                  {
+                    inherit modules specialArgs system;
+                  };
+              };
+            };
+            inputs = {
+              nixpkgs = nixpkgsInput "default-lib";
+              nixpkgs-unstable = nixpkgsInput "unstable-lib";
+            };
+            result = buildSystemConfigs {
+              discoveredSystems."x86_64-linux" = {
+                myhost = sysLinuxFixture;
+                other = sysLinuxFixture;
+              };
+              discoveredHomes = { };
+              inherit inputs;
+              hostsMeta.myhost.nixpkgs = "nixpkgs-unstable";
+            };
+          in
+          {
+            myhostLib = result.nixosConfigurations.myhost.specialArgs.lib.libMarker;
+            otherLib = result.nixosConfigurations.other.specialArgs.lib.libMarker;
+          };
+        expected = {
+          myhostLib = "unstable-lib";
+          otherLib = "default-lib";
+        };
+      };
+      "home purr.lib follows the linked system's nixpkgs; hm eval lib stays global" = {
+        expr =
+          let
+            homeCapturingInput = {
+              lib.homeManagerConfiguration = args: {
+                inherit (args) extraSpecialArgs modules;
+              };
+            };
+            mkLib = marker: {
+              lib = lib.extend (
+                _self: _super: {
+                  libMarker = marker;
+                }
+              );
+            };
+            globalLib = lib.extend (
+              _self: _super: {
+                evalLibMarker = "global-eval";
+              }
+            );
+            inputs = {
+              nixpkgs = mkLib "default-lib";
+              nixpkgs-unstable = mkLib "unstable-lib";
+              home-manager = homeCapturingInput;
+            };
+            result = buildHomeConfigs {
+              discoveredHomes."x86_64-linux"."alice@myhost" = homeFixture;
+              discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
+              inherit inputs;
+              lib = globalLib;
+              hostsMeta.myhost.nixpkgs = "nixpkgs-unstable";
+            };
+            args = result."alice@myhost".extraSpecialArgs;
+          in
+          {
+            hmEvalLibMarker = args.lib.evalLibMarker or "missing";
+            purrLibMarker = args.purr.lib.libMarker or "missing";
+          };
+        expected = {
+          hmEvalLibMarker = "global-eval";
+          purrLibMarker = "unstable-lib";
+        };
+      };
+    };
+  };
+
   # ---- extraArgs ----
   extraArgs = {
     tests = {

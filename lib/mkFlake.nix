@@ -46,6 +46,7 @@ let
     {
       inputs,
       src,
+      inputsFor ? ({ inputs, ... }: inputs),
       namespace ? null,
       libDir ? null,
       flattenLib ? false,
@@ -87,6 +88,13 @@ let
       ...
     }:
     let
+      # Effective inputs: the raw flake inputs after an optional `inputsFor`
+      # filter/replace. This is internal only — modules still receive the raw
+      # `inputs` as an argument; replacement affects how purr builds pkgs,
+      # system configs, and home configs.
+      effectiveInputs =
+        if builtins.isFunction inputsFor then inputsFor { inherit inputs; } else inputsFor;
+
       hjCfg = hydraJobs;
       hjEnabled = hjCfg.enable or false;
       hjName = hjCfg.as or "hydraJobs";
@@ -134,7 +142,7 @@ let
 
       pkgs = forAllSystems (
         system:
-        import inputs.nixpkgs {
+        import effectiveInputs.nixpkgs {
           inherit system;
           config = nixpkgsConfig;
           overlays = sharedOverlays;
@@ -152,8 +160,8 @@ let
       };
 
       mergedLib = buildMergedLib {
-        inherit inputs;
         inherit lib;
+        effectiveInputs = effectiveInputs;
         importedPurrLib = importedPurrLib;
         inherit namespace;
       };
@@ -272,9 +280,11 @@ let
               nixpkgsConfig
               sharedOverlays
               ;
+            effectiveInputs = effectiveInputs;
             hostsMeta = builtins.mapAttrs (_: v: v.meta or { }) hosts;
             inputs = inputs;
             extraModules = extraModulesWithLocal;
+            importedPurrLib = importedPurrLib;
             lib = mergedLib;
           }
         else
@@ -291,9 +301,11 @@ let
               nixpkgsConfig
               sharedOverlays
               ;
+            effectiveInputs = effectiveInputs;
             hostsMeta = builtins.mapAttrs (_: v: v.meta or { }) hosts;
             inputs = inputs;
             extraModules = extraModulesWithLocal;
+            importedPurrLib = importedPurrLib;
             lib = mergedLib;
           }
         else

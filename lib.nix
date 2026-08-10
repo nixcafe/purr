@@ -14,6 +14,7 @@ let
 
   confs = import ./lib/configs.nix {
     inherit lib;
+    inherit (libBuilder) mergePurrLib;
   };
 
   resolver = import ./lib/resolveDir.nix {
