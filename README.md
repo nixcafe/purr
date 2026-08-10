@@ -200,41 +200,6 @@ Homes named `<user>@<host>` auto-link to matching hosts. No extra wiring needed.
 }
 ```
 
-### Per-host inputs (multi-nixpkgs)
-
-Replace or filter which inputs purr builds with via `inputsFor`, then point
-individual hosts at a specific input through a meta key. Modules always keep
-the original `inputs` argument — replacement only affects how purr builds
-things.
-
-```nix
-# flake.nix
-inputs = {
-  nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
-  # ...
-};
-
-outputs = inputs:
-  inputs.purr.lib.mkFlake {
-    inherit inputs;
-    src = ./.;
-    inputsFor = { inputs, ... }: {
-      nixpkgs = inputs.nixpkgs;
-      nixpkgs-unstable = inputs.nixpkgs-unstable;
-    };
-    hosts.desktop.meta.nixpkgs = "nixpkgs-unstable";
-  };
-```
-
-```nix
-# systems/x86_64-linux/server/meta.nix
-{ nixpkgs = "nixpkgs-unstable"; }
-```
-
-Supported role keys: `nixpkgs`, `home-manager`, `nix-darwin`. Homes inherit
-their linked system's nixpkgs; unmatched homes use the effective-input default.
-
 ### Namespace Bridge
 
 Forward home-manager config from any NixOS module via the namespace bridge — set `purr.users.<name>.homeConfig` on a host with linked homes:

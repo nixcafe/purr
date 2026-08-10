@@ -35,11 +35,16 @@ let
   withEffective =
     inputs: effectiveInputs: if effectiveInputs == null then inputs else effectiveInputs;
 
-  # Effective-input key for a host role: the merged meta's explicit override,
+  # Meta key under which per-host input role overrides live. Nested under its
+  # own key so the role names (nixpkgs, home-manager, nix-darwin) never collide
+  # with a host's free-form custom meta keys.
+  rolesKey = "roles";
+
+  # Effective-input key for a host role: `meta.<rolesKey>.<role>` when set,
   # else the conventional default.
   roleKey =
     meta: role: default:
-    meta.${role} or default;
+    meta.${rolesKey}.${role} or default;
 
   # The merged lib handed to a host's modules. Its base is that host's
   # effective nixpkgs lib (real nixpkgs libs expose `attrNames`) re-merged with
@@ -613,7 +618,7 @@ let
                     };
                 }
               else
-                throw "darwin system '${systemName}' requires a nix-darwin input (add inputs.nix-darwin or inputs.darwin, or set meta.nix-darwin)"
+                throw "darwin system '${systemName}' requires a nix-darwin input (add inputs.nix-darwin or inputs.darwin, or set meta.roles.nix-darwin)"
             else
               throw "unsupported format '${format}' for system '${systemName}'";
         in

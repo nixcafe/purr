@@ -1,6 +1,6 @@
 # Integration tests: per-host input replacement via `inputsFor` + meta role
 # keys. A second hermetically-importable nixpkgs mock is wired through
-# `inputsFor`; `hosts.<name>.meta.nixpkgs` makes `server` build from it, while
+# `inputsFor`; `hosts.<name>.meta.roles.nixpkgs` makes `server` build from it, while
 # the other hosts and the linked/standalone homes fall back to the default.
 { lib }:
 let
@@ -24,7 +24,7 @@ let
     hosts.server.meta = {
       tier = "prod";
       region = "us-east";
-      nixpkgs = "nixpkgs-unstable";
+      roles.nixpkgs = "nixpkgs-unstable";
     };
     inputsFor =
       { inputs, ... }:
