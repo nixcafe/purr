@@ -1331,7 +1331,7 @@ in
   # ---- role resolution (inputsFor / effective inputs) ----
   roleResolution = {
     tests = {
-      "meta.nixpkgs selects an alternate effective input for a linux host" = {
+      "meta.roles.nixpkgs selects an alternate effective input for a linux host" = {
         expr =
           let
             nixpkgsInput = marker: {
@@ -1354,7 +1354,7 @@ in
               discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
               discoveredHomes = { };
               inherit inputs;
-              hostsMeta.myhost.nixpkgs = "nixpkgs-unstable";
+              hostsMeta.myhost.roles.nixpkgs = "nixpkgs-unstable";
             };
           in
           result.nixosConfigurations.myhost.src;
@@ -1430,7 +1430,7 @@ in
           effOnlyHiddenFromModules = false;
         };
       };
-      "meta.home-manager selects an alternate home-manager for the bridge" = {
+      "meta.roles.home-manager selects an alternate home-manager for the bridge" = {
         expr =
           let
             inputs = {
@@ -1448,7 +1448,7 @@ in
               discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
               discoveredHomes."x86_64-linux"."alice@myhost" = homeFixture;
               inherit inputs;
-              hostsMeta.myhost."home-manager" = "home-manager-unstable";
+              hostsMeta.myhost.roles."home-manager" = "home-manager-unstable";
             };
             modules = result.nixosConfigurations.myhost.modules;
           in
@@ -1461,7 +1461,7 @@ in
           hasHmOne = false;
         };
       };
-      "meta.nix-darwin selects an alternate nix-darwin input" = {
+      "meta.roles.nix-darwin selects an alternate nix-darwin input" = {
         expr =
           let
             darwinSystem = marker: {
@@ -1487,33 +1487,33 @@ in
               discoveredSystems."aarch64-darwin".mac1 = sysDarwinFixture;
               discoveredHomes = { };
               inherit inputs;
-              hostsMeta.mac1.nix-darwin = "nix-darwin-unstable";
+              hostsMeta.mac1.roles.nix-darwin = "nix-darwin-unstable";
             };
           in
           result.darwinConfigurations.mac1.src;
         expected = "nd-two";
       };
-      "meta.nixpkgs referencing an input missing from effective inputs throws" = {
+      "meta.roles.nixpkgs referencing an input missing from effective inputs throws" = {
         expr =
           let
             result = buildSystemConfigs {
               discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
               discoveredHomes = { };
               inputs = nixosInputs;
-              hostsMeta.myhost.nixpkgs = "nixpkgs-stable";
+              hostsMeta.myhost.roles.nixpkgs = "nixpkgs-stable";
             };
           in
           (builtins.tryEval result.nixosConfigurations.myhost).success;
         expected = false;
       };
-      "non-string meta.nixpkgs throws" = {
+      "non-string meta.roles.nixpkgs throws" = {
         expr =
           let
             result = buildSystemConfigs {
               discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
               discoveredHomes = { };
               inputs = nixosInputs;
-              hostsMeta.myhost.nixpkgs = [ "nixpkgs" ];
+              hostsMeta.myhost.roles.nixpkgs = [ "nixpkgs" ];
             };
           in
           (builtins.tryEval result.nixosConfigurations.myhost).success;
@@ -1540,7 +1540,7 @@ in
               discoveredHomes."x86_64-linux"."alice@myhost" = homeFixture;
               discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
               inherit inputs effectiveInputs;
-              hostsMeta.myhost.nixpkgs = "nixpkgs-unstable";
+              hostsMeta.myhost.roles.nixpkgs = "nixpkgs-unstable";
             };
           in
           {
@@ -1612,7 +1612,7 @@ in
               };
               discoveredHomes = { };
               inherit inputs;
-              hostsMeta.myhost.nixpkgs = "nixpkgs-unstable";
+              hostsMeta.myhost.roles.nixpkgs = "nixpkgs-unstable";
             };
           in
           {
@@ -1654,7 +1654,7 @@ in
               discoveredSystems."x86_64-linux".myhost = sysLinuxFixture;
               inherit inputs;
               lib = globalLib;
-              hostsMeta.myhost.nixpkgs = "nixpkgs-unstable";
+              hostsMeta.myhost.roles.nixpkgs = "nixpkgs-unstable";
             };
             args = result."alice@myhost".extraSpecialArgs;
           in

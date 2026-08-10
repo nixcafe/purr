@@ -111,9 +111,11 @@ all pure, all lazy:
    pkgs, system configs, home configs, and the merged lib base. The `inputs`
    argument modules receive is NEVER modified — modules always see the raw
    flake inputs.
-2. **Host meta role keys** — `meta.nixpkgs`, `meta.home-manager`,
-   `meta.nix-darwin` name a key of the effective inputs to use for that host.
-   Resolved in `buildSystemConfigs` / `buildHomeConfigs` via
+2. **Host meta role keys** — `meta.roles.<role>` (e.g. `meta.roles.nixpkgs`)
+   names a key of the effective inputs to use for that host. The role names
+   (`nixpkgs`, `home-manager`, `nix-darwin`) live under the single nested
+   `meta.roles` key so they never collide with a host's free-form custom meta
+   keys. Resolved in `buildSystemConfigs` / `buildHomeConfigs` via
    `lib/resolveInput.nix`. A host sets the key and purr builds from that
    input; `null`/absent falls back to the conventional key
    (`nixpkgs`, `home-manager`/`homeManager`, `nix-darwin`/`darwin`) of the
@@ -126,9 +128,9 @@ lookup — no recursion.
 
 Consumption points that honor `effectiveInputs` / role resolution:
 
-- `nixosSystem` (linux host): `effectiveInputs.<meta.nixpkgs or "nixpkgs">.lib.nixosSystem`
-- `darwinSystem` (darwin host): `effectiveInputs.<meta.nix-darwin or auto>.lib.darwinSystem`
-- home-manager bridge: `effectiveInputs.<meta."home-manager" or auto>`
+- `nixosSystem` (linux host): `effectiveInputs.<meta.roles.nixpkgs or "nixpkgs">.lib.nixosSystem`
+- `darwinSystem` (darwin host): `effectiveInputs.<meta.roles.nix-darwin or auto>.lib.darwinSystem`
+- home-manager bridge: `effectiveInputs.<meta.roles."home-manager" or auto>`
 - standalone homes: pkgs imported from the linked system's role (via
   `systemMeta.nixpkgs`), or the effective-input default
 - per-system pkgs (packages/shells/checks/apps) + hydraJobs `systemPkgs`:
@@ -184,8 +186,9 @@ auto structure is guaranteed to win. Referencing an unknown host via
   `nixosConfigurations`/`darwinConfigurations` output. Defaults to `true` when
   `images == []` or the host is darwin; a host with `images` is image-only by
   default (excluded from config outputs and config hydraJobs groups).
-- `nixpkgs` / `home-manager` / `nix-darwin` — input role keys (see "Input
-  Roles" above): a key of the effective inputs to build this host from.
+- `roles` — input role keys (see "Input Roles" above): maps a role name
+  (`nixpkgs`, `home-manager`, `nix-darwin`) to a key of the effective inputs to
+  build this host from. Hosts set e.g. `meta.roles.nixpkgs = "nixpkgs-stable"`.
 
 Everything else in the merged meta is a free-form custom key exposed as
 `purr.meta.<key>` for user automation.

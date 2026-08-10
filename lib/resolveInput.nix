@@ -4,8 +4,8 @@
 # purr's *effective* inputs — the result of the flake's `inputsFor`
 # transform (filtering/replacing the raw flake inputs before purr consumes
 # them internally). A host's merged meta may pin a role to a specific
-# effective-input key via `meta.<role>`; otherwise the role falls back to its
-# conventional key (`nixpkgs`, `home-manager`, ...).
+# effective-input key via `meta.roles.<role>`; otherwise the role falls back
+# to its conventional key (`nixpkgs`, `home-manager`, ...).
 #
 # Module arguments are never affected: modules always receive the raw flake
 # inputs. This resolution only drives how purr itself builds pkgs, system
