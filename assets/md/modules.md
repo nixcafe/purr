@@ -68,6 +68,8 @@ Each auto-discovered module receives different arguments depending on its direct
 
 > **Note:** `lib` in `packages/`, `legacyPackages/`, `shells/`, `checks/`, `apps/`, and `formatter/` includes the project's custom lib under `lib.<namespace>.*`, merged via the merged namespace lib. `systems/` and `homes/` receive a `purr` attrset with metadata about the current configuration context via `specialArgs` / `extraSpecialArgs`. See [Systems & Homes](/systems-homes#purr-metadata) for the full `purr` shape.
 
+> **Note:** discovered packages are auto-registered into `pkgs` and spread into every module's arguments, so a module can depend on a sibling package by name: `{ hello, ... }: hello.override { ... }`. Enabled by default (`packagesToPkgs = true`). See [Packages](/mkflake#packages).
+
 ## Custom Lib
 
 Create a `lib/` directory under `src` to share functions across all modules:

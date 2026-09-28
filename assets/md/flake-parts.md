@@ -68,6 +68,7 @@ Default `moduleTypes`:
 | `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
 | `purr.packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
+| `purr.packagesToPkgs` | bool | `true` | Auto-register discovered packages into `pkgs` (addressable as `pkgs.<name>`, overridable, usable by other modules). See [Packages](/mkflake#packages) |
 | `purr.legacyPackagesDir` | nullOr str | `null` | auto-detects `legacyPackages/` |
 | `purr.legacyPackagesByName` | bool | `false` | Also discover legacy packages via `by-name/` convention (coexists with regular discovery) |
 | `purr.appsDir` | nullOr str | `null` | auto-detects `apps/` |

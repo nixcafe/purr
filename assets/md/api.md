@@ -1,6 +1,6 @@
 # API Reference
 
-All 42 library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
+All 43 library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
 
 ## Flake Builder
 
@@ -200,6 +200,14 @@ Resolve the merged lib handed to modules. The base is the flake's real `inputs.n
 ### `autoModules`
 
 Per-system auto-discovery for checks, shells, packages, and apps. Each module is imported with `pkgs` spread into the function arguments (like `callPackage`), so `{ stdenv, fetchurl, pkgs, lib, ... }` style destructuring works directly.
+
+### `autoPackages`
+
+Per-system package discovery for `packages/`, identical to `autoModules` except
+each discovered package is wrapped with `lib.makeOverridable` (so
+`.override`/`.overrideAttrs` work like a `callPackage` package). Used for the
+`packages.<system>.*` output and for the overlay that auto-registers packages
+into `pkgs` (`packagesToPkgs`).
 
 ### `autoFormatter`
 

@@ -19,14 +19,15 @@ src/
 │   └── shared/                       #   → merged into nixos + darwin
 │
 ├── packages/                         # Per-system packages (auto-detect: "packages")
+│   │                                 #   also registered into pkgs.<name> (packagesToPkgs)
 │   ├── known-hosts/
-│   │   └── default.nix               #   → packages.<system>.known-hosts
+│   │   └── default.nix               #   → packages.<system>.known-hosts, pkgs.known-hosts
 │   ├── match-blocks/
-│   │   └── default.nix               #   → packages.<system>.match-blocks
+│   │   └── default.nix               #   → packages.<system>.match-blocks, pkgs.match-blocks
 │   └── by-name/                      #   Optional by-name convention (packagesByName = true)
 │       └── co/
 │           └── cowsay/
-│               └── package.nix       #   → packages.<system>.cowsay
+│               └── package.nix       #   → packages.<system>.cowsay, pkgs.cowsay
 │
 ├── legacyPackages/                   # Per-system legacy packages (auto-detect: "legacyPackages")
 │   ├── hello/
@@ -70,6 +71,8 @@ src/
     └── x86_64-linux/
         └── alice@server/default.nix  # → homeConfigurations."alice@server"
 ```
+
+> **Packages:** every package under `packages/` is also auto-registered into `pkgs` (as `pkgs.<name>`), so it can be used from any module and by other packages. Disable with `packagesToPkgs = false`. See [Packages](/mkflake#packages).
 
 > **hydraJobs:** custom CI jobs live in a top-level `hydraJobs/` directory. Enable with `hydraJobs.enable = true`. See the [hydraJobs](/hydrajobs) page.
 

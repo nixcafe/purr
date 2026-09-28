@@ -48,6 +48,7 @@
 | `overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `packagesDir` | nullOr str | `null` | auto-detects `packages/` |
 | `packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
+| `packagesToPkgs` | bool | `true` | Auto-register discovered packages into `pkgs` (addressable as `pkgs.<name>`, overridable, usable by other modules). See [Packages](#packages) |
 | `legacyPackagesDir` | nullOr str | `null` | auto-detects `legacyPackages/` |
 | `legacyPackagesByName` | bool | `false` | Also discover legacy packages via `by-name/` convention (coexists with regular discovery) |
 | `appsDir` | nullOr str | `null` | auto-detects `apps/` |
@@ -165,6 +166,45 @@ inputs.purr.lib.mkFlake {
   outputsBuilder = { pkgs, ... }: {
     formatter = pkgs.alejandra;
   };
+}
+```
+
+## Packages
+
+Modules under `packages/` are exposed as `packages.<system>.<name>` **and
+auto-registered into `pkgs`** (when `packagesToPkgs = true`, the default). This
+means any module — packages, shells, checks, apps, NixOS/darwin/home configs —
+can reference them as `pkgs.<name>`:
+
+```nix
+# packages/hello/default.nix
+{ lib, ... }: { /* ... */ }
+```
+
+```nix
+# checks/lint/default.nix
+{ pkgs, ... }: pkgs.hello   # the discovered package
+```
+
+Each discovered package is wrapped like a `callPackage` package
+(`.override`/`.overrideAttrs` work), and can depend on other discovered
+packages:
+
+```nix
+# packages/wrapper/default.nix — `hello` resolves from `pkgs`
+{ hello, ... }: hello.override { /* ... */ }
+```
+
+Registration is implemented as a nixpkgs overlay built on the package-set
+fixpoint, so one-way dependencies resolve lazily. Mutually-recursive packages
+recurse, exactly like any nixpkgs overlay. Set `packagesToPkgs = false` to keep
+packages out of `pkgs` (they remain available as `packages.<system>.<name>`).
+
+```nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  packagesToPkgs = false;   # opt out of pkgs registration
 }
 ```
 

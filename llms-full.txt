@@ -138,7 +138,7 @@ See the [Directory Structure](/directory-structure) page for the complete layout
 
 ## API Reference
 
-The full library API (42 functions) is documented on the [API Reference](/api) page.
+The full library API (43 functions) is documented on the [API Reference](/api) page.
 
 # flake-parts Integration
 
@@ -210,6 +210,7 @@ Default `moduleTypes`:
 | `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
 | `purr.packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
+| `purr.packagesToPkgs` | bool | `true` | Auto-register discovered packages into `pkgs` (addressable as `pkgs.<name>`, overridable, usable by other modules). See [Packages](/mkflake#packages) |
 | `purr.legacyPackagesDir` | nullOr str | `null` | auto-detects `legacyPackages/` |
 | `purr.legacyPackagesByName` | bool | `false` | Also discover legacy packages via `by-name/` convention (coexists with regular discovery) |
 | `purr.appsDir` | nullOr str | `null` | auto-detects `apps/` |
@@ -414,6 +415,7 @@ All auto-discovered modules receive `extraArgs` keys — packages, shells, check
 | `overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `packagesDir` | nullOr str | `null` | auto-detects `packages/` |
 | `packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
+| `packagesToPkgs` | bool | `true` | Auto-register discovered packages into `pkgs` (addressable as `pkgs.<name>`, overridable, usable by other modules). See [Packages](#packages) |
 | `legacyPackagesDir` | nullOr str | `null` | auto-detects `legacyPackages/` |
 | `legacyPackagesByName` | bool | `false` | Also discover legacy packages via `by-name/` convention (coexists with regular discovery) |
 | `appsDir` | nullOr str | `null` | auto-detects `apps/` |
@@ -534,6 +536,45 @@ inputs.purr.lib.mkFlake {
 }
 ```
 
+## Packages
+
+Modules under `packages/` are exposed as `packages.<system>.<name>` **and
+auto-registered into `pkgs`** (when `packagesToPkgs = true`, the default). This
+means any module — packages, shells, checks, apps, NixOS/darwin/home configs —
+can reference them as `pkgs.<name>`:
+
+```nix
+# packages/hello/default.nix
+{ lib, ... }: { /* ... */ }
+```
+
+```nix
+# checks/lint/default.nix
+{ pkgs, ... }: pkgs.hello   # the discovered package
+```
+
+Each discovered package is wrapped like a `callPackage` package
+(`.override`/`.overrideAttrs` work), and can depend on other discovered
+packages:
+
+```nix
+# packages/wrapper/default.nix — `hello` resolves from `pkgs`
+{ hello, ... }: hello.override { /* ... */ }
+```
+
+Registration is implemented as a nixpkgs overlay built on the package-set
+fixpoint, so one-way dependencies resolve lazily. Mutually-recursive packages
+recurse, exactly like any nixpkgs overlay. Set `packagesToPkgs = false` to keep
+packages out of `pkgs` (they remain available as `packages.<system>.<name>`).
+
+```nix
+inputs.purr.lib.mkFlake {
+  inherit inputs;
+  src = ./.;
+  packagesToPkgs = false;   # opt out of pkgs registration
+}
+```
+
 ## Legacy Packages
 
 Auto-discover `legacyPackages.<system>.*` from `legacyPackages/` — the convention for unmergeable or non-standard packages, still buildable via `nix build .#<name>`:
@@ -645,6 +686,8 @@ Each auto-discovered module receives different arguments depending on its direct
 
 > **Note:** `lib` in `packages/`, `legacyPackages/`, `shells/`, `checks/`, `apps/`, and `formatter/` includes the project's custom lib under `lib.<namespace>.*`, merged via the merged namespace lib. `systems/` and `homes/` receive a `purr` attrset with metadata about the current configuration context via `specialArgs` / `extraSpecialArgs`. See [Systems & Homes](/systems-homes#purr-metadata) for the full `purr` shape.
 
+> **Note:** discovered packages are auto-registered into `pkgs` and spread into every module's arguments, so a module can depend on a sibling package by name: `{ hello, ... }: hello.override { ... }`. Enabled by default (`packagesToPkgs = true`). See [Packages](/mkflake#packages).
+
 ## Custom Lib
 
 Create a `lib/` directory under `src` to share functions across all modules:
@@ -717,14 +760,15 @@ src/
 │   └── shared/                       #   → merged into nixos + darwin
 │
 ├── packages/                         # Per-system packages (auto-detect: "packages")
+│   │                                 #   also registered into pkgs.<name> (packagesToPkgs)
 │   ├── known-hosts/
-│   │   └── default.nix               #   → packages.<system>.known-hosts
+│   │   └── default.nix               #   → packages.<system>.known-hosts, pkgs.known-hosts
 │   ├── match-blocks/
-│   │   └── default.nix               #   → packages.<system>.match-blocks
+│   │   └── default.nix               #   → packages.<system>.match-blocks, pkgs.match-blocks
 │   └── by-name/                      #   Optional by-name convention (packagesByName = true)
 │       └── co/
 │           └── cowsay/
-│               └── package.nix       #   → packages.<system>.cowsay
+│               └── package.nix       #   → packages.<system>.cowsay, pkgs.cowsay
 │
 ├── legacyPackages/                   # Per-system legacy packages (auto-detect: "legacyPackages")
 │   ├── hello/
@@ -768,6 +812,8 @@ src/
     └── x86_64-linux/
         └── alice@server/default.nix  # → homeConfigurations."alice@server"
 ```
+
+> **Packages:** every package under `packages/` is also auto-registered into `pkgs` (as `pkgs.<name>`), so it can be used from any module and by other packages. Disable with `packagesToPkgs = false`. See [Packages](/mkflake#packages).
 
 > **hydraJobs:** custom CI jobs live in a top-level `hydraJobs/` directory. Enable with `hydraJobs.enable = true`. See the [hydraJobs](/hydrajobs) page.
 
@@ -1498,7 +1544,7 @@ The same declarations also feed `hydraJobs.images.<host>.<format>` when hydraJob
 
 # API Reference
 
-All 42 library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
+All 43 library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
 
 ## Flake Builder
 
@@ -1698,6 +1744,14 @@ Resolve the merged lib handed to modules. The base is the flake's real `inputs.n
 ### `autoModules`
 
 Per-system auto-discovery for checks, shells, packages, and apps. Each module is imported with `pkgs` spread into the function arguments (like `callPackage`), so `{ stdenv, fetchurl, pkgs, lib, ... }` style destructuring works directly.
+
+### `autoPackages`
+
+Per-system package discovery for `packages/`, identical to `autoModules` except
+each discovered package is wrapped with `lib.makeOverridable` (so
+`.override`/`.overrideAttrs` work like a `callPackage` package). Used for the
+`packages.<system>.*` output and for the overlay that auto-registers packages
+into `pkgs` (`packagesToPkgs`).
 
 ### `autoFormatter`
 
