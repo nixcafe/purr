@@ -38,6 +38,45 @@ let
     else
       { };
 
+  # Like `importMod`, but wraps the result with `lib.makeOverridable` so that
+  # discovered packages behave like `callPackage`-created nixpkgs packages:
+  # they gain `.override`/`.overrideDerivation` and can therefore override each
+  # other (e.g. one package wrapping another). Used both for the flake's
+  # `packages.<system>.*` output and for the overlay that auto-registers them
+  # into `pkgs` (see `mkFlake.nix` / `flake-module.nix`).
+  importPackagesMod =
+    pkgs: purrLib: namespace: inputs: extraArgs: module:
+    let
+      raw = import module;
+      args =
+        pkgs
+        // (purrArgs {
+          inherit
+            extraArgs
+            inputs
+            namespace
+            ;
+          lib = purrLib;
+        })
+        // {
+          inherit pkgs;
+          inherit (pkgs) system;
+        };
+    in
+    if builtins.isFunction raw then purrLib.makeOverridable raw args else raw;
+
+  autoPackages =
+    src: pkgs: purrLib: namespace: inputs: extraArgs: dir: packagesByName:
+    if dir != null then
+      let
+        regularMods = modules.findModulesLib src dir;
+        byNameMods = if packagesByName then modules.findModulesByName src dir else { };
+        allMods = regularMods // byNameMods;
+      in
+      builtins.mapAttrs (_: importPackagesMod pkgs purrLib namespace inputs extraArgs) allMods
+    else
+      { };
+
   autoFormatter =
     src: pkgs: purrLib: namespace: inputs: extraArgs: dir:
     if dir != null then
@@ -109,6 +148,7 @@ in
   inherit
     autoFormatter
     autoModules
+    autoPackages
     overlayModules
     templateModules
     ;

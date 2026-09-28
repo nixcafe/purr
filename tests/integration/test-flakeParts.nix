@@ -86,6 +86,35 @@ let
   };
 
   hydraFlake = hydraEval.config.flake;
+
+  noRegisterEval = lib.evalModules {
+    modules = [
+      flakeModule
+      {
+        options.flake = lib.mkOption {
+          type = lib.types.raw;
+        };
+        options.perSystem = lib.mkOption {
+          type = lib.types.raw;
+        };
+      }
+      {
+        purr.enable = true;
+        purr.src = projectDir;
+        purr.namespace = "demo";
+        purr.packagesToPkgs = false;
+        purr.hosts.server.meta = {
+          tier = "prod";
+          region = "us-east";
+        };
+      }
+    ];
+    specialArgs = {
+      inherit inputs;
+    };
+  };
+
+  noRegisterFlake = noRegisterEval.config.flake;
 in
 {
   flakeOutputs = {
@@ -257,6 +286,19 @@ in
       "renamed output carries mirrored jobs" = {
         expr = hydraFlake.builds.nixosConfigurations."x86_64-linux".server;
         expected = "toplevel-server";
+      };
+    };
+  };
+
+  packagesToPkgs = {
+    tests = {
+      "includes the auto-generated packages overlay by default" = {
+        expr = length flake.nixosConfigurations.server.config.nixpkgs.overlays;
+        expected = 3;
+      };
+      "packagesToPkgs = false omits the packages overlay" = {
+        expr = length noRegisterFlake.nixosConfigurations.server.config.nixpkgs.overlays;
+        expected = 2;
       };
     };
   };
