@@ -101,6 +101,7 @@ rec {
   inherit (autoMods)
     autoFormatter
     autoModules
+    autoPackages
     overlayModules
     templateModules
     ;

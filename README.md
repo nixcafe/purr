@@ -40,7 +40,7 @@ Put your code in the right directories, and purr wires your entire flake:
 .
 ├── flake.nix
 ├── modules/              → nixosModules, darwinModules, homeModules
-├── packages/             → packages.<system>.*
+├── packages/             → packages.<system>.* (also registered into pkgs.*)
 ├── legacyPackages/       → legacyPackages.<system>.*
 ├── shells/               → devShells.<system>.*
 ├── checks/               → checks.<system>.*
@@ -164,6 +164,36 @@ Create a `lib/` directory to share functions across all modules, packages, shell
 ```
 
 Access anywhere with `lib.<namespace>.keys`, `lib.<namespace>.utils`, etc.
+
+### Packages
+
+Modules under `packages/` become per-system packages
+(`packages.<system>.<name>`) and are **auto-registered into `pkgs`**, so any
+module can reference them as `pkgs.<name>` — no imports or overlays to wire:
+
+```nix
+# packages/hello/default.nix
+{ lib, ... }: { /* ... */ }
+```
+
+```nix
+# checks/lint/default.nix
+{ pkgs, ... }: pkgs.hello   # the discovered package
+```
+
+Each package is wrapped like a `callPackage` package (`.override` /
+`.overrideAttrs` work) and added to `pkgs` through an overlay built on the
+package-set fixpoint, so packages may depend on each other:
+
+```nix
+# packages/wrapper/default.nix — `hello` resolves from `pkgs`
+{ hello, ... }: hello.override { /* ... */ }
+```
+
+One-way dependencies resolve lazily; mutual cycles are an error, as with any
+nixpkgs overlay. Disable registration with `packagesToPkgs = false` (packages
+stay available as `packages.<system>.<name>`). Registration applies to both
+`mkFlake` and the flake-parts module.
 
 ### Systems & Homes
 

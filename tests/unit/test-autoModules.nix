@@ -185,4 +185,63 @@ in
       };
     };
   };
+
+  autoPackages = {
+    tests = {
+      "returns {} when dir is null" = {
+        expr = autoMods.autoPackages fixturesDir mockPkgs lib null { } { } null false;
+        expected = { };
+      };
+      "discovers the same packages as autoModules" = {
+        expr =
+          let
+            regular = autoMods.autoModules fixturesDir mockPkgs lib null { } { } "packages" false;
+            overridable = autoMods.autoPackages fixturesDir mockPkgs lib null { } { } "packages" false;
+          in
+          sort (a: b: a < b) (attrNames overridable) == sort (a: b: a < b) (attrNames regular);
+        expected = true;
+      };
+      "each discovered package is wrapped overridable" = {
+        expr =
+          let
+            result = autoMods.autoPackages fixturesDir mockPkgs lib null { } { } "packages" false;
+          in
+          (result.hello.override { }).type;
+        expected = "regular";
+      };
+      "override re-invokes the package with merged args" = {
+        expr =
+          let
+            result = autoMods.autoPackages fixturesDir mockPkgs lib null { } { } "packages" false;
+          in
+          (result.extra-test.override { myCustom = "overridden"; }).myCustom;
+        expected = "overridden";
+      };
+      "non-function packages pass through untouched" = {
+        expr =
+          let
+            result = autoMods.autoPackages fixturesDir mockPkgs lib null { } { } "packages" false;
+          in
+          result.plain;
+        expected = {
+          plain = true;
+        };
+      };
+      "auto-registers into a pkgs fixpoint and resolves cross-package deps" = {
+        expr =
+          let
+            overlay = final: _: autoMods.autoPackages fixturesDir final lib null { } { } "packagesCross" false;
+            pkgs = lib.fix (self: mockPkgs // overlay self { });
+          in
+          {
+            registered = pkgs ? base;
+            wrapperSeesBase = pkgs.wrapper.wrapped;
+          };
+        expected = {
+          registered = true;
+          wrapperSeesBase = "base";
+        };
+      };
+    };
+  };
 }

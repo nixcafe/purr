@@ -32,6 +32,7 @@ let
   inherit (autoMods)
     autoFormatter
     autoModules
+    autoPackages
     overlayModules
     templateModules
     ;
@@ -82,6 +83,7 @@ let
       homesDir ? null,
       autoInject ? true,
       packagesByName ? false,
+      packagesToPkgs ? true,
       extraArgs ? { },
       hosts ? { },
       hydraJobs ? { },
@@ -138,8 +140,23 @@ let
 
       importedOverlays = overlayModules src resolved.overlaysDir;
 
-      sharedOverlays = builtins.attrValues importedOverlays;
+      # Auto-register every package discovered under `packages/` into `pkgs` as
+      # a normal nixpkgs overlay. This makes them addressable as
+      # `pkgs.<name>` and — because purr spreads the whole `pkgs` attrset into
+      # every module invocation — available as arguments to other discovered
+      # packages, shells and checks (exactly like nixpkgs packages).
+      #
+      # Implemented with `final` as the fixpoint so packages may depend on one
+      # another. Mutual cycles behave like they would in any nixpkgs overlay
+      # (infinite recursion), but ordinary one-way dependencies are fine and
+      # lazily resolved.
+      packagesOverlay =
+        final: _:
+        autoPackages src final mergedLib namespace inputs extraArgs resolved.packagesDir packagesByName;
 
+      sharedOverlays =
+        builtins.attrValues importedOverlays
+        ++ lib.optional (packagesToPkgs && resolved.packagesDir != null) packagesOverlay;
       pkgs = forAllSystems (
         system:
         import effectiveInputs.nixpkgs {
@@ -240,7 +257,9 @@ let
 
       packages = forAllSystems (
         system:
-        autoModules src pkgs.${system} mergedLib namespace inputs extraArgs resolved.packagesDir
+        (if packagesToPkgs then autoPackages else autoModules) src pkgs.${system} mergedLib namespace inputs
+          extraArgs
+          resolved.packagesDir
           packagesByName
       );
 

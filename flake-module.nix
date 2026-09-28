@@ -56,6 +56,7 @@ let
   inherit (autoMods)
     autoFormatter
     autoModules
+    autoPackages
     overlayModules
     templateModules
     ;
@@ -194,6 +195,25 @@ in
         `<packagesDir>/by-name/<shard>/<name>/package.nix` in addition
         to the standard `<packagesDir>/<name>/default.nix` pattern.
         Coexists with regular package discovery.
+      '';
+    };
+
+    packagesToPkgs = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Whether to auto-register discovered packages into `pkgs`.
+
+        When enabled, every package under `packages/` is added to `pkgs` as a
+        nixpkgs overlay, so it is addressable as `pkgs.<name>` from any module
+        (packages, shells, checks, apps, NixOS/darwin/home configs) and can be
+        depended on by other discovered packages. Each package is wrapped like
+        a `callPackage` package, so `.override`/`.overrideAttrs` work.
+
+        The overlay is built on the package-set fixpoint, so one-way
+        dependencies between discovered packages resolve lazily. Mutual cycles
+        recurse like any nixpkgs overlay. Disable to keep packages out of
+        `pkgs` (they remain available as `packages.<system>.<name>`).
       '';
     };
 
@@ -610,6 +630,20 @@ in
 
       discoveredOverlays = overlayModules cfg.src resolved.overlaysDir;
 
+      # Auto-register packages discovered under `packages/` into `pkgs`, so they
+      # are addressable as `pkgs.<name>` and passed as arguments to other
+      # discovered modules (purr spreads the whole `pkgs` attrset into every
+      # module invocation). Built on `final` so one-way dependencies between
+      # packages resolve lazily; mutual cycles recurse like any nixpkgs overlay.
+      packagesOverlay =
+        final: _:
+        autoPackages cfg.src final mergedLib cfg.namespace inputs cfg.extraArgs resolved.packagesDir
+          cfg.packagesByName;
+
+      sharedOverlays =
+        builtins.attrValues discoveredOverlays
+        ++ lib.optional (cfg.packagesToPkgs && resolved.packagesDir != null) packagesOverlay;
+
       discoveredTemplates =
         templateModules cfg.src resolved.templatesDir cfg.templatesRecursive mergedLib cfg.namespace inputs
           cfg.extraArgs;
@@ -651,7 +685,7 @@ in
             extraModules = extraModulesWithLocal;
             importedPurrLib = importedPurrLib;
             lib = mergedLib;
-            sharedOverlays = builtins.attrValues discoveredOverlays;
+            inherit sharedOverlays;
           }
         else
           { };
@@ -671,7 +705,7 @@ in
             extraModules = extraModulesWithLocal;
             importedPurrLib = importedPurrLib;
             lib = mergedLib;
-            sharedOverlays = builtins.attrValues discoveredOverlays;
+            inherit sharedOverlays;
           }
         else
           { };
@@ -694,7 +728,7 @@ in
                 value = import effectiveInputs.nixpkgs {
                   inherit system;
                   config = cfg.nixpkgsConfig;
-                  overlays = builtins.attrValues discoveredOverlays;
+                  inherit sharedOverlays;
                 };
               }) systemsMod.defaultSystems
             );
@@ -757,13 +791,18 @@ in
           pkgs = import effectiveInputs.nixpkgs {
             inherit system;
             config = cfg.nixpkgsConfig;
-            overlays = builtins.attrValues discoveredOverlays;
+            inherit sharedOverlays;
           };
           mod = autoModules cfg.src pkgs mergedLib cfg.namespace inputs cfg.extraArgs;
 
           checksModules = mod resolved.checksDir false;
           shellsModules = mod resolved.shellsDir false;
-          packagesModules = mod resolved.packagesDir cfg.packagesByName;
+          packagesModules =
+            (if cfg.packagesToPkgs then autoPackages else autoModules) cfg.src pkgs mergedLib cfg.namespace
+              inputs
+              cfg.extraArgs
+              resolved.packagesDir
+              cfg.packagesByName;
           appsModules = mod resolved.appsDir false;
           formatterModule =
             autoFormatter cfg.src pkgs mergedLib cfg.namespace inputs cfg.extraArgs

@@ -68,6 +68,17 @@ let
       systems = [ "x86_64-linux" ];
     };
   };
+
+  noRegister = mkFlake {
+    inherit inputs;
+    src = projectDir;
+    namespace = "demo";
+    packagesToPkgs = false;
+    hosts.server.meta = {
+      tier = "prod";
+      region = "us-east";
+    };
+  };
 in
 {
   outputShape = {
@@ -244,10 +255,16 @@ in
             hasSharedCustom = anyFunction;
           };
         expected = {
-          length = 2;
+          # shared: the `custom` overlay + the auto-generated packages overlay
+          # (the fixture project has a `packages/` dir); plus the host's own.
+          length = 3;
           hasServerExtra = true;
           hasSharedCustom = true;
         };
+      };
+      "packagesToPkgs = false omits the auto-generated packages overlay" = {
+        expr = length noRegister.nixosConfigurations.server.config.nixpkgs.overlays;
+        expected = 2;
       };
       "host nixpkgs.config merges on top of purr's nixpkgsConfig" = {
         expr = server.config.nixpkgs.config;

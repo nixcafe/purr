@@ -51,7 +51,7 @@ lib/
   resolveDir.nix         # directory resolution (shared by mkFlake + flake-module)
   resolveInput.nix       # effective-input role resolution (resolveRole, defaults)
   purrLib.nix            # lib construction (buildImportedPurrLib, mergePurrLib)
-  autoModules.nix        # per-system auto-discovery
+  autoModules.nix        # per-system auto-discovery (autoModules, autoPackages, ...)
 ```
 
 ### Shared helpers
@@ -63,7 +63,31 @@ The three new files below eliminate ~120 lines of duplication between
 |------|---------|
 | `lib/resolveDir.nix` | Dir resolution (`resolveDir`, `resolveDirs`) |
 | `lib/purrLib.nix` | Lib construction (`buildImportedPurrLib`, `mergePurrLib`, `buildMergedLib`) |
-| `lib/autoModules.nix` | Per-system auto-discovery (`autoModules`, `overlayModules`, `templateModules`) |
+| `lib/autoModules.nix` | Per-system auto-discovery (`autoModules`, `autoPackages`, `overlayModules`, `templateModules`) |
+
+### Package auto-registration (`packagesToPkgs`)
+
+Modules under `packages/` are exposed as `packages.<system>.*` **and**
+auto-registered into `pkgs` (gated by `packagesToPkgs`, default `true`). This
+makes them addressable as `pkgs.<name>` and usable as arguments by other
+discovered modules — `importMod` / `importPackagesMod` spread the whole `pkgs`
+attrset into every module invocation, so `{ pkgs, hello, ... }` just works.
+
+- `lib/autoModules.nix` — `autoPackages` is `autoModules` with each package
+  wrapped in `makeOverridable`, so `.override`/`.overrideAttrs` work like a
+  `callPackage` package.
+- `lib/mkFlake.nix` / `flake-module.nix` — build
+  `packagesOverlay = final: _: autoPackages … final …`, append it to
+  `sharedOverlays` when `packagesToPkgs` is on, and use `autoPackages` for the
+  `packages` output. `sharedOverlays` is also handed to the NixOS/darwin/home
+  builders, so host `pkgs` get the same packages.
+
+**Cycle safety.** `packagesOverlay` only references the `final` fixpoint —
+never the outer `pkgs` binding — and `autoPackages` evaluates each package
+lazily, so one-way dependencies between discovered packages resolve without
+recursion. Mutually-recursive packages recurse, exactly like any nixpkgs
+overlay. Keep new code on `final`/`makeOverridable`; do not reach back for the
+eager `pkgs`.
 
 ### Namespace Lib Merging
 
