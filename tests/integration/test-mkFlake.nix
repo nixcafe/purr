@@ -361,7 +361,7 @@ in
           namespace = server.config."home-manager".extraSpecialArgs.namespace;
           host = server.config."home-manager".extraSpecialArgs.host;
           purrName = server.config."home-manager".extraSpecialArgs.purr.meta.name;
-          # The bridge must NOT override home-manager's own `lib` — that breaks
+          # The bridge must NOT override home-manager's own `lib`: that breaks
           # home-manager's internal submodule evaluation (TODO: upstream home-manager
           # regression). Bridged homes keep home-manager's extended lib; the merged
           # namespace lib is exposed uniformly as `purr.lib`.

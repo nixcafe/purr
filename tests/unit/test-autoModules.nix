@@ -1,4 +1,4 @@
-# Unit tests for lib/autoModules.nix — per-system auto-discovery.
+# Unit tests for lib/autoModules.nix: per-system auto-discovery.
 { lib }:
 let
   inherit (lib) attrNames sort;

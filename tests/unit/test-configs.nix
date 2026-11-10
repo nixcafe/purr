@@ -1,4 +1,4 @@
-# Unit tests for lib/configs.nix — system and home config builders.
+# Unit tests for lib/configs.nix: system and home config builders.
 { lib }:
 let
   confs = import ../../lib/configs.nix {

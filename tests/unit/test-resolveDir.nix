@@ -1,4 +1,4 @@
-# Unit tests for lib/resolveDir.nix — directory auto-detection.
+# Unit tests for lib/resolveDir.nix: directory auto-detection.
 { lib }:
 let
   resolver = import ../../lib/resolveDir.nix {

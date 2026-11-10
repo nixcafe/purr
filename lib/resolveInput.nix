@@ -1,7 +1,7 @@
 # Effective-input resolution for per-host role overrides.
 #
 # Roles (`nixpkgs`, `home-manager`, `nix-darwin`) map each host to one of
-# purr's *effective* inputs — the result of the flake's `inputsFor`
+# purr's *effective* inputs: the result of the flake's `inputsFor`
 # transform (filtering/replacing the raw flake inputs before purr consumes
 # them internally). A host's merged meta may pin a role to a specific
 # effective-input key via `meta.roles.<role>`; otherwise the role falls back
@@ -15,7 +15,7 @@
   #
   #   effectiveInputs : the post-`inputsFor` inputs (internal only)
   #   key             : the effective-input key to use (a string)
-  #   context         : e.g. `"host 'server'"` — used in error messages
+  #   context         : e.g. `"host 'server'"`, used in error messages
   #
   # Throws a clear error when the key is not a string or not present in the
   # effective inputs.

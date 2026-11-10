@@ -1,4 +1,4 @@
-# Unit tests for lib/resolveInput.nix — effective-input role resolution.
+# Unit tests for lib/resolveInput.nix: effective-input role resolution.
 { lib }:
 let
   inherit (import ../../lib/resolveInput.nix) defaultHomeManager defaultNixDarwin resolveRole;

@@ -1,4 +1,4 @@
-# Unit tests for lib/modules.nix — module discovery, merging, and collection.
+# Unit tests for lib/modules.nix: module discovery, merging, and collection.
 { lib }:
 let
   inherit (lib)

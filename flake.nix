@@ -1,5 +1,5 @@
 {
-  description = "Purr — a lean Nix flake library";
+  description = "A Nix flake framework based on project layout and modules";
 
   inputs = {
     nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
