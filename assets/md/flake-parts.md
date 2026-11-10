@@ -1,6 +1,8 @@
 # flake-parts Integration
 
-purr works as a [flake-parts](https://github.com/hercules-ci/flake-parts) module, giving you access to all purr features alongside other flake-parts modules.
+purr provides a [flake-parts](https://github.com/hercules-ci/flake-parts) module at
+`inputs.purr.flakeModules.default`. It adds the `purr.*` options and builds the
+discovered flake outputs.
 
 ## Setup
 
@@ -33,21 +35,21 @@ purr works as a [flake-parts](https://github.com/hercules-ci/flake-parts) module
 
 All options are under the `purr.*` namespace.
 
-### Core Options
+### Core options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `purr.enable` | bool | `false` | Enable purr |
-| `purr.src` | path | *required* | Project root directory |
+| `purr.src` | path | required | Project root directory |
 | `purr.namespace` | nullOr str | `null` | Module option namespace |
-| `purr.libDir` | nullOr str | `null` | auto-detects `lib/` |
-| `purr.flattenLib` | bool | `false` | Flatten lib subdirectories into root |
-| `purr.modulesDir` | str | `"modules"` | Module directory name under src |
+| `purr.libDir` | nullOr str | `null` | Path under `src` for the project lib; auto-detects `lib/` |
+| `purr.flattenLib` | bool | `false` | Flatten lib subdirectories into the namespace root |
+| `purr.modulesDir` | str | `"modules"` | Module directory name under `src` |
 | `purr.moduleTypes` | attrs | See below | Subdirectory mapping per output |
 | `purr.extraModules` | attrs | `{}` | `{ nixos = [...]; darwin = [...]; home = [...]; }` |
-| `purr.extraArgs` | attrs | `{}` | Custom key-value pairs injected into all auto-discovered module args (packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`). Purr's own keys override `extraArgs` on conflict |
-| `purr.bundleModules` | bool | `false` | Bundle all modules into a `default` module |
-| `purr.bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
+| `purr.extraArgs` | attrs | `{}` | Custom values added to the arguments of every auto-discovered module, system `specialArgs`, and home `extraSpecialArgs`. purr's own keys win on conflict |
+| `purr.bundleModules` | bool | `false` | Include `extraModules` in the generated `default` module bundle |
+| `purr.bundleExtraModules` | bool | `true` | Include extra modules in the bundle when `bundleModules` is on |
 
 Default `moduleTypes`:
 
@@ -59,7 +61,7 @@ Default `moduleTypes`:
 }
 ```
 
-### Directory Options
+### Directory options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -67,28 +69,28 @@ Default `moduleTypes`:
 | `purr.shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
-| `purr.packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
-| `purr.packagesToPkgs` | bool | `true` | Auto-register discovered packages into `pkgs` (addressable as `pkgs.<name>`, overridable, usable by other modules). See [Packages](/mkflake#packages) |
+| `purr.packagesByName` | bool | `false` | Also discover packages from `packages/by-name/<shard>/<name>/package.nix` |
+| `purr.packagesToPkgs` | bool | `true` | Register discovered packages in `pkgs` as well. See [Packages](/mkflake#packages) |
 | `purr.legacyPackagesDir` | nullOr str | `null` | auto-detects `legacyPackages/` |
-| `purr.legacyPackagesByName` | bool | `false` | Also discover legacy packages via `by-name/` convention (coexists with regular discovery) |
+| `purr.legacyPackagesByName` | bool | `false` | Also discover legacy packages from the `by-name/` layout |
 | `purr.appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `purr.templatesDir` | nullOr str | `null` | auto-detects `templates/` |
-| `purr.templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
+| `purr.templatesRecursive` | bool | `false` | Scan `templates/` recursively |
 | `purr.formatterDir` | nullOr str | `null` | auto-detects `formatters/` then `formatter/`. The `default.nix` must return a derivation |
 | `purr.systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `purr.homesDir` | nullOr str | `null` | auto-detects `homes/` |
 
-### Other Options
+### Other options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `purr.nixpkgsConfig` | attrs | `{}` | nixpkgs config (`allowUnfree`, etc.) |
-| `purr.inputsFor` | nullOr fn | identity | Transform `{ inputs, ... } -> inputs'` (or a plain attrset) that filters/replaces the raw flake inputs into the **effective inputs** purr builds from internally. Modules always keep the raw `inputs`. See [Per-host inputs](/mkflake#per-host-inputs-multi-nixpkgs) |
-| `purr.autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
-| `purr.outputsBuilder` | fn | `(_: {})` | Additional per-system outputs. Called for each system with `{ pkgs, system, lib, inputs, namespace }` plus all `extraArgs` keys; the returned attrset is **deep-merged** into the perSystem flake outputs |
+| `purr.nixpkgsConfig` | attrs | `{}` | nixpkgs config such as `allowUnfree` |
+| `purr.inputsFor` | nullOr fn | `null` | Filter or replace the flake inputs that purr uses internally. Accepts `{ inputs, ... } -> inputs'` or a plain attrset. Modules still receive the raw `inputs`. See [Per-host inputs](/mkflake#per-host-inputs-multi-nixpkgs) |
+| `purr.autoInject` | bool | `true` | Inject `networking.hostName`, `home.username`, and `home.homeDirectory` with `lib.mkDefault` |
+| `purr.outputsBuilder` | fn | `(_: {})` | Additional per-system outputs. Called with `{ pkgs, system, lib, inputs, namespace }` plus every `extraArgs` key. The result is deep-merged into the per-system outputs |
 | `purr.hosts` | attrs | `{}` | Per-host config: `purr.hosts.<name>.meta = { images = [...]; deployable = true; roles.nixpkgs = "..."; ... }`, deep-merged over the host's `meta.nix`. See [Host Meta](/meta) |
 
-### hydraJobs Options
+### hydraJobs options
 
 All under `purr.hydraJobs.*`. See the [hydraJobs](/hydrajobs) page for details.
 
@@ -96,14 +98,14 @@ All under `purr.hydraJobs.*`. See the [hydraJobs](/hydrajobs) page for details.
 |--------|------|---------|-------------|
 | `purr.hydraJobs.enable` | bool | `false` | Enable the `hydraJobs` flake output |
 | `purr.hydraJobs.as` | str | `"hydraJobs"` | Name of the flake output carrying the jobs |
-| `purr.hydraJobs.dir` | nullOr str | `null` | Custom jobs directory, auto-detects `hydraJobs/` |
-| `purr.hydraJobs.systems` | nullOr \[str] | `null` | Filter which systems get CI jobs |
-| `purr.hydraJobs.include` | nullOr \[str] | `null` | Mirror outputs into hydraJobs (`null` = auto-detect all) |
+| `purr.hydraJobs.dir` | nullOr str | `null` | Jobs directory; auto-detects `hydraJobs/` |
+| `purr.hydraJobs.systems` | nullOr \[str] | `null` | Restrict CI jobs to these systems. Also restricts the top-level `images` output |
+| `purr.hydraJobs.include` | nullOr \[str] | `null` | Outputs to mirror into hydraJobs; `null` auto-detects |
 | `purr.hydraJobs.extra` | attrs | `{}` | Extra jobs merged last, highest priority |
 
-## Custom Module Directories
+## Custom module directories
 
-You can customize which subdirectories are scanned for each module type:
+Change which subdirectories are scanned for each module type:
 
 ```nix
 purr.moduleTypes = {
@@ -111,37 +113,44 @@ purr.moduleTypes = {
 };
 ```
 
-## Extra Modules from Other Flakes
+## Extra modules from other flakes
 
 Inject external modules alongside auto-discovered ones:
 
 ```nix
 purr.extraModules = {
   nixos = [
-    inputs.cattery-modules.nixosModules.default
+    inputs.my-extra-modules.nixosModules.default
     inputs.disko.nixosModules.default
   ];
 };
 ```
 
-## Default Module Bundle
+## Default module bundle
 
-A `default` module that imports all discovered sub-modules is **always generated** (for `nixosModules`, `darwinModules`, and `homeModules`) — unless you define your own `default` module, in which case the auto-generated bundle is skipped. Users can import with:
+A `default` module that imports all discovered sub-modules is generated for
+`nixosModules`, `darwinModules`, and `homeModules`. It is skipped when a discovered
+module set or `extraModules` already defines `default`. Consumers can import the
+bundle with:
 
 ```nix
 { imports = [ inputs.myflake.nixosModules.default ]; }
 ```
 
-`bundleModules` (default `false`) controls whether your `extraModules` are folded into this bundle. Set `bundleModules = true` to include them; combine with `bundleExtraModules = false` to include only the auto-discovered modules.
+`bundleModules` (default `false`) controls whether `extraModules` are folded into this
+bundle. Set it to `true` and leave `bundleExtraModules = true` to include them, or set
+`bundleExtraModules = false` to bundle only the auto-discovered modules:
 
 ```nix
 purr.bundleModules = true;        # include extraModules in the default bundle
-purr.bundleExtraModules = false;  # (optional) only discovered modules, no extras
+purr.bundleExtraModules = false;  # only discovered modules in the bundle
 ```
 
-## Formatter & Legacy Packages
+## Formatter and legacy packages
 
-Auto-discovery works the same as mkFlake — drop a `formatters/default.nix` (returns a derivation) or `legacyPackages/<name>/default.nix` and the outputs appear:
+Discovery works the same as in mkFlake. A `formatters/default.nix` that returns a
+derivation becomes `formatter.<system>`, and `legacyPackages/<name>/default.nix`
+becomes `legacyPackages.<system>.<name>`:
 
 ```nix
 # formatters/default.nix
@@ -151,15 +160,22 @@ Auto-discovery works the same as mkFlake — drop a `formatters/default.nix` (re
 { pkgs, ... }: pkgs.hello
 ```
 
-To also scan the `by-name/` convention for legacy packages, enable `legacyPackagesByName`:
+To also scan the `by-name/` layout for legacy packages:
 
 ```nix
 purr.legacyPackagesByName = true;   # also scan legacyPackages/by-name/
 ```
 
-## Outputs Builder
+Checks, shells, apps, overlays, and templates use the same directories and module
+shapes as mkFlake. See [checks and shells](/mkflake#checks-and-shells),
+[apps](/mkflake#apps), and
+[overlays and templates](/mkflake#overlays-and-templates).
 
-`purr.outputsBuilder` mirrors mkFlake's `outputsBuilder` — add any custom per-system output. It receives `{ pkgs, system, lib, inputs, namespace }` plus all `extraArgs` keys, and its result is deep-merged with purr's auto-discovered outputs:
+## Outputs builder
+
+`purr.outputsBuilder` works like mkFlake's `outputsBuilder`. It receives
+`{ pkgs, system, lib, inputs, namespace }` plus every `extraArgs` key, and its result
+is deep-merged with the discovered per-system outputs:
 
 ```nix
 purr.outputsBuilder = { pkgs, system, lib, namespace, ... }: {
@@ -167,9 +183,10 @@ purr.outputsBuilder = { pkgs, system, lib, namespace, ... }: {
 };
 ```
 
-## Hydra CI (hydraJobs)
+## Hydra CI
 
-Generate a `hydraJobs` output for Hydra that mirrors your system/home configs and adds custom jobs from a `hydraJobs/` directory:
+Generate a `hydraJobs` output that mirrors configuration outputs and adds custom jobs
+from a `hydraJobs/` directory:
 
 ```nix
 purr.hydraJobs = {
@@ -179,13 +196,19 @@ purr.hydraJobs = {
 };
 ```
 
-> In flake-parts mode, hydraJobs mirrors the config outputs (`nixosConfigurations`, `darwinConfigurations`, `homeConfigurations`), images, directory jobs, and `extra`. Per-system outputs (`checks`, `packages`, `devShells`, `legacyPackages`, `formatter`) are only auto-mirrored in mkFlake mode — in flake-parts mode, add them via `purr.hydraJobs.extra` if needed.
+In flake-parts mode, hydraJobs mirrors the config outputs
+(`nixosConfigurations`, `darwinConfigurations`, `homeConfigurations`), images,
+directory jobs, and `extra`. The per-system outputs (`checks`, `packages`,
+`devShells`, `legacyPackages`, `formatter`) are not auto-mirrored; add them through
+`purr.hydraJobs.extra` if needed.
 
 See the [hydraJobs](/hydrajobs) page for the full reference.
 
-## Namespace Lib Output
+## Namespace lib output
 
-When a `lib/` directory exists and `namespace` is set, purr exports the namespace lib as a flake `lib.<namespace>` output — in both mkFlake and flake-parts modes:
+When a `lib/` directory exists and `namespace` is set, purr exports the namespace lib
+as a flake output in both mkFlake and flake-parts modes. When `namespace` is `null`,
+the same lib is exported at `lib`:
 
 ```nix
 # lib/default.nix
@@ -199,7 +222,7 @@ When a `lib/` directory exists and `namespace` is set, purr exports the namespac
 nix eval .#lib.myproject.utils
 ```
 
-## Extra Args
+## Extra args
 
 Pass custom values to every auto-discovered module:
 
@@ -221,4 +244,6 @@ Modules receive `extraArgs` values as function parameters:
 }
 ```
 
-All auto-discovered modules receive `extraArgs` keys — packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`, and `outputsBuilder`. Purr's own keys (`inputs`, `pkgs`, `namespace`, `lib`, etc.) always override `extraArgs` in case of naming conflicts.
+The keys are passed to packages, shells, checks, apps, templates, system
+`specialArgs`, home `extraSpecialArgs`, and `outputsBuilder`. purr's own keys
+(`inputs`, `pkgs`, `namespace`, `lib`, and similar) override `extraArgs` on conflict.

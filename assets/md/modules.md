@@ -1,10 +1,13 @@
 # Module System
 
-purr auto-discovers modules from your directory structure and wires them into your flake outputs.
+purr discovers modules from the directory layout and exports them as flake module
+outputs. Modules are plain Nix modules; purr supplies the namespace and the project
+lib.
 
-## Module Discovery
+## Module discovery
 
-Place modules under `modules/` and they're auto-discovered:
+Place modules under `modules/`. The path below the module type directory becomes the
+attribute path:
 
 ```
 modules/
@@ -14,9 +17,9 @@ modules/
 └── shared/users/default.nix            → nixos + darwin (shared)
 ```
 
-### Module Types
+### Module types
 
-The default module type mapping determines which subdirectories go to which flake outputs:
+The default mapping decides which subdirectories go to which flake outputs:
 
 | Output | Directories |
 |--------|-------------|
@@ -24,7 +27,7 @@ The default module type mapping determines which subdirectories go to which flak
 | `darwinModules` | `darwin/`, `shared/` |
 | `homeModules` | `home/` |
 
-Customize with `moduleTypes`:
+Change it with `moduleTypes`:
 
 ```nix
 moduleTypes = {
@@ -32,9 +35,13 @@ moduleTypes = {
 };
 ```
 
+A directory is included only if it exists. Modules from all listed directories are
+merged into the same output tree.
+
 ## Namespace
 
-Each module receives `namespace` as a parameter, keeping options scoped under `config.<namespace>.*`:
+When `namespace` is set, each module receives it as a parameter. Options stay under
+`config.<namespace>.*`:
 
 ```nix
 { config, lib, namespace, ... }@args:
@@ -47,32 +54,43 @@ in
 }
 ```
 
-## Module Arguments
+The namespace wrapper also injects the defining flake's `inputs` and the merged lib,
+so modules can use `lib.<namespace>.*` without an extra import.
 
-Each auto-discovered module receives different arguments depending on its directory:
+## Module arguments
+
+Auto-discovered modules receive different arguments depending on their directory:
 
 | Directory | Arguments |
 |-----------|-----------|
 | `lib/` | `{ lib, inputs, namespace }` |
 | `modules/` | `{ config, options, lib, pkgs, namespace, ... }` |
-| `packages/` | `{ inputs, system, namespace, lib, pkgs }` |
-| `legacyPackages/` | `{ inputs, system, namespace, lib, pkgs }` |
-| `shells/` | `{ inputs, system, namespace, lib, pkgs }` |
-| `checks/` | `{ inputs, system, namespace, lib, pkgs }` |
-| `apps/` | `{ inputs, system, namespace, lib, pkgs }` |
-| `formatter/` | `{ inputs, system, namespace, lib, pkgs }` |
-| `overlays/` | `final: prev:` (Nix overlay convention) |
-| `templates/` | `{ inputs, namespace, lib }` |
+| `packages/` | `{ inputs, system, namespace, lib, pkgs, ... }` |
+| `legacyPackages/` | `{ inputs, system, namespace, lib, pkgs, ... }` |
+| `shells/` | `{ inputs, system, namespace, lib, pkgs, ... }` |
+| `checks/` | `{ inputs, system, namespace, lib, pkgs, ... }` |
+| `apps/` | `{ inputs, system, namespace, lib, pkgs, ... }` |
+| `formatters/` or `formatter/` | `{ inputs, system, namespace, lib, pkgs, ... }` |
+| `overlays/` | `final: prev:` |
+| `templates/` | `{ inputs, namespace, lib, ... }` |
 | `systems/` | `{ config, options, lib, pkgs, purr, host, namespace, system, inputs, ... }` |
 | `homes/` | `{ config, options, lib, pkgs, purr, user, host, namespace, system, inputs, ... }` |
 
-> **Note:** `lib` in `packages/`, `legacyPackages/`, `shells/`, `checks/`, `apps/`, and `formatter/` includes the project's custom lib under `lib.<namespace>.*`, merged via the merged namespace lib. `systems/` and `homes/` receive a `purr` attrset with metadata about the current configuration context via `specialArgs` / `extraSpecialArgs`. See [Systems & Homes](/systems-homes#purr-metadata) for the full `purr` shape.
+`lib` in `packages/`, `legacyPackages/`, `shells/`, `checks/`, `apps/`, and
+`formatters/` is the merged lib, including the project lib under
+`lib.<namespace>.*`. `systems/` and `homes/` receive `purr` through `specialArgs`
+and `extraSpecialArgs`. See [Systems & Homes](/systems-homes#purr-metadata) for the
+shape of `purr`.
 
-> **Note:** discovered packages are auto-registered into `pkgs` and spread into every module's arguments, so a module can depend on a sibling package by name: `{ hello, ... }: hello.override { ... }`. Enabled by default (`packagesToPkgs = true`). See [Packages](/mkflake#packages).
+Discovered packages are registered in `pkgs` by default (`packagesToPkgs = true`) and
+the whole `pkgs` set is passed to per-system modules. A package can therefore depend
+on a sibling package by name: `{ hello, ... }: hello.override { ... }`. This applies
+to per-system modules, not to NixOS or home modules, which use `pkgs.<name>`. See
+[Packages](/mkflake#packages).
 
-## Custom Lib
+## Custom lib
 
-Create a `lib/` directory under `src` to share functions across all modules:
+Create a `lib/` directory under `src` to share functions across modules:
 
 ```nix
 # lib/default.nix
@@ -83,7 +101,8 @@ Create a `lib/` directory under `src` to share functions across all modules:
 }
 ```
 
-Functions are accessible as `lib.<namespace>.*` in all modules, packages, shells, and checks:
+The functions are available as `lib.<namespace>.*` in modules, packages, shells,
+checks, apps, templates, formatters, and legacy packages:
 
 ```nix
 # packages/known-hosts/default.nix
@@ -94,28 +113,36 @@ in
 pkgs.writeText "known-hosts" (keys.generate { ... })
 ```
 
-Subdirectories nest by default (`lib.<namespace>.keys.foo`). Set `flattenLib = true` to merge all submodules directly under the namespace (`lib.<namespace>.foo`).
+Subdirectories nest by default (`lib.<namespace>.keys.foo`). Set `flattenLib = true`
+to merge all submodules directly under the namespace (`lib.<namespace>.foo`). When
+`namespace` is `null`, the lib is merged at the top level of `lib`.
 
-The `lib/` directory supports both a root `default.nix` and recursive subdirectory discovery via `findModules` — both can coexist.
+A root `lib/default.nix` and subdirectory modules can coexist. The root module is
+imported separately by `buildImportedPurrLib`; subdirectory modules are collected by
+`findModulesLib`.
 
-## Default Module Bundle
+## Default module bundle
 
-A `default` module that imports all discovered sub-modules is **always generated** (for `nixosModules`, `darwinModules`, and `homeModules`) — unless you define your own `default` module, in which case the auto-generated bundle is skipped:
+A `default` module that imports all discovered sub-modules is generated for
+`nixosModules`, `darwinModules`, and `homeModules`. It is skipped when a discovered
+module set or `extraModules` already defines `default`:
 
 ```nix
 { imports = [ inputs.myflake.nixosModules.default ]; }
 ```
 
-`bundleModules` (default `false`) controls whether your `extraModules` are folded into this bundle. Set `bundleModules = true` to include them; combine with `bundleExtraModules = false` to include only the auto-discovered modules.
+`bundleModules` (default `false`) controls whether `extraModules` are folded into the
+bundle. Set `bundleModules = true` to include them, and `bundleExtraModules = false`
+to bundle only the auto-discovered modules.
 
-## Extra Modules
+## Extra modules
 
 Inject modules from other flakes:
 
 ```nix
 extraModules = {
   nixos = [
-    inputs.cattery-modules.nixosModules.default
+    inputs.my-extra-modules.nixosModules.default
     inputs.disko.nixosModules.default
   ];
 };

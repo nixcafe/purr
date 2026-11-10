@@ -1,14 +1,15 @@
 # purr
 
-purr turns your project directory structure into a fully wired Nix flake — **no boilerplate, no manual wiring**. Drop files into conventional directories and purr discovers everything: modules, packages, legacy packages, shells, checks, apps, overlays, templates, a formatter, NixOS/darwin systems, home-manager homes, and a shared lib.
+purr builds a Nix flake from the files in your project. It discovers modules, packages,
+systems, homes, and the other outputs from the directory layout, so you do not have to
+wire them together by hand.
 
-Compared to other flake auto-discovery tools, purr stays **minimal** — a single dependency (`nixpkgs-lib`, ~2 MB) and a small, focused API surface.
+purr depends on `nixpkgs-lib`. The standalone API is a single `mkFlake` call, and the
+flake-parts module exposes the same discovery.
 
-***
+## Quick start
 
-## Quick Start
-
-Scaffold a new purr project in seconds:
+Start from a template:
 
 ```bash
 # Standalone (mkFlake)
@@ -36,21 +37,31 @@ Or add purr to an existing flake:
 }
 ```
 
-## Why purr?
+## What purr discovers
 
-| | purr | Other frameworks |
-|---|---|---|
-| **Dependencies** | 1 (`nixpkgs-lib`, ~2 MB) | 3+ (flake-parts, flake-utils, ...) |
-| **API surface** | Single `mkFlake` call or one flake-parts module | Multiple nested imports |
-| **Option namespace** | Built-in `namespace` injection | Manual `config.<name>.` prefixing |
-| **Systems & homes** | Auto-discovered, auto-linked | Manual wiring |
-| **Custom lib** | `lib.<namespace>.*` propagated everywhere | Manual import passthrough |
+`src` is scanned for these directories:
 
-## Core Concepts
+```
+.
+├── flake.nix
+├── modules/              → nixosModules, darwinModules, homeModules
+├── packages/             → packages.<system>.* (also registered into pkgs.*)
+├── legacyPackages/       → legacyPackages.<system>.*
+├── shells/               → devShells.<system>.*
+├── checks/               → checks.<system>.*
+├── apps/                 → apps.<system>.*
+├── overlays/             → overlays.*
+├── templates/            → templates.*
+├── formatters/           → formatter.<system>
+├── hydraJobs/            → hydraJobs.* (when enabled)
+├── lib/                  → lib.<namespace>.*
+├── systems/              → nixosConfigurations, darwinConfigurations
+└── homes/                → homeConfigurations
+```
 
-### Automatic Module Discovery
+## Modules
 
-Drop modules into `modules/` — purr discovers them by subdirectory convention:
+Modules under `modules/` are exposed by their subdirectory path:
 
 ```
 modules/
@@ -60,9 +71,14 @@ modules/
 └── shared/users/default.nix            → merged into nixos + darwin
 ```
 
-### Namespace Support
+The default `moduleTypes` maps `nixos/` and `shared/` to `nixosModules`, `darwin/` and
+`shared/` to `darwinModules`, and `home/` to `homeModules`. See
+[Module System](/modules) for the mappings and customisation.
 
-purr injects a `namespace` parameter into every module:
+## Namespaces
+
+When `namespace` is set, purr passes it to every discovered module and exports the
+project lib under `lib.<namespace>`:
 
 ```nix
 { config, lib, namespace, ... }:
@@ -75,9 +91,10 @@ in
 }
 ```
 
-### Custom Lib (`lib.<namespace>.*`)
+## Shared lib
 
-Share functions across all modules via a `lib/` directory:
+A `lib/` directory is available as `lib.<namespace>.*` in every module, package,
+shell, and check:
 
 ```nix
 # lib/default.nix
@@ -88,37 +105,38 @@ Share functions across all modules via a `lib/` directory:
 }
 ```
 
-Access anywhere as `lib.<namespace>.keys`, `lib.<namespace>.utils`.
+Access the functions with `lib.<namespace>.keys`, `lib.<namespace>.utils`, and so on.
 
-### Systems & Homes
+## Systems and homes
 
-Auto-discover NixOS/darwin systems and home-manager homes:
+Systems and homes use the `<arch>-<format>/<name>` layout:
 
 ```
 systems/
 ├── x86_64-linux/server/default.nix    → nixosConfigurations.server
-└── homes/
-    └── x86_64-linux/alice@server/     → homeConfigurations."alice@server"
-                                        (auto-linked to server)
+└── aarch64-darwin/macbook/default.nix → darwinConfigurations.macbook
+
+homes/
+└── x86_64-linux/alice@server/default.nix  → homeConfigurations."alice@server"
 ```
 
-See the [Systems & Homes](/systems-homes) page for the namespace bridge and image formats, and the [Host Meta](/meta) page for per-host metadata (`meta.nix`, `hosts.<name>.meta`, `purr.meta`).
+A home named `<user>@<host>` is linked to the matching host when home-manager is
+available. See [Systems & Homes](/systems-homes) and [Host Meta](/meta).
 
-### hydraJobs (CI)
+## hydraJobs
 
-Generate a `hydraJobs` output for Hydra CI that automatically mirrors every buildable output — packages, checks, shells, NixOS/hosts toplevels, home activation packages, and system images — plus custom jobs from a `hydraJobs/` directory. See the [hydraJobs](/hydrajobs) page.
+When enabled, `hydraJobs` mirrors buildable outputs and adds jobs from a `hydraJobs/`
+directory. See [hydraJobs](/hydrajobs).
 
-## Integration Modes
+## Integration modes
 
-purr works in two modes — pick whichever fits your stack:
+* [flake-parts](/flake-parts): import `inputs.purr.flakeModules.default`.
+* [mkFlake](/mkflake): call `inputs.purr.lib.mkFlake` without flake-parts.
 
-* **[flake-parts](/flake-parts)** — use as a flake-parts module alongside other frameworks
-* **[mkFlake](/mkflake)** — standalone, no flake-parts dependency needed
+## Project layout
 
-## Project Structure
+See [Directory Structure](/directory-structure) for the full layout.
 
-See the [Directory Structure](/directory-structure) page for the complete layout — purr auto-detects everything from modules to overlays, templates to apps.
+## API reference
 
-## API Reference
-
-The full library API (43 functions) is documented on the [API Reference](/api) page.
+The library exports 43 functions. See [API Reference](/api).

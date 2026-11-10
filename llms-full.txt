@@ -1,31 +1,32 @@
 # purr
 
-purr - Nix flake framework with automatic discovery and module system
+Nix flake framework based on directory layout, namespaces, and modules
 
 <!--
 Sitemap:
-- [purr](/index): Nix flake framework with automatic discovery and module system
+- [purr](/index): Nix flake framework based on directory layout, namespaces, and modules
 - [flake-parts Integration](/flake-parts): Using purr as a flake-parts module
 - [mkFlake Usage](/mkflake): Using purr standalone with mkFlake
 - [Module System](/modules): Module discovery, namespace support, and custom lib
-- [Directory Structure](/directory-structure): Full directory layout auto-discovered by purr
-- [Systems & Homes](/systems-homes): Auto-discovering NixOS/darwin systems and home-manager homes
-- [Host Meta](/meta): Per-host metadata — cheap to read, exposed as `purr.meta`
-- [hydraJobs](/hydrajobs): Hydra CI job sets with automatic derivation discovery
-- [API Reference](/api): Complete purr library API reference
+- [Directory Structure](/directory-structure): Directory layout discovered by purr
+- [Systems & Homes](/systems-homes): Discover NixOS/darwin systems and home-manager homes
+- [Host Meta](/meta): Per-host metadata exposed as `purr.meta`
+- [hydraJobs](/hydrajobs): Hydra CI job sets built from flake outputs and a jobs directory
+- [API Reference](/api): purr library API reference
 -->
 
 # purr
 
-purr turns your project directory structure into a fully wired Nix flake — **no boilerplate, no manual wiring**. Drop files into conventional directories and purr discovers everything: modules, packages, legacy packages, shells, checks, apps, overlays, templates, a formatter, NixOS/darwin systems, home-manager homes, and a shared lib.
+purr builds a Nix flake from the files in your project. It discovers modules, packages,
+systems, homes, and the other outputs from the directory layout, so you do not have to
+wire them together by hand.
 
-Compared to other flake auto-discovery tools, purr stays **minimal** — a single dependency (`nixpkgs-lib`, ~2 MB) and a small, focused API surface.
+purr depends on `nixpkgs-lib`. The standalone API is a single `mkFlake` call, and the
+flake-parts module exposes the same discovery.
 
-***
+## Quick start
 
-## Quick Start
-
-Scaffold a new purr project in seconds:
+Start from a template:
 
 ```bash
 # Standalone (mkFlake)
@@ -53,21 +54,31 @@ Or add purr to an existing flake:
 }
 ```
 
-## Why purr?
+## What purr discovers
 
-| | purr | Other frameworks |
-|---|---|---|
-| **Dependencies** | 1 (`nixpkgs-lib`, ~2 MB) | 3+ (flake-parts, flake-utils, ...) |
-| **API surface** | Single `mkFlake` call or one flake-parts module | Multiple nested imports |
-| **Option namespace** | Built-in `namespace` injection | Manual `config.<name>.` prefixing |
-| **Systems & homes** | Auto-discovered, auto-linked | Manual wiring |
-| **Custom lib** | `lib.<namespace>.*` propagated everywhere | Manual import passthrough |
+`src` is scanned for these directories:
 
-## Core Concepts
+```
+.
+├── flake.nix
+├── modules/              → nixosModules, darwinModules, homeModules
+├── packages/             → packages.<system>.* (also registered into pkgs.*)
+├── legacyPackages/       → legacyPackages.<system>.*
+├── shells/               → devShells.<system>.*
+├── checks/               → checks.<system>.*
+├── apps/                 → apps.<system>.*
+├── overlays/             → overlays.*
+├── templates/            → templates.*
+├── formatters/           → formatter.<system>
+├── hydraJobs/            → hydraJobs.* (when enabled)
+├── lib/                  → lib.<namespace>.*
+├── systems/              → nixosConfigurations, darwinConfigurations
+└── homes/                → homeConfigurations
+```
 
-### Automatic Module Discovery
+## Modules
 
-Drop modules into `modules/` — purr discovers them by subdirectory convention:
+Modules under `modules/` are exposed by their subdirectory path:
 
 ```
 modules/
@@ -77,9 +88,14 @@ modules/
 └── shared/users/default.nix            → merged into nixos + darwin
 ```
 
-### Namespace Support
+The default `moduleTypes` maps `nixos/` and `shared/` to `nixosModules`, `darwin/` and
+`shared/` to `darwinModules`, and `home/` to `homeModules`. See
+[Module System](/modules) for the mappings and customisation.
 
-purr injects a `namespace` parameter into every module:
+## Namespaces
+
+When `namespace` is set, purr passes it to every discovered module and exports the
+project lib under `lib.<namespace>`:
 
 ```nix
 { config, lib, namespace, ... }:
@@ -92,9 +108,10 @@ in
 }
 ```
 
-### Custom Lib (`lib.<namespace>.*`)
+## Shared lib
 
-Share functions across all modules via a `lib/` directory:
+A `lib/` directory is available as `lib.<namespace>.*` in every module, package,
+shell, and check:
 
 ```nix
 # lib/default.nix
@@ -105,44 +122,47 @@ Share functions across all modules via a `lib/` directory:
 }
 ```
 
-Access anywhere as `lib.<namespace>.keys`, `lib.<namespace>.utils`.
+Access the functions with `lib.<namespace>.keys`, `lib.<namespace>.utils`, and so on.
 
-### Systems & Homes
+## Systems and homes
 
-Auto-discover NixOS/darwin systems and home-manager homes:
+Systems and homes use the `<arch>-<format>/<name>` layout:
 
 ```
 systems/
 ├── x86_64-linux/server/default.nix    → nixosConfigurations.server
-└── homes/
-    └── x86_64-linux/alice@server/     → homeConfigurations."alice@server"
-                                        (auto-linked to server)
+└── aarch64-darwin/macbook/default.nix → darwinConfigurations.macbook
+
+homes/
+└── x86_64-linux/alice@server/default.nix  → homeConfigurations."alice@server"
 ```
 
-See the [Systems & Homes](/systems-homes) page for the namespace bridge and image formats, and the [Host Meta](/meta) page for per-host metadata (`meta.nix`, `hosts.<name>.meta`, `purr.meta`).
+A home named `<user>@<host>` is linked to the matching host when home-manager is
+available. See [Systems & Homes](/systems-homes) and [Host Meta](/meta).
 
-### hydraJobs (CI)
+## hydraJobs
 
-Generate a `hydraJobs` output for Hydra CI that automatically mirrors every buildable output — packages, checks, shells, NixOS/hosts toplevels, home activation packages, and system images — plus custom jobs from a `hydraJobs/` directory. See the [hydraJobs](/hydrajobs) page.
+When enabled, `hydraJobs` mirrors buildable outputs and adds jobs from a `hydraJobs/`
+directory. See [hydraJobs](/hydrajobs).
 
-## Integration Modes
+## Integration modes
 
-purr works in two modes — pick whichever fits your stack:
+* [flake-parts](/flake-parts): import `inputs.purr.flakeModules.default`.
+* [mkFlake](/mkflake): call `inputs.purr.lib.mkFlake` without flake-parts.
 
-* **[flake-parts](/flake-parts)** — use as a flake-parts module alongside other frameworks
-* **[mkFlake](/mkflake)** — standalone, no flake-parts dependency needed
+## Project layout
 
-## Project Structure
+See [Directory Structure](/directory-structure) for the full layout.
 
-See the [Directory Structure](/directory-structure) page for the complete layout — purr auto-detects everything from modules to overlays, templates to apps.
+## API reference
 
-## API Reference
-
-The full library API (43 functions) is documented on the [API Reference](/api) page.
+The library exports 43 functions. See [API Reference](/api).
 
 # flake-parts Integration
 
-purr works as a [flake-parts](https://github.com/hercules-ci/flake-parts) module, giving you access to all purr features alongside other flake-parts modules.
+purr provides a [flake-parts](https://github.com/hercules-ci/flake-parts) module at
+`inputs.purr.flakeModules.default`. It adds the `purr.*` options and builds the
+discovered flake outputs.
 
 ## Setup
 
@@ -175,21 +195,21 @@ purr works as a [flake-parts](https://github.com/hercules-ci/flake-parts) module
 
 All options are under the `purr.*` namespace.
 
-### Core Options
+### Core options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `purr.enable` | bool | `false` | Enable purr |
-| `purr.src` | path | *required* | Project root directory |
+| `purr.src` | path | required | Project root directory |
 | `purr.namespace` | nullOr str | `null` | Module option namespace |
-| `purr.libDir` | nullOr str | `null` | auto-detects `lib/` |
-| `purr.flattenLib` | bool | `false` | Flatten lib subdirectories into root |
-| `purr.modulesDir` | str | `"modules"` | Module directory name under src |
+| `purr.libDir` | nullOr str | `null` | Path under `src` for the project lib; auto-detects `lib/` |
+| `purr.flattenLib` | bool | `false` | Flatten lib subdirectories into the namespace root |
+| `purr.modulesDir` | str | `"modules"` | Module directory name under `src` |
 | `purr.moduleTypes` | attrs | See below | Subdirectory mapping per output |
 | `purr.extraModules` | attrs | `{}` | `{ nixos = [...]; darwin = [...]; home = [...]; }` |
-| `purr.extraArgs` | attrs | `{}` | Custom key-value pairs injected into all auto-discovered module args (packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`). Purr's own keys override `extraArgs` on conflict |
-| `purr.bundleModules` | bool | `false` | Bundle all modules into a `default` module |
-| `purr.bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle |
+| `purr.extraArgs` | attrs | `{}` | Custom values added to the arguments of every auto-discovered module, system `specialArgs`, and home `extraSpecialArgs`. purr's own keys win on conflict |
+| `purr.bundleModules` | bool | `false` | Include `extraModules` in the generated `default` module bundle |
+| `purr.bundleExtraModules` | bool | `true` | Include extra modules in the bundle when `bundleModules` is on |
 
 Default `moduleTypes`:
 
@@ -201,7 +221,7 @@ Default `moduleTypes`:
 }
 ```
 
-### Directory Options
+### Directory options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -209,28 +229,28 @@ Default `moduleTypes`:
 | `purr.shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `purr.overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `purr.packagesDir` | nullOr str | `null` | auto-detects `packages/` |
-| `purr.packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
-| `purr.packagesToPkgs` | bool | `true` | Auto-register discovered packages into `pkgs` (addressable as `pkgs.<name>`, overridable, usable by other modules). See [Packages](/mkflake#packages) |
+| `purr.packagesByName` | bool | `false` | Also discover packages from `packages/by-name/<shard>/<name>/package.nix` |
+| `purr.packagesToPkgs` | bool | `true` | Register discovered packages in `pkgs` as well. See [Packages](/mkflake#packages) |
 | `purr.legacyPackagesDir` | nullOr str | `null` | auto-detects `legacyPackages/` |
-| `purr.legacyPackagesByName` | bool | `false` | Also discover legacy packages via `by-name/` convention (coexists with regular discovery) |
+| `purr.legacyPackagesByName` | bool | `false` | Also discover legacy packages from the `by-name/` layout |
 | `purr.appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `purr.templatesDir` | nullOr str | `null` | auto-detects `templates/` |
-| `purr.templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
+| `purr.templatesRecursive` | bool | `false` | Scan `templates/` recursively |
 | `purr.formatterDir` | nullOr str | `null` | auto-detects `formatters/` then `formatter/`. The `default.nix` must return a derivation |
 | `purr.systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `purr.homesDir` | nullOr str | `null` | auto-detects `homes/` |
 
-### Other Options
+### Other options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `purr.nixpkgsConfig` | attrs | `{}` | nixpkgs config (`allowUnfree`, etc.) |
-| `purr.inputsFor` | nullOr fn | identity | Transform `{ inputs, ... } -> inputs'` (or a plain attrset) that filters/replaces the raw flake inputs into the **effective inputs** purr builds from internally. Modules always keep the raw `inputs`. See [Per-host inputs](/mkflake#per-host-inputs-multi-nixpkgs) |
-| `purr.autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
-| `purr.outputsBuilder` | fn | `(_: {})` | Additional per-system outputs. Called for each system with `{ pkgs, system, lib, inputs, namespace }` plus all `extraArgs` keys; the returned attrset is **deep-merged** into the perSystem flake outputs |
+| `purr.nixpkgsConfig` | attrs | `{}` | nixpkgs config such as `allowUnfree` |
+| `purr.inputsFor` | nullOr fn | `null` | Filter or replace the flake inputs that purr uses internally. Accepts `{ inputs, ... } -> inputs'` or a plain attrset. Modules still receive the raw `inputs`. See [Per-host inputs](/mkflake#per-host-inputs-multi-nixpkgs) |
+| `purr.autoInject` | bool | `true` | Inject `networking.hostName`, `home.username`, and `home.homeDirectory` with `lib.mkDefault` |
+| `purr.outputsBuilder` | fn | `(_: {})` | Additional per-system outputs. Called with `{ pkgs, system, lib, inputs, namespace }` plus every `extraArgs` key. The result is deep-merged into the per-system outputs |
 | `purr.hosts` | attrs | `{}` | Per-host config: `purr.hosts.<name>.meta = { images = [...]; deployable = true; roles.nixpkgs = "..."; ... }`, deep-merged over the host's `meta.nix`. See [Host Meta](/meta) |
 
-### hydraJobs Options
+### hydraJobs options
 
 All under `purr.hydraJobs.*`. See the [hydraJobs](/hydrajobs) page for details.
 
@@ -238,14 +258,14 @@ All under `purr.hydraJobs.*`. See the [hydraJobs](/hydrajobs) page for details.
 |--------|------|---------|-------------|
 | `purr.hydraJobs.enable` | bool | `false` | Enable the `hydraJobs` flake output |
 | `purr.hydraJobs.as` | str | `"hydraJobs"` | Name of the flake output carrying the jobs |
-| `purr.hydraJobs.dir` | nullOr str | `null` | Custom jobs directory, auto-detects `hydraJobs/` |
-| `purr.hydraJobs.systems` | nullOr \[str] | `null` | Filter which systems get CI jobs |
-| `purr.hydraJobs.include` | nullOr \[str] | `null` | Mirror outputs into hydraJobs (`null` = auto-detect all) |
+| `purr.hydraJobs.dir` | nullOr str | `null` | Jobs directory; auto-detects `hydraJobs/` |
+| `purr.hydraJobs.systems` | nullOr \[str] | `null` | Restrict CI jobs to these systems. Also restricts the top-level `images` output |
+| `purr.hydraJobs.include` | nullOr \[str] | `null` | Outputs to mirror into hydraJobs; `null` auto-detects |
 | `purr.hydraJobs.extra` | attrs | `{}` | Extra jobs merged last, highest priority |
 
-## Custom Module Directories
+## Custom module directories
 
-You can customize which subdirectories are scanned for each module type:
+Change which subdirectories are scanned for each module type:
 
 ```nix
 purr.moduleTypes = {
@@ -253,37 +273,44 @@ purr.moduleTypes = {
 };
 ```
 
-## Extra Modules from Other Flakes
+## Extra modules from other flakes
 
 Inject external modules alongside auto-discovered ones:
 
 ```nix
 purr.extraModules = {
   nixos = [
-    inputs.cattery-modules.nixosModules.default
+    inputs.my-extra-modules.nixosModules.default
     inputs.disko.nixosModules.default
   ];
 };
 ```
 
-## Default Module Bundle
+## Default module bundle
 
-A `default` module that imports all discovered sub-modules is **always generated** (for `nixosModules`, `darwinModules`, and `homeModules`) — unless you define your own `default` module, in which case the auto-generated bundle is skipped. Users can import with:
+A `default` module that imports all discovered sub-modules is generated for
+`nixosModules`, `darwinModules`, and `homeModules`. It is skipped when a discovered
+module set or `extraModules` already defines `default`. Consumers can import the
+bundle with:
 
 ```nix
 { imports = [ inputs.myflake.nixosModules.default ]; }
 ```
 
-`bundleModules` (default `false`) controls whether your `extraModules` are folded into this bundle. Set `bundleModules = true` to include them; combine with `bundleExtraModules = false` to include only the auto-discovered modules.
+`bundleModules` (default `false`) controls whether `extraModules` are folded into this
+bundle. Set it to `true` and leave `bundleExtraModules = true` to include them, or set
+`bundleExtraModules = false` to bundle only the auto-discovered modules:
 
 ```nix
 purr.bundleModules = true;        # include extraModules in the default bundle
-purr.bundleExtraModules = false;  # (optional) only discovered modules, no extras
+purr.bundleExtraModules = false;  # only discovered modules in the bundle
 ```
 
-## Formatter & Legacy Packages
+## Formatter and legacy packages
 
-Auto-discovery works the same as mkFlake — drop a `formatters/default.nix` (returns a derivation) or `legacyPackages/<name>/default.nix` and the outputs appear:
+Discovery works the same as in mkFlake. A `formatters/default.nix` that returns a
+derivation becomes `formatter.<system>`, and `legacyPackages/<name>/default.nix`
+becomes `legacyPackages.<system>.<name>`:
 
 ```nix
 # formatters/default.nix
@@ -293,15 +320,22 @@ Auto-discovery works the same as mkFlake — drop a `formatters/default.nix` (re
 { pkgs, ... }: pkgs.hello
 ```
 
-To also scan the `by-name/` convention for legacy packages, enable `legacyPackagesByName`:
+To also scan the `by-name/` layout for legacy packages:
 
 ```nix
 purr.legacyPackagesByName = true;   # also scan legacyPackages/by-name/
 ```
 
-## Outputs Builder
+Checks, shells, apps, overlays, and templates use the same directories and module
+shapes as mkFlake. See [checks and shells](/mkflake#checks-and-shells),
+[apps](/mkflake#apps), and
+[overlays and templates](/mkflake#overlays-and-templates).
 
-`purr.outputsBuilder` mirrors mkFlake's `outputsBuilder` — add any custom per-system output. It receives `{ pkgs, system, lib, inputs, namespace }` plus all `extraArgs` keys, and its result is deep-merged with purr's auto-discovered outputs:
+## Outputs builder
+
+`purr.outputsBuilder` works like mkFlake's `outputsBuilder`. It receives
+`{ pkgs, system, lib, inputs, namespace }` plus every `extraArgs` key, and its result
+is deep-merged with the discovered per-system outputs:
 
 ```nix
 purr.outputsBuilder = { pkgs, system, lib, namespace, ... }: {
@@ -309,9 +343,10 @@ purr.outputsBuilder = { pkgs, system, lib, namespace, ... }: {
 };
 ```
 
-## Hydra CI (hydraJobs)
+## Hydra CI
 
-Generate a `hydraJobs` output for Hydra that mirrors your system/home configs and adds custom jobs from a `hydraJobs/` directory:
+Generate a `hydraJobs` output that mirrors configuration outputs and adds custom jobs
+from a `hydraJobs/` directory:
 
 ```nix
 purr.hydraJobs = {
@@ -321,13 +356,19 @@ purr.hydraJobs = {
 };
 ```
 
-> In flake-parts mode, hydraJobs mirrors the config outputs (`nixosConfigurations`, `darwinConfigurations`, `homeConfigurations`), images, directory jobs, and `extra`. Per-system outputs (`checks`, `packages`, `devShells`, `legacyPackages`, `formatter`) are only auto-mirrored in mkFlake mode — in flake-parts mode, add them via `purr.hydraJobs.extra` if needed.
+In flake-parts mode, hydraJobs mirrors the config outputs
+(`nixosConfigurations`, `darwinConfigurations`, `homeConfigurations`), images,
+directory jobs, and `extra`. The per-system outputs (`checks`, `packages`,
+`devShells`, `legacyPackages`, `formatter`) are not auto-mirrored; add them through
+`purr.hydraJobs.extra` if needed.
 
 See the [hydraJobs](/hydrajobs) page for the full reference.
 
-## Namespace Lib Output
+## Namespace lib output
 
-When a `lib/` directory exists and `namespace` is set, purr exports the namespace lib as a flake `lib.<namespace>` output — in both mkFlake and flake-parts modes:
+When a `lib/` directory exists and `namespace` is set, purr exports the namespace lib
+as a flake output in both mkFlake and flake-parts modes. When `namespace` is `null`,
+the same lib is exported at `lib`:
 
 ```nix
 # lib/default.nix
@@ -341,7 +382,7 @@ When a `lib/` directory exists and `namespace` is set, purr exports the namespac
 nix eval .#lib.myproject.utils
 ```
 
-## Extra Args
+## Extra args
 
 Pass custom values to every auto-discovered module:
 
@@ -363,13 +404,16 @@ Modules receive `extraArgs` values as function parameters:
 }
 ```
 
-All auto-discovered modules receive `extraArgs` keys — packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`, and `outputsBuilder`. Purr's own keys (`inputs`, `pkgs`, `namespace`, `lib`, etc.) always override `extraArgs` in case of naming conflicts.
+The keys are passed to packages, shells, checks, apps, templates, system
+`specialArgs`, home `extraSpecialArgs`, and `outputsBuilder`. purr's own keys
+(`inputs`, `pkgs`, `namespace`, `lib`, and similar) override `extraArgs` on conflict.
 
 # mkFlake Usage
 
-`mkFlake` is purr's standalone flake builder. Use it when you don't need or want flake-parts.
+`mkFlake` builds a flake from a project directory without flake-parts. The call returns
+the complete `outputs` attrset.
 
-## Basic Usage
+## Basic usage
 
 ```nix
 {
@@ -390,46 +434,46 @@ All auto-discovered modules receive `extraArgs` keys — packages, shells, check
 }
 ```
 
-## Full API Reference
+## Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `inputs` | attrs | *required* | Flake inputs. Required: `nixpkgs`. Optional: `home-manager` (or `homeManager`) for home-manager support, `nix-darwin` (or `darwin`) for darwin support |
-| `inputsFor` | nullOr fn | identity | Transform `{ inputs, ... } -> inputs'` (or a plain attrset) that filters/replaces the raw flake inputs into the **effective inputs** purr builds from internally. Modules always keep the raw `inputs`. See [Per-host inputs](#per-host-inputs-multi-nixpkgs) below |
-| `src` | path | *required* | Project root directory |
-| `namespace` | nullOr str | `null` | Module option namespace, also used as lib key (`lib.<namespace>`) |
-| `libDir` | nullOr str | `null` | Lib directory (relative to `src`), auto-detects `lib/` |
-| `flattenLib` | bool | `false` | Flatten lib subdirectories into root (no dir nesting) |
-| `systems` | list | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` | Systems to generate for |
-| `nixpkgsConfig` | attrs | `{}` | nixpkgs config (`allowUnfree`, etc.) |
-| `outputsBuilder` | fn | `({ pkgs, system, inputs, namespace, lib, ... }: {})` | Per-system extra flake outputs. Also receives all `extraArgs` keys. Results are **deep-merged** with auto-discovered outputs, so both coexist (e.g. `packages` from auto-discovery and from `outputsBuilder`) |
-| `modulesDir` | str | `"modules"` | Module directory name under src |
-| `moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | Subdirectory mapping per output |
-| `extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` — raw module injection |
-| `extraArgs` | attrs | `{}` | Custom key-value pairs injected into all auto-discovered module args (packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`). Purr's own keys override `extraArgs` on conflict |
+| `inputs` | attrs | required | Flake inputs. `nixpkgs` is required. `home-manager` (or `homeManager`) enables home-manager outputs, and `nix-darwin` (or `darwin`) enables darwin support |
+| `inputsFor` | fn | identity | Filter or replace the flake inputs that purr uses internally. Accepts `{ inputs, ... } -> inputs'` or a plain attrset. Modules still receive the raw `inputs`. See [Per-host inputs](#per-host-inputs-multi-nixpkgs) |
+| `src` | path | required | Project root directory |
+| `namespace` | nullOr str | `null` | Module option namespace, also used as the lib key (`lib.<namespace>`) |
+| `libDir` | nullOr str | `null` | Lib directory relative to `src`; auto-detects `lib/` |
+| `flattenLib` | bool | `false` | Flatten lib subdirectories into the namespace root |
+| `systems` | list | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` | Systems to generate per-system outputs for |
+| `nixpkgsConfig` | attrs | `{}` | nixpkgs config such as `allowUnfree` |
+| `outputsBuilder` | fn | `(_: {})` | Per-system extra outputs. Called with `{ pkgs, system, inputs, namespace, lib, ... }` plus every `extraArgs` key. The result is deep-merged with the discovered outputs |
+| `modulesDir` | str | `"modules"` | Module directory name under `src` |
+| `moduleTypes` | attrs | `{ nixos = [...]; darwin = [...]; home = [...]; }` | Subdirectory mapping per output |
+| `extraModules` | attrs | `{}` | Raw module injection: `{ nixos = [...]; darwin = [...]; home = [...]; }` |
+| `extraArgs` | attrs | `{}` | Custom values added to the arguments of every auto-discovered module, system `specialArgs`, and home `extraSpecialArgs`. purr's own keys win on conflict |
 | `hosts` | attrs | `{}` | Per-host config: `hosts.<name>.meta = { images = [...]; deployable = true; roles.nixpkgs = "..."; ... }`, deep-merged over the host's `meta.nix`. See [Host Meta](/meta) |
-| `bundleModules` | bool | `false` | Include `extraModules` in the auto-generated `default` bundle (the `default` module itself is always generated unless you define your own) |
-| `bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle (only when `bundleModules = true`) |
+| `bundleModules` | bool | `false` | Include `extraModules` in the generated `default` module bundle |
+| `bundleExtraModules` | bool | `true` | Include extra modules in the bundle when `bundleModules` is on |
 | `checksDir` | nullOr str | `null` | auto-detects `checks/` |
 | `shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `packagesDir` | nullOr str | `null` | auto-detects `packages/` |
-| `packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
-| `packagesToPkgs` | bool | `true` | Auto-register discovered packages into `pkgs` (addressable as `pkgs.<name>`, overridable, usable by other modules). See [Packages](#packages) |
+| `packagesByName` | bool | `false` | Also discover packages from `packages/by-name/<shard>/<name>/package.nix` |
+| `packagesToPkgs` | bool | `true` | Register discovered packages in `pkgs` as well. See [Packages](#packages) |
 | `legacyPackagesDir` | nullOr str | `null` | auto-detects `legacyPackages/` |
-| `legacyPackagesByName` | bool | `false` | Also discover legacy packages via `by-name/` convention (coexists with regular discovery) |
+| `legacyPackagesByName` | bool | `false` | Also discover legacy packages from the `by-name/` layout |
 | `appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `templatesDir` | nullOr str | `null` | auto-detects `templates/` |
-| `templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
-| `formatterDir` | nullOr str | `null` | auto-detects `formatters/` then `formatter/`. The `default.nix` must return a derivation (`{ pkgs, ... }: pkgs.nixfmt-rfc-style`) |
+| `templatesRecursive` | bool | `false` | Scan `templates/` recursively |
+| `formatterDir` | nullOr str | `null` | auto-detects `formatters/` then `formatter/`. The `default.nix` must return a derivation |
 | `systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `homesDir` | nullOr str | `null` | auto-detects `homes/` |
-| `autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
+| `autoInject` | bool | `true` | Inject `networking.hostName`, `home.username`, and `home.homeDirectory` with `lib.mkDefault` |
 | `hydraJobs` | attrs | `{}` | Hydra CI options: `{ enable, as, dir, systems, include, extra }`. See below |
 
-## Hydra CI (hydraJobs)
+## Hydra CI
 
-Generate a `hydraJobs` output for Hydra CI that automatically mirrors every buildable output, plus custom jobs from a `hydraJobs/` directory:
+`hydraJobs` mirrors buildable outputs and adds jobs from a `hydraJobs/` directory:
 
 ```nix
 inputs.purr.lib.mkFlake {
@@ -445,7 +489,7 @@ inputs.purr.lib.mkFlake {
 
 See the [hydraJobs](/hydrajobs) page for the full reference.
 
-## Customizing Systems
+## Customizing systems
 
 ```nix
 inputs.purr.lib.mkFlake {
@@ -455,7 +499,7 @@ inputs.purr.lib.mkFlake {
 }
 ```
 
-## Custom Module Directories
+## Custom module directories
 
 ```nix
 inputs.purr.lib.mkFlake {
@@ -467,7 +511,7 @@ inputs.purr.lib.mkFlake {
 }
 ```
 
-## Systems & Homes
+## Systems and homes
 
 ```nix
 inputs.purr.lib.mkFlake {
@@ -480,51 +524,57 @@ inputs.purr.lib.mkFlake {
 
 ## Per-host inputs (multi-nixpkgs)
 
-Replace or filter which inputs purr builds with via `inputsFor`, then point
-individual hosts at a specific input through a `roles` meta key. Modules
-always keep the original `inputs` argument — replacement only affects how
-purr builds pkgs, system configs, home configs, and the merged lib. See
-[Host Meta — roles](/meta#roles) for the full role reference.
+`inputsFor` selects which inputs purr builds from. A host then points at one of those
+inputs with `meta.roles.<role>`. Modules always keep the original `inputs` argument.
+The replacement only affects how purr builds pkgs, system configs, home configs, and
+the merged lib. See [Host Meta: roles](/meta#roles-per-host-inputs) for the role
+reference.
 
 ```nix
 # flake.nix
-inputs = {
-  nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
-  # ...
-};
-
-outputs = inputs:
-  inputs.purr.lib.mkFlake {
-    inherit inputs;
-    src = ./.;
-    inputsFor = { inputs, ... }: {
-      inherit (inputs) nixpkgs;
-      inherit (inputs) nixpkgs-unstable;
-    };
-    hosts.desktop.meta.roles.nixpkgs = "nixpkgs-unstable";
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+    purr.url = "github:nixcafe/purr";
   };
+
+  outputs = inputs:
+    inputs.purr.lib.mkFlake {
+      inherit inputs;
+      src = ./.;
+      inputsFor = { inputs, ... }: {
+        inherit (inputs) nixpkgs;
+        inherit (inputs) nixpkgs-unstable;
+      };
+      hosts.server.meta.roles.nixpkgs = "nixpkgs-unstable";
+    };
+}
 ```
+
+The same role can be set in `meta.nix`:
 
 ```nix
 # systems/x86_64-linux/server/meta.nix
 { roles.nixpkgs = "nixpkgs-unstable"; }
 ```
 
-Supported role keys: `nixpkgs`, `home-manager`, `nix-darwin`. Homes inherit
-their linked system's nixpkgs; unmatched homes use the effective-input
-default.
+Supported role keys are `nixpkgs`, `home-manager`, and `nix-darwin`. Homes inherit
+their linked system's nixpkgs; unmatched homes use the effective-input default.
 
 ## Formatter
 
-Auto-discover a per-system formatter from `formatters/` (or `formatter/`). The `default.nix` receives `{ pkgs, lib, system, namespace, inputs, ... }` and must return a derivation:
+A per-system formatter is discovered from `formatters/` or `formatter/`. The
+`default.nix` receives `{ pkgs, lib, system, namespace, inputs, ... }` and must return
+a derivation:
 
 ```nix
 # formatters/default.nix
 { pkgs, ... }: pkgs.nixfmt-rfc-style
 ```
 
-This produces `formatter.<system>` so `nix fmt` works out of the box. You can still override via `outputsBuilder`:
+This produces `formatter.<system>`, which `nix fmt` uses. `outputsBuilder` can override
+it:
 
 ```nix
 inputs.purr.lib.mkFlake {
@@ -538,10 +588,9 @@ inputs.purr.lib.mkFlake {
 
 ## Packages
 
-Modules under `packages/` are exposed as `packages.<system>.<name>` **and
-auto-registered into `pkgs`** (when `packagesToPkgs = true`, the default). This
-means any module — packages, shells, checks, apps, NixOS/darwin/home configs —
-can reference them as `pkgs.<name>`:
+Modules under `packages/` are exposed as `packages.<system>.<name>`. When
+`packagesToPkgs = true` (the default), they are also registered in `pkgs`, so any
+per-system module or host config can reference them as `pkgs.<name>`:
 
 ```nix
 # packages/hello/default.nix
@@ -553,31 +602,34 @@ can reference them as `pkgs.<name>`:
 { pkgs, ... }: pkgs.hello   # the discovered package
 ```
 
-Each discovered package is wrapped like a `callPackage` package
-(`.override`/`.overrideAttrs` work), and can depend on other discovered
-packages:
+Each discovered package is wrapped like a `callPackage` package, so
+`.override` and `.overrideAttrs` work, and packages can depend on each other:
 
 ```nix
-# packages/wrapper/default.nix — `hello` resolves from `pkgs`
+# packages/wrapper/default.nix
+# `hello` resolves from `pkgs`
 { hello, ... }: hello.override { /* ... */ }
 ```
 
-Registration is implemented as a nixpkgs overlay built on the package-set
-fixpoint, so one-way dependencies resolve lazily. Mutually-recursive packages
-recurse, exactly like any nixpkgs overlay. Set `packagesToPkgs = false` to keep
-packages out of `pkgs` (they remain available as `packages.<system>.<name>`).
+Registration is a nixpkgs overlay built on the package-set fixpoint. One-way
+dependencies resolve lazily. Mutually recursive packages recurse, as in any nixpkgs
+overlay.
+
+Set `packagesToPkgs = false` to keep packages out of `pkgs`. They remain available as
+`packages.<system>.<name>`:
 
 ```nix
 inputs.purr.lib.mkFlake {
   inherit inputs;
   src = ./.;
-  packagesToPkgs = false;   # opt out of pkgs registration
+  packagesToPkgs = false;
 }
 ```
 
-## Legacy Packages
+## Legacy packages
 
-Auto-discover `legacyPackages.<system>.*` from `legacyPackages/` — the convention for unmergeable or non-standard packages, still buildable via `nix build .#<name>`:
+`legacyPackages.<system>.*` is discovered from `legacyPackages/`. These packages are
+not added to `pkgs`:
 
 ```nix
 # legacyPackages/hello/default.nix
@@ -592,7 +644,52 @@ inputs.purr.lib.mkFlake {
 }
 ```
 
-## Extra Args
+Build one with `nix build .#legacyPackages.<system>.hello`.
+
+## Checks and shells
+
+`checks/<name>/default.nix` becomes `checks.<system>.<name>`, and
+`shells/<name>/default.nix` becomes `devShells.<system>.<name>`:
+
+```nix
+# checks/lint/default.nix
+{ pkgs, ... }: pkgs.runCommand "lint" { } "true"
+
+# shells/dev/default.nix
+{ pkgs, ... }: pkgs.mkShell { packages = [ pkgs.git ]; }
+```
+
+## Apps
+
+`apps/<name>/default.nix` becomes `apps.<system>.<name>` and must return a flake app:
+
+```nix
+# apps/hello/default.nix
+{ pkgs, ... }: {
+  type = "app";
+  program = "${pkgs.hello}/bin/hello";
+}
+```
+
+## Overlays and templates
+
+`overlays/<name>/default.nix` becomes `overlays.<name>`, and
+`templates/<name>/default.nix` becomes `templates.<name>`:
+
+```nix
+# overlays/custom/default.nix
+_final: prev: {
+  hello = prev.hello.overrideAttrs (_: { doCheck = false; });
+}
+
+# templates/rust/default.nix
+{
+  path = ./.;
+  description = "A Rust project";
+}
+```
+
+## Extra args
 
 Pass custom values to every auto-discovered module:
 
@@ -614,15 +711,20 @@ Modules receive `extraArgs` values as function parameters:
 pkgs.writeText "myapp" "target: ${deploymentTarget}"
 ```
 
-All auto-discovered modules receive `extraArgs` keys — packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`, and `outputsBuilder`. Purr's own keys (`inputs`, `pkgs`, `namespace`, `lib`, etc.) always override `extraArgs` in case of naming conflicts.
+The keys are passed to packages, shells, checks, apps, templates, system
+`specialArgs`, home `extraSpecialArgs`, and `outputsBuilder`. purr's own keys
+(`inputs`, `pkgs`, `namespace`, `lib`, and similar) override `extraArgs` on conflict.
 
 # Module System
 
-purr auto-discovers modules from your directory structure and wires them into your flake outputs.
+purr discovers modules from the directory layout and exports them as flake module
+outputs. Modules are plain Nix modules; purr supplies the namespace and the project
+lib.
 
-## Module Discovery
+## Module discovery
 
-Place modules under `modules/` and they're auto-discovered:
+Place modules under `modules/`. The path below the module type directory becomes the
+attribute path:
 
 ```
 modules/
@@ -632,9 +734,9 @@ modules/
 └── shared/users/default.nix            → nixos + darwin (shared)
 ```
 
-### Module Types
+### Module types
 
-The default module type mapping determines which subdirectories go to which flake outputs:
+The default mapping decides which subdirectories go to which flake outputs:
 
 | Output | Directories |
 |--------|-------------|
@@ -642,7 +744,7 @@ The default module type mapping determines which subdirectories go to which flak
 | `darwinModules` | `darwin/`, `shared/` |
 | `homeModules` | `home/` |
 
-Customize with `moduleTypes`:
+Change it with `moduleTypes`:
 
 ```nix
 moduleTypes = {
@@ -650,9 +752,13 @@ moduleTypes = {
 };
 ```
 
+A directory is included only if it exists. Modules from all listed directories are
+merged into the same output tree.
+
 ## Namespace
 
-Each module receives `namespace` as a parameter, keeping options scoped under `config.<namespace>.*`:
+When `namespace` is set, each module receives it as a parameter. Options stay under
+`config.<namespace>.*`:
 
 ```nix
 { config, lib, namespace, ... }@args:
@@ -665,32 +771,43 @@ in
 }
 ```
 
-## Module Arguments
+The namespace wrapper also injects the defining flake's `inputs` and the merged lib,
+so modules can use `lib.<namespace>.*` without an extra import.
 
-Each auto-discovered module receives different arguments depending on its directory:
+## Module arguments
+
+Auto-discovered modules receive different arguments depending on their directory:
 
 | Directory | Arguments |
 |-----------|-----------|
 | `lib/` | `{ lib, inputs, namespace }` |
 | `modules/` | `{ config, options, lib, pkgs, namespace, ... }` |
-| `packages/` | `{ inputs, system, namespace, lib, pkgs }` |
-| `legacyPackages/` | `{ inputs, system, namespace, lib, pkgs }` |
-| `shells/` | `{ inputs, system, namespace, lib, pkgs }` |
-| `checks/` | `{ inputs, system, namespace, lib, pkgs }` |
-| `apps/` | `{ inputs, system, namespace, lib, pkgs }` |
-| `formatter/` | `{ inputs, system, namespace, lib, pkgs }` |
-| `overlays/` | `final: prev:` (Nix overlay convention) |
-| `templates/` | `{ inputs, namespace, lib }` |
+| `packages/` | `{ inputs, system, namespace, lib, pkgs, ... }` |
+| `legacyPackages/` | `{ inputs, system, namespace, lib, pkgs, ... }` |
+| `shells/` | `{ inputs, system, namespace, lib, pkgs, ... }` |
+| `checks/` | `{ inputs, system, namespace, lib, pkgs, ... }` |
+| `apps/` | `{ inputs, system, namespace, lib, pkgs, ... }` |
+| `formatters/` or `formatter/` | `{ inputs, system, namespace, lib, pkgs, ... }` |
+| `overlays/` | `final: prev:` |
+| `templates/` | `{ inputs, namespace, lib, ... }` |
 | `systems/` | `{ config, options, lib, pkgs, purr, host, namespace, system, inputs, ... }` |
 | `homes/` | `{ config, options, lib, pkgs, purr, user, host, namespace, system, inputs, ... }` |
 
-> **Note:** `lib` in `packages/`, `legacyPackages/`, `shells/`, `checks/`, `apps/`, and `formatter/` includes the project's custom lib under `lib.<namespace>.*`, merged via the merged namespace lib. `systems/` and `homes/` receive a `purr` attrset with metadata about the current configuration context via `specialArgs` / `extraSpecialArgs`. See [Systems & Homes](/systems-homes#purr-metadata) for the full `purr` shape.
+`lib` in `packages/`, `legacyPackages/`, `shells/`, `checks/`, `apps/`, and
+`formatters/` is the merged lib, including the project lib under
+`lib.<namespace>.*`. `systems/` and `homes/` receive `purr` through `specialArgs`
+and `extraSpecialArgs`. See [Systems & Homes](/systems-homes#purr-metadata) for the
+shape of `purr`.
 
-> **Note:** discovered packages are auto-registered into `pkgs` and spread into every module's arguments, so a module can depend on a sibling package by name: `{ hello, ... }: hello.override { ... }`. Enabled by default (`packagesToPkgs = true`). See [Packages](/mkflake#packages).
+Discovered packages are registered in `pkgs` by default (`packagesToPkgs = true`) and
+the whole `pkgs` set is passed to per-system modules. A package can therefore depend
+on a sibling package by name: `{ hello, ... }: hello.override { ... }`. This applies
+to per-system modules, not to NixOS or home modules, which use `pkgs.<name>`. See
+[Packages](/mkflake#packages).
 
-## Custom Lib
+## Custom lib
 
-Create a `lib/` directory under `src` to share functions across all modules:
+Create a `lib/` directory under `src` to share functions across modules:
 
 ```nix
 # lib/default.nix
@@ -701,7 +818,8 @@ Create a `lib/` directory under `src` to share functions across all modules:
 }
 ```
 
-Functions are accessible as `lib.<namespace>.*` in all modules, packages, shells, and checks:
+The functions are available as `lib.<namespace>.*` in modules, packages, shells,
+checks, apps, templates, formatters, and legacy packages:
 
 ```nix
 # packages/known-hosts/default.nix
@@ -712,28 +830,36 @@ in
 pkgs.writeText "known-hosts" (keys.generate { ... })
 ```
 
-Subdirectories nest by default (`lib.<namespace>.keys.foo`). Set `flattenLib = true` to merge all submodules directly under the namespace (`lib.<namespace>.foo`).
+Subdirectories nest by default (`lib.<namespace>.keys.foo`). Set `flattenLib = true`
+to merge all submodules directly under the namespace (`lib.<namespace>.foo`). When
+`namespace` is `null`, the lib is merged at the top level of `lib`.
 
-The `lib/` directory supports both a root `default.nix` and recursive subdirectory discovery via `findModules` — both can coexist.
+A root `lib/default.nix` and subdirectory modules can coexist. The root module is
+imported separately by `buildImportedPurrLib`; subdirectory modules are collected by
+`findModulesLib`.
 
-## Default Module Bundle
+## Default module bundle
 
-A `default` module that imports all discovered sub-modules is **always generated** (for `nixosModules`, `darwinModules`, and `homeModules`) — unless you define your own `default` module, in which case the auto-generated bundle is skipped:
+A `default` module that imports all discovered sub-modules is generated for
+`nixosModules`, `darwinModules`, and `homeModules`. It is skipped when a discovered
+module set or `extraModules` already defines `default`:
 
 ```nix
 { imports = [ inputs.myflake.nixosModules.default ]; }
 ```
 
-`bundleModules` (default `false`) controls whether your `extraModules` are folded into this bundle. Set `bundleModules = true` to include them; combine with `bundleExtraModules = false` to include only the auto-discovered modules.
+`bundleModules` (default `false`) controls whether `extraModules` are folded into the
+bundle. Set `bundleModules = true` to include them, and `bundleExtraModules = false`
+to bundle only the auto-discovered modules.
 
-## Extra Modules
+## Extra modules
 
 Inject modules from other flakes:
 
 ```nix
 extraModules = {
   nixos = [
-    inputs.cattery-modules.nixosModules.default
+    inputs.my-extra-modules.nixosModules.default
     inputs.disko.nixosModules.default
   ];
 };
@@ -741,12 +867,13 @@ extraModules = {
 
 # Directory Structure
 
-All directories are auto-detected under your `src` path:
+purr resolves each directory under the project `src` path. Most directories are
+optional; a directory is used when it exists.
 
 ```
 src/
 ├── lib/                              # Project library (auto-detect: "lib")
-│   ├── default.nix                   #   import { lib, inputs, namespace }: returns attrset
+│   ├── default.nix                   #   { lib, inputs, namespace }: returns an attrset
 │   ├── keys/
 │   │   └── default.nix               #   nested → lib.<namespace>.keys
 │   └── utils/
@@ -765,7 +892,7 @@ src/
 │   │   └── default.nix               #   → packages.<system>.known-hosts, pkgs.known-hosts
 │   ├── match-blocks/
 │   │   └── default.nix               #   → packages.<system>.match-blocks, pkgs.match-blocks
-│   └── by-name/                      #   Optional by-name convention (packagesByName = true)
+│   └── by-name/                      #   Optional by-name layout (packagesByName = true)
 │       └── co/
 │           └── cowsay/
 │               └── package.nix       #   → packages.<system>.cowsay, pkgs.cowsay
@@ -773,7 +900,7 @@ src/
 ├── legacyPackages/                   # Per-system legacy packages (auto-detect: "legacyPackages")
 │   ├── hello/
 │   │   └── default.nix               #   → legacyPackages.<system>.hello
-│   └── by-name/                      #   Optional by-name convention (legacyPackagesByName = true)
+│   └── by-name/                      #   Optional by-name layout (legacyPackagesByName = true)
 │       └── he/
 │           └── hello/
 │               └── package.nix       #   → legacyPackages.<system>.hello
@@ -802,6 +929,11 @@ src/
 │   └── default.nix                   #   returns a derivation → formatter.<system>
 │                                     #   e.g. { pkgs, ... }: pkgs.nixfmt-rfc-style
 │
+├── hydraJobs/                        # Custom CI jobs (used when hydraJobs.enable = true)
+│   └── build/
+│       └── hello/
+│           └── default.nix           #   → hydraJobs.build.<system>.hello
+│
 ├── systems/                          # auto-detect: "systems", "hosts"
 │   └── x86_64-linux/
 │       ├── server/default.nix        # → nixosConfigurations.server
@@ -813,13 +945,18 @@ src/
         └── alice@server/default.nix  # → homeConfigurations."alice@server"
 ```
 
-> **Packages:** every package under `packages/` is also auto-registered into `pkgs` (as `pkgs.<name>`), so it can be used from any module and by other packages. Disable with `packagesToPkgs = false`. See [Packages](/mkflake#packages).
+Packages under `packages/` are also registered in `pkgs` as `pkgs.<name>`, so any
+per-system module can use them. Disable this with `packagesToPkgs = false`. See
+[Packages](/mkflake#packages).
 
-> **hydraJobs:** custom CI jobs live in a top-level `hydraJobs/` directory. Enable with `hydraJobs.enable = true`. See the [hydraJobs](/hydrajobs) page.
+Custom CI jobs live in `hydraJobs/` and are used when `hydraJobs.enable = true`. See
+the [hydraJobs](/hydrajobs) page.
 
-## Directory Discovery
+## Directory discovery
 
-Each directory is auto-detected when the option is `null` (default). The discovery order:
+Each optional directory is resolved from the option value or from the candidate list
+when the option is `null`. `modulesDir` is a name with the default `"modules"`, not an
+auto-detected path.
 
 | Output | Option | Auto-detect candidates |
 |--------|--------|------------------------|
@@ -829,14 +966,15 @@ Each directory is auto-detected when the option is `null` (default). The discove
 | Shells | `shellsDir` | `shells/` → `devShells/` |
 | Overlays | `overlaysDir` | `overlays/` |
 | Packages | `packagesDir` | `packages/` |
-| Legacy Packages | `legacyPackagesDir` | `legacyPackages/` |
+| Legacy packages | `legacyPackagesDir` | `legacyPackages/` |
 | Apps | `appsDir` | `apps/` |
 | Templates | `templatesDir` | `templates/` |
 | Formatter | `formatterDir` | `formatters/` → `formatter/` |
 | Systems | `systemsDir` | `systems/` → `hosts/` |
 | Homes | `homesDir` | `homes/` |
+| Hydra jobs | `hydraJobs.dir` | `hydraJobs/` |
 
-You can override any directory with an explicit name:
+Override any directory with an explicit name:
 
 ```nix
 # mkFlake
@@ -858,9 +996,11 @@ purr = {
 
 # Systems & Homes
 
-purr auto-discovers NixOS/darwin systems and home-manager homes using the `<arch>-<format>/<name>` convention (compatible with [Snowfall Lib](https://snowfall.org)). Only `linux` and `darwin` formats are supported.
+purr discovers NixOS and darwin systems from `<arch>-<format>/<name>` and
+home-manager homes from `<arch>-<format>/<user>@<host>`. Only the `linux` and `darwin`
+formats are supported.
 
-## Directory Structure
+## Directory layout
 
 ```
 src/
@@ -879,16 +1019,18 @@ src/
 │       └── alice@macbook/default.nix # → homeConfigurations."alice@macbook"
 ```
 
-## System Output Mapping
+## Output mapping
 
-| Format in dir name | Flake output key | Builder |
+| Format in directory name | Flake output key | Builder |
 |---|---|---|
 | `linux` | `nixosConfigurations.<name>` | `nixosSystem` |
 | `darwin` | `darwinConfigurations.<name>` | `darwinSystem` |
 
-## Home Auto-Linking
+## Home auto-linking
 
-Homes named `<user>@<host>` are automatically injected into matching hosts. When `home-manager` (or `homeManager`) is available as an input, building `nixosConfigurations.server` will include all homes with `@server` suffix:
+Homes named `<user>@<host>` are linked to the matching system. When `home-manager`
+(or `homeManager`) is available as an input, building `nixosConfigurations.server`
+includes every home with the `@server` suffix:
 
 ```nix
 # homes/x86_64-linux/alice@server/default.nix
@@ -898,15 +1040,22 @@ Homes named `<user>@<host>` are automatically injected into matching hosts. When
 }
 ```
 
-The home is auto-configured via `home-manager.users.alice` in the host's NixOS config. No additional wiring needed. For every linked home, purr also:
+The home is added through `home-manager.users.alice` in the host's NixOS
+configuration. For every linked home, purr also:
 
-* sets `home-manager.useGlobalPkgs` and `home-manager.useUserPackages` to `mkDefault true`
-* auto-creates `users.users.<name>` (`isNormalUser = mkDefault true`) for non-root users on Linux hosts
-* injects the username as a module argument (`_module.args.user = "alice"`) and default `home.username` / `home.homeDirectory`
+* sets `home-manager.useGlobalPkgs` and `home-manager.useUserPackages` to
+  `mkDefault true`
+* creates `users.users.<name>` (`isNormalUser = mkDefault true`) for non-root users on
+  Linux hosts
+* passes the username as `_module.args.user` and injects `home.username` and
+  `home.homeDirectory` as defaults
 
-## Building Images (ISO, qemu, raw, cloud, …)
+## Building images
 
-purr does **not** have special format directories (`x86_64-iso`, `x86_64-do`, …). Instead, nixpkgs (25.05+) already imports `image/images.nix` by default, which makes every NixOS configuration capable of building all image formats out of the box. Just put your system under `systems/<arch>-linux/` and build any image from it:
+purr does not use special format directories such as `x86_64-iso`. nixpkgs 25.05 and
+later imports `image/images.nix` by default, so every NixOS configuration exposes
+`system.build.images`. Put the system under `systems/<arch>-linux/` and build an image
+from it:
 
 ```bash
 # ISO image
@@ -927,7 +1076,9 @@ nix build .#nixosConfigurations.server.config.system.build.images.amazon
 
 ### Short `images.<host>.<format>` output
 
-Declare which formats to build for a host in its [host meta](/meta) (a `meta.nix` file or `hosts.<name>.meta` config), and purr exposes a top-level `images.<host>.<format>` output. This works regardless of whether [hydraJobs](/hydrajobs) is enabled:
+Declare the formats for a Linux host in its [host meta](/meta), either in `meta.nix`
+or in `hosts.<name>.meta`. purr then exposes a top-level
+`images.<host>.<format>` output:
 
 ```nix
 # systems/x86_64-linux/server/meta.nix
@@ -937,16 +1088,21 @@ Declare which formats to build for a host in its [host meta](/meta) (a `meta.nix
 ```
 
 ```bash
-# Short names, always available
 nix build .#images.server.iso
 nix build .#images.server.qemu
 ```
 
-Available formats are the same as below. When hydraJobs is enabled, these same declarations are mirrored as `hydraJobs.images.<host>.<format>`.
+This output exists whether or not hydraJobs is enabled. When `hydraJobs.systems` is
+set, it also filters the `images` output. When hydraJobs is enabled, the same
+declarations are mirrored as `hydraJobs.images.<host>.<format>`.
 
-### Image-only hosts (not deployable)
+### Image-only hosts
 
-A host that declares `images` in its meta is treated as an **image-only recipe** by default. It is excluded from `nixosConfigurations`/`darwinConfigurations` (and from the `hydraJobs` config groups), so its `system.build.toplevel` is never evaluated and it cannot be deployed with `nixos-rebuild`. Use this for hosts like installer ISOs that have no root file system and exist only to build images:
+On Linux, a host that declares `images` in its meta is an image-only recipe by default.
+It is excluded from `nixosConfigurations` and `darwinConfigurations`, and from the
+hydraJobs config groups. Its `system.build.toplevel` is never evaluated, so it cannot
+be deployed with `nixos-rebuild`. Use this for hosts such as installer ISOs that have
+no root file system:
 
 ```nix
 # systems/x86_64-linux/installer/meta.nix
@@ -955,42 +1111,48 @@ A host that declares `images` in its meta is treated as an **image-only recipe**
 }
 ```
 
-`installer` will **not** show up in `nixosConfigurations`, but `nix build .#images.installer.iso` still works. The image declarations are read cheaply from `meta.nix` — nixpkgs and home-manager are never evaluated just to decide how a host is exposed, and the image derivations stay lazy until you actually build them.
+`installer` does not appear in `nixosConfigurations`, but
+`nix build .#images.installer.iso` works. Meta is read from `meta.nix` before nixpkgs
+or home-manager is evaluated, and the image derivations stay lazy.
 
-To keep a host deployable **and** build images from it, set `deployable = true`:
+To keep a host deployable and build images from it, set `deployable = true`:
 
 ```nix
 # systems/x86_64-linux/server/meta.nix
 {
   images = [ "iso" "qemu" ];
-  deployable = true; # stays in nixosConfigurations AND builds images
+  deployable = true;
 }
 ```
 
-> **Note:** `deployable` is a host meta key, not a system option. A host is deployable by default when `images` is empty; declaring `images` without `deployable = true` makes it image-only.
+`deployable` is a host meta key, not a system option. A host is deployable by default
+when `images` is empty, or when the host is darwin. On Linux, declaring `images`
+without `deployable = true` makes the host image-only.
 
 ### Available image formats
 
-All formats from the now-deprecated [nixos-generators](https://github.com/nix-community/nixos-generators) are built into nixpkgs:
+These formats come from nixpkgs `image/images.nix`:
 
 | Format key | Image type | Format key | Image type |
 |---|---|---|---|
 | `iso` | Bootable ISO 9660 | `proxmox` | Proxmox VE image |
-| `qemu-efi` | QEMU qcow2 (EFI) | `proxmox-lxc` | Proxmox LXC container |
-| `qemu` | QEMU qcow2 (BIOS) | `lxc` | LXC container |
-| `raw-efi` | Raw disk (EFI) | `lxc-metadata` | LXC metadata tarball |
-| `raw` | Raw disk (BIOS) | `oci` | OCI container image |
-| `amazon` | AWS EC2 AMI | `vagrant-virtualbox` | Vagrant VirtualBox |
-| `azure` | Azure VM image | `virtualbox` | VirtualBox OVA |
-| `google-compute` | GCP image | `vmware` | VMware VMDK |
-| `digital-ocean` | DigitalOcean image | `kubevirt` | KubeVirt container disk |
-| `hyperv` | Hyper-V VHDX | `cloudstack` | Apache CloudStack |
-| `linode` | Linode image | `openstack` | OpenStack image |
+| `iso-installer` | Installer ISO | `proxmox-lxc` | Proxmox LXC container |
+| `qemu-efi` | QEMU qcow2 (EFI) | `lxc` | LXC container |
+| `qemu` | QEMU qcow2 (BIOS) | `lxc-metadata` | LXC metadata tarball |
+| `raw-efi` | Raw disk (EFI) | `oci` | OCI container image |
+| `raw` | Raw disk (BIOS) | `vagrant-virtualbox` | Vagrant VirtualBox |
+| `amazon` | AWS EC2 AMI | `virtualbox` | VirtualBox OVA |
+| `azure` | Azure VM image | `vmware` | VMware VMDK |
+| `google-compute` | GCP image | `kubevirt` | KubeVirt container disk |
+| `digital-ocean` | DigitalOcean image | `cloudstack` | Apache CloudStack |
+| `hyperv` | Hyper-V VHDX | `openstack` | OpenStack image |
+| `linode` | Linode image | `openstack-zfs` | OpenStack image with ZFS |
 | `kexec` | Netboot kexec image | `sd-card` | Raspberry Pi / SD card |
 
-### If you need different configs for different images
+### Different configs for different images
 
-Put multiple systems under `systems/x86_64-linux/` with different names. A minimal installer config is a good candidate for an image-only host (see [Image-only hosts](#image-only-hosts-not-deployable)):
+Put multiple systems under `systems/x86_64-linux/` with different names. A minimal
+installer config is a good candidate for an image-only host:
 
 ```
 systems/x86_64-linux/
@@ -1011,9 +1173,11 @@ Then build:
 nix build .#images.installer.iso
 ```
 
-## Namespace Bridge (system -> home config forwarding)
+## Namespace bridge (system to home config)
 
-On any host with linked homes (when home-manager is available as an input), purr defines the option `purr.users`. Setting `purr.users.<name>.homeConfig` from any NixOS module forwards that config to `home-manager.users.<name>`. This works whether or not a `namespace` is set:
+On a host with linked homes, purr defines the option `purr.users`. Setting
+`purr.users.<name>.homeConfig` from any NixOS module forwards that config to
+`home-manager.users.<name>`. The option exists whether or not a `namespace` is set:
 
 ```nix
 # systems/x86_64-linux/server/default.nix
@@ -1028,61 +1192,75 @@ On any host with linked homes (when home-manager is available as an input), purr
 }
 ```
 
-Keys inside `homeConfig` map directly to home-manager option paths (`home.packages`, `programs.*`, `services.*`, etc.). The bridge provides low-priority defaults — the user's home module (`homes/x86_64-linux/alice@server/default.nix`) always takes priority.
+Keys inside `homeConfig` map directly to home-manager option paths
+(`home.packages`, `programs.*`, `services.*`, and so on). The bridge config is
+forwarded as a normal-priority home-manager module. If both the bridge and the home
+module set the same non-mergeable option at normal priority, the module system reports
+a conflict. Use `lib.mkDefault` on one side when the home module should be able to
+override a bridge value.
 
-### Priority Order (lowest to highest)
+The bridge is added before the home module in the import list. Import order does not
+change option priority.
 
-1. `purr.users.<name>.homeConfig` (bridge)
-2. `home-manager.users.<name>` set directly in any NixOS module
-3. The home module file (`homes/.../default.nix`)
+## `purr` metadata
 
-## `purr` Metadata
+Each system and home module receives a `purr` attrset with metadata about the current
+configuration. It is passed through `specialArgs` for systems and `extraSpecialArgs`
+for homes.
 
-Each system and home module receives a `purr` attrset with metadata about the current configuration. This is passed via `specialArgs` (systems) and `extraSpecialArgs` (homes).
-
-### System Modules (`specialArgs.purr`)
-
-| Field | Example | Description |
-|---|---|---|
-| `meta` | see [Host Meta](/meta) | Merged host metadata (contains `name`, `arch`, `format`, `isDarwin`, `isLinux`, `system`, `homes`, `images`, `deployable`, `roles`, plus custom keys) |
-| `systemMetas` | `{ server = {...}; workstation = {...}; }` | Registry of **every** discovered host's merged meta, keyed by host name (including self) |
-
-### Home Modules (`extraSpecialArgs.purr`)
+### System modules (`specialArgs.purr`)
 
 | Field | Example | Description |
 |---|---|---|
-| `meta` | `{ user = "alice"; host = "server"; ... }` | Home metadata: `user`, `host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system` |
-| `systemMeta` | see [Host Meta](/meta) | Merged meta of the system named by the home's host, or `null` when no matching system exists |
-| `systemMetas` | `{ server = {...}; ... }` | The same global host registry as systems receive |
-| `lib` | `{ hm = {...}; ... }` | The merged namespace lib (with home-manager's `lib.hm` extension), also available as `lib` for standalone homes |
+| `meta` | see [Host Meta](/meta) | Merged host metadata: `name`, `host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system`, `homes`, `images`, `deployable`, `roles`, plus custom keys |
+| `systemMetas` | `{ server = {...}; workstation = {...}; }` | Registry of every discovered host's merged meta, keyed by host name, including the current host |
 
-> **Note:** `purr.lib` is the merged namespace lib, available uniformly in **both** standalone and bridged homes — use `purr.lib.<namespace>.xxx` from any home module. Standalone homes additionally receive the same lib under `lib`.
+### Home modules (`extraSpecialArgs.purr`)
 
-### Usage Example
+| Field | Example | Description |
+|---|---|---|
+| `meta` | `{ user = "alice"; host = "server"; ... }` | Standalone homes: home metadata (`user`, `host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system`). Bridged homes: the host's merged meta, as described in [Host Meta](/meta) |
+| `systemMeta` | see [Host Meta](/meta) | Merged meta of the system named by the home's host, or `null` when no matching system exists. In a bridged home this is the same host meta passed as `meta` |
+| `systemMetas` | `{ server = {...}; ... }` | The same host registry that systems receive |
+| `lib` | `{ hm = {...}; ... }` | The merged namespace lib with home-manager's `lib.hm` extension, also available as `lib` for standalone homes |
+
+Bridged homes receive the host's merged meta as `purr.meta`, so `purr.meta.user` is
+not set there. Use the `user` module argument in home modules that run both
+standalone and bridged.
+
+`purr.lib` is the merged namespace lib with `lib.hm` re-added. It is available in
+both standalone and bridged homes, so `purr.lib.<namespace>.xxx` works from any home
+module. Bridged homes keep home-manager's own evaluation lib and do not receive a
+`lib` override. Standalone homes also receive their evaluation lib as `lib`;
+`purr.lib` follows the home's resolved nixpkgs role.
+
+### Usage
 
 ```nix
 # systems/x86_64-linux/server/default.nix
 { config, pkgs, lib, purr, ... }:
 {
-  networking.hostName = purr.meta.name;       # "server"
-  nixpkgs.hostPlatform = purr.meta.archFormat;  # "x86_64-linux"
-  services.foo.enable = purr.meta.tier == "prod";  # custom meta key
+  networking.hostName = purr.meta.name;              # "server"
+  nixpkgs.hostPlatform = purr.meta.archFormat;       # "x86_64-linux"
+  services.foo.enable = purr.meta.tier == "prod";    # custom meta key
   services.bar.enable = purr.systemMetas.workstation.tier == "dev";
 }
 ```
 
-````nix
+```nix
 # homes/x86_64-linux/alice@server/default.nix
 { pkgs, lib, purr, ... }:
 {
   home.packages = [ pkgs.neovim ];
-  # systemMeta is the meta of "server" (or null when not linked to a system)
+  # systemMeta is the meta of "server", or null when not linked to a system
   programs.git.enable = purr.systemMeta != null;
 }
+```
 
-## Auto-Injection
+## Auto-injection
 
-By default (`autoInject = true`), purr auto-injects basic configuration using `lib.mkDefault` — user modules can always override:
+By default (`autoInject = true`), purr injects basic configuration with
+`lib.mkDefault`, so user modules can override it:
 
 | Context | Injected config |
 |---|---|
@@ -1090,7 +1268,7 @@ By default (`autoInject = true`), purr auto-injects basic configuration using `l
 | Home config (linux) | `home.username`, `home.homeDirectory = "/home/<user>"` |
 | Home config (darwin) | `home.username`, `home.homeDirectory = "/Users/<user>"` |
 
-Disable with `autoInject = false`.
+Disable the defaults with `autoInject = false`.
 
 ## Usage in mkFlake
 
@@ -1101,7 +1279,7 @@ inputs.purr.lib.mkFlake {
   systemsDir = "systems";   # or "hosts", or null to auto-detect
   homesDir = "homes";
 }
-````
+```
 
 ## Usage in flake-parts
 
@@ -1116,32 +1294,41 @@ purr = {
 
 # Host Meta
 
-Every system host can carry **metadata** that purr reads at flake-evaluation time and re-exposes to the host's modules as `purr.meta`. It drives host behaviour (which images to build, whether the host is deployable) and gives your modules a cheap, structured way to read per-host facts — no placeholder-arg imports, no nixpkgs/system evaluation.
+Every system host can carry metadata that purr reads during flake evaluation and
+passes to the host's modules as `purr.meta`. The same data decides which images to
+build and whether the host is exposed as a configuration.
 
-## Why meta instead of module options?
+## Why host meta
 
-Image/host declarations used to live inside the host's `default.nix` and were read back out by importing the module with placeholder arguments. That was fragile — a module touching `config`/`pkgs` at the top level would crash the cheap read, and conditional declarations were silently ignored.
+Host declarations used to live in the host's `default.nix`. purr had to import the
+module with placeholder arguments to read them, which could fail when the module
+touched `config` or `pkgs` at the top level. Host meta is a separate file or config
+value that purr reads directly. The host module is not imported to decide how the
+host is exposed.
 
-Host meta is a dedicated, tiny file/config that purr reads directly. The host module is never imported just to decide how the host is exposed.
+## Sources and merge order
 
-## Sources & Merge Order
+Host meta is merged from up to three sources. Later sources win:
 
-Host meta is merged from up to three sources, in increasing priority (later wins):
+1. Auto-generated: `name`, `host`, `arch`, `archFormat`, `format`, `isDarwin`,
+   `isLinux`, `system`, and `homes`. These come from the host's directory path and
+   matched homes.
+2. `meta.nix`: a file next to the host's `default.nix`.
+3. `hosts.<name>.meta`: flake-level config (`hosts` in `mkFlake`, `purr.hosts` in
+   flake-parts).
 
-1. **Auto-generated** — `name`, `host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system`, `homes` (derived from the host's directory path and matched homes).
-2. **`meta.nix`** — a file next to the host's `default.nix`.
-3. **`hosts.<name>.meta`** — flake-level config (`mkFlake` / `purr.hosts`).
-
-The two user sources are **deep-merged** (`lib.recursiveUpdate`), so a flake-level config can override individual nested keys of a `meta.nix` without replacing the whole attrset.
+The two user sources are deep-merged with `lib.recursiveUpdate`, so a flake-level
+config can override one nested key without replacing the whole attrset.
 
 ```
-auto meta ──► meta.nix ──► hosts.<name>.meta
-  (lowest)                    (highest)
+auto meta -> meta.nix -> hosts.<name>.meta
+ (lowest)                  (highest)
 ```
 
 ## `meta.nix`
 
-Place a `meta.nix` next to the host's `systems/<arch>-<format>/<name>/default.nix`:
+Place `meta.nix` next to the host's
+`systems/<arch>-<format>/<name>/default.nix`:
 
 ```
 src/
@@ -1149,7 +1336,7 @@ src/
     └── x86_64-linux/
         └── server/
             ├── default.nix
-            └── meta.nix          # ← optional host metadata
+            └── meta.nix          # optional host metadata
 ```
 
 ### Plain attrset
@@ -1164,11 +1351,13 @@ src/
 
 ### Function
 
-`meta.nix` may also be a function. It is called with the auto-generated meta plus convenient fixed values — all **lazily bound**, so cheap conditionals like `if inputs ? nix-darwin then ...` cost nothing extra:
+`meta.nix` may also be a function. purr calls it with the auto-generated meta plus
+fixed values. The arguments are bound lazily, so conditions such as
+`if inputs ? nix-darwin then ...` do not force nixpkgs or the module system:
 
 ```nix
 # systems/x86_64-linux/server/meta.nix
-{ inputs, lib, arch, format, extraArgs, ... }:
+{ inputs, lib, arch, ... }:
 assert lib != null;
 if arch == "x86_64" && inputs ? home-manager then
   {
@@ -1181,22 +1370,23 @@ else
 
 | Parameter | Description |
 |---|---|
-| `inputs` | All flake inputs (incl. transitive inputs in mkFlake mode) |
-| `lib` | The merged purr lib (nixpkgs lib + namespace lib) |
+| `inputs` | The flake inputs |
+| `lib` | The merged purr lib (nixpkgs lib plus the namespace lib) |
 | `namespace` | The configured namespace, or `null` |
-| `extraArgs` | The configured `extraArgs` (same as system modules receive) |
+| `extraArgs` | The configured `extraArgs` |
 | `host` / `name` | Host name |
-| `system` | Full triple, e.g. `"x86_64-linux"` |
-| `arch` | Architecture, e.g. `"x86_64"` |
-| `archFormat` | Directory name, e.g. `"x86_64-linux"` |
+| `system` | Full triple, for example `"x86_64-linux"` |
+| `arch` | Architecture, for example `"x86_64"` |
+| `archFormat` | Directory name, for example `"x86_64-linux"` |
 | `format` | `"linux"` or `"darwin"` |
 | `isDarwin` / `isLinux` | Platform booleans |
-| `homes` | Auto-matched homes, e.g. `[{ user = "alice"; host = "server"; }]` |
-| `...` | Extra args accepted, never forced |
+| `homes` | Matched homes, for example `[{ user = "alice"; host = "server"; }]` |
+| `...` | Extra arguments are accepted but not forced |
 
-`pkgs`, `config`, `options` are **not** provided — the whole point is that meta evaluation never touches nixpkgs or the module system.
+`pkgs`, `config`, and `options` are not provided. Meta evaluation does not evaluate a
+NixOS or home-manager configuration.
 
-## `hosts.<name>.meta` (flake config)
+## `hosts.<name>.meta`
 
 ### mkFlake
 
@@ -1205,7 +1395,7 @@ inputs.purr.lib.mkFlake {
   inherit inputs;
   src = ./.;
   hosts.server.meta = {
-    tier = "prod";      # overrides / deep-merges meta.nix
+    tier = "prod";      # deep-merges over meta.nix
   };
 }
 ```
@@ -1218,11 +1408,13 @@ purr.hosts.server.meta = {
 };
 ```
 
-Referencing a host that has no matching `systems/<arch>-<format>/<name>/default.nix` is an error.
+Referencing a host that has no matching
+`systems/<arch>-<format>/<name>/default.nix` is an error.
 
-## Reserved Keys
+## Reserved keys
 
-The auto-generated keys **cannot be overridden**. Setting one in `meta.nix` or `hosts.<name>.meta` emits a warning (to stderr during flake evaluation) and the value is silently dropped — the auto-generated value always wins.
+The auto-generated keys cannot be overridden. Setting one in `meta.nix` or
+`hosts.<name>.meta` emits a warning during flake evaluation and drops the user value.
 
 | Reserved key | Auto-generated value |
 |---|---|
@@ -1230,57 +1422,61 @@ The auto-generated keys **cannot be overridden**. Setting one in `meta.nix` or `
 | `host` | Host name (alias of `name`) |
 | `arch` | Architecture |
 | `archFormat` | Arch-format directory name |
-| `format` | `"linux"` / `"darwin"` |
+| `format` | `"linux"` or `"darwin"` |
 | `isDarwin` / `isLinux` | Platform booleans |
 | `system` | Full triple |
-| `homes` | Auto-matched homes |
+| `homes` | Matched homes |
 
-## Behaviour Keys
+## Behaviour keys
 
-These are consumed by purr itself:
+These keys are consumed by purr:
 
 | Key | Type | Description |
 |---|---|---|
-| `images` | `[str]` | Image formats to build. Exposed as `images.<host>.<format>` (and `hydraJobs.images.<host>.<format>` when hydraJobs is enabled). Each format maps to `config.system.build.images.<format>`. Must be a list of strings. |
-| `deployable` | `bool` | Whether the host is exposed as a `nixosConfigurations`/`darwinConfigurations` output. Defaults to `true` when `images == []` or the host is darwin. |
-| `roles` | `attrs` | Maps a role name to a key of the **effective inputs** to build this host from, e.g. `roles.nixpkgs = "nixpkgs-stable"`. Never modifies your flake inputs. See [below](#roles-per-host-inputs). |
+| `images` | list of strings | Image formats to build for a Linux host. Exposed as `images.<host>.<format>`, and as `hydraJobs.images.<host>.<format>` when hydraJobs is enabled. Each format maps to `config.system.build.images.<format>` |
+| `deployable` | bool | Whether the host is exposed in `nixosConfigurations` or `darwinConfigurations`. Defaults to `true` when `images` is empty or the host is darwin |
+| `roles` | attrs | Maps a role name to a key of the effective inputs, for example `roles.nixpkgs = "nixpkgs-stable"`. See [roles](#roles-per-host-inputs) |
 
-A host with `images` and no explicit `deployable` is **image-only**: it is excluded from `nixosConfigurations`/`darwinConfigurations` (and the hydraJobs config groups), so its `system.build.toplevel` is never evaluated. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
+A Linux host with `images` and no explicit `deployable` is image-only. It is excluded
+from the configuration outputs and the hydraJobs config groups, so its
+`system.build.toplevel` is not evaluated. See
+[Image-only hosts](/systems-homes#image-only-hosts).
 
 ### roles (per-host inputs)
 
-Give different hosts different inputs (e.g. a second nixpkgs for some hosts, a
-different home-manager) without touching your flake inputs. Two pieces work
-together:
+Different hosts can build from different inputs, for example a second nixpkgs or a
+different home-manager. Two pieces work together:
 
-1. **`inputsFor`** — filters/replaces the raw flake inputs into the *effective*
-   inputs purr builds from internally (see [mkFlake](/mkflake#per-host-inputs-multi-nixpkgs)
-   or [flake-parts](/flake-parts)). Default is the identity.
-2. **`meta.roles.<role>`** — points a host at a specific effective-input key.
-   The role names (`nixpkgs`, `home-manager`, `nix-darwin`) live under the
-   single nested `roles` key so they never collide with your free-form custom
-   meta keys. Absent roles fall back to the conventional input key
-   (`nixpkgs`, `home-manager`/`homeManager`, `nix-darwin`/`darwin`).
+1. `inputsFor` filters or replaces the raw flake inputs into the effective inputs
+   that purr builds from internally. See
+   [mkFlake](/mkflake#per-host-inputs-multi-nixpkgs) or
+   [flake-parts](/flake-parts). Default is the identity.
+2. `meta.roles.<role>` points a host at an effective-input key. The role names
+   (`nixpkgs`, `home-manager`, `nix-darwin`) live under `roles` so they do not collide
+   with custom meta keys. If a role is absent, purr falls back to the conventional
+   input key (`nixpkgs`, `home-manager` or `homeManager`, `nix-darwin` or `darwin`).
 
 ```nix
 # systems/x86_64-linux/server/meta.nix
 {
-  roles.nixpkgs = "nixpkgs-stable";        # build from the nixpkgs-stable input
+  roles.nixpkgs = "nixpkgs-stable";
   roles."home-manager" = "home-manager-stable";
-  tier = "prod";                            # still a normal custom key
+  tier = "prod";
 }
 ```
 
-This is internal-only: it changes which input purr *consumes* to build pkgs,
-system configs, home configs, and the merged lib base. The `inputs` argument
-your modules receive is **never** modified — modules always see the raw flake
-inputs. Homes inherit their linked system's nixpkgs; unmatched homes use the
-effective-input default. Referencing an input missing from the effective
-inputs throws a clear error.
+Role replacement is internal. It changes which input purr uses to build pkgs, system
+configs, home configs, and the merged lib base. The `inputs` argument that modules
+receive is never modified. Homes inherit their linked system's nixpkgs; unmatched
+homes use the effective-input default. Referencing an input that is missing from the
+effective inputs throws an error.
 
 ## `purr.meta`
 
-The merged meta is injected into every system host module via `specialArgs.purr.meta` (and the home-manager bridge's `extraSpecialArgs`). It always contains the 8 auto keys plus the normalized `images` and derived `deployable`, plus any custom keys you set:
+For system modules, the merged meta is passed through `specialArgs.purr.meta`. The
+home-manager bridge receives the same host meta through `extraSpecialArgs`. It always
+contains the 9 auto-generated keys plus the normalized `images` and derived
+`deployable`, plus any custom keys:
 
 ```nix
 # systems/x86_64-linux/server/default.nix
@@ -1306,47 +1502,62 @@ purr.meta =
     homes = [ { user = "alice"; host = "server"; } ];
     images = [ "iso" "qemu" ];
     deployable = true;
-    tier = "prod";      # ← custom key
+    tier = "prod";      # custom key
   }
 ```
 
-### `purr.systemMetas` (global host registry)
+### `purr.systemMetas`
 
-Every discovered host's merged meta is registered in `purr.systemMetas` — a pure-metadata registry keyed by host name, including the current host. It is available to both system and home modules, so you can read any other host's facts cheaply without evaluating its config:
+Every discovered host's merged meta is registered in `purr.systemMetas`, a pure
+metadata registry keyed by host name. The registry includes the current host and is
+available to both system and home modules. Reading another host's facts does not
+evaluate that host's config:
 
 ```nix
 # systems/x86_64-linux/server/default.nix
 { purr, ... }:
 {
-  # read another host's meta
   services.bar.enable = purr.systemMetas.workstation.tier == "dev";
 }
 ```
 
-Home modules additionally get `purr.systemMeta` — the merged meta of the system named by the home's host (or `null` when no matching system exists).
+Home modules also get `purr.systemMeta`, the merged meta of the system named by the
+home's host, or `null` when no matching system exists.
 
 ### Custom keys
 
-Any key other than the reserved/behaviour keys is carried through untouched and exposed as `purr.meta.<key>`. This is a free-form slot for your own automation — role/tier labels, machine groups, feature flags, and anything else that should be cheaply readable both by purr and by your modules.
+Any key other than the reserved and behaviour keys is passed through and exposed as
+`purr.meta.<key>`. This is a free-form slot for labels, groups, feature flags, or
+other data that both purr and your modules need to read.
 
 ## Validation
 
-* `images` must be a list — anything else throws.
-* `meta.nix` must evaluate to an attrset — anything else throws.
-* `hosts.<name>.meta` referencing a non-existent host throws.
-* Reserved keys are dropped with a warning (not an error).
+* `images` must be a list, otherwise evaluation throws.
+* `meta.nix` must evaluate to an attrset, otherwise evaluation throws.
+* `hosts.<name>.meta` referencing a nonexistent host throws.
+* Reserved keys are dropped with a warning, not an error.
 
-## For homes
+## Homes
 
-Home modules receive `purr.meta` with home-specific fields (`user`, `host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system`) — **not** the full host meta (no `images`/`deployable`). They also get `purr.systemMeta` (the linked system's merged host meta, or `null` when unlinked) and `purr.systemMetas` (the global registry). See [Systems & Homes — purr Metadata](/systems-homes#purr-metadata).
+Standalone home modules receive `purr.meta` with home-specific fields (`user`,
+`host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system`). They do not
+receive the full host meta, so `images` and `deployable` are absent. Bridged homes
+receive the host's merged meta as both `purr.meta` and `purr.systemMeta`; use the
+`user` module argument for the username there. In both forms `purr.systemMetas` is the
+host registry, and `purr.systemMeta` is the linked system's merged meta (or `null` for
+an unlinked standalone home). See
+[Systems & Homes: purr metadata](/systems-homes#purr-metadata).
 
 # hydraJobs
 
-purr can generate a `hydraJobs` flake output for [Hydra CI](https://nixos.org/hydra/). Hydra evaluates `outputs.hydraJobs` (falling back to `checks`) and every derivation leaf becomes a build job. purr makes this automatic — everything buildable in your flake is mirrored into `hydraJobs` with zero configuration, plus you can add custom jobs from a directory and fine-tune which outputs are included.
+purr can generate a `hydraJobs` flake output for [Hydra CI](https://nixos.org/hydra/).
+Hydra evaluates `outputs.hydraJobs` (falling back to `checks`) and builds every
+derivation leaf. When enabled, purr mirrors the buildable outputs and can add custom
+jobs from a `hydraJobs/` directory.
 
 ## Enabling
 
-hydraJobs is **off by default**. Turn it on with the `hydraJobs.enable` option:
+hydraJobs is off by default. Enable it with `hydraJobs.enable`:
 
 ```nix
 # mkFlake
@@ -1370,12 +1581,12 @@ purr = {
 
 ```nix
 hydraJobs = {
-  enable = true;                  # bool, default false — output hydraJobs
-  as = "builds";                  # str, default "hydraJobs" — output name (see below)
-  dir = "hydraJobs";              # nullOr str, default null — auto-detects "hydraJobs"
-  systems = ["x86_64-linux"];     # nullOr [str], default null — filter CI systems
-  include = null;                 # nullOr [str], default null — auto-detect all outputs
-  extra = { };                    # attrs, default {} — extra jobs, highest priority
+  enable = true;                  # bool, default false: output hydraJobs
+  as = "builds";                  # str, default "hydraJobs": output name
+  dir = "hydraJobs";              # nullOr str, default null: auto-detects "hydraJobs"
+  systems = ["x86_64-linux"];     # nullOr [str], default null: filter CI systems
+  include = null;                 # nullOr [str], default null: auto-detect outputs
+  extra = { };                    # attrs, default {}: extra jobs, highest priority
 };
 ```
 
@@ -1383,24 +1594,22 @@ hydraJobs = {
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `purr.hydraJobs.enable` | bool | `false` | Enable the `hydraJobs` flake output |
+| `purr.hydraJobs.enable` | bool | `false` | Enable the hydraJobs flake output |
 | `purr.hydraJobs.as` | str | `"hydraJobs"` | Name of the flake output carrying the jobs |
-| `purr.hydraJobs.dir` | nullOr str | `null` | Directory for custom jobs, auto-detects `hydraJobs/` |
-| `purr.hydraJobs.systems` | nullOr \[str] | `null` | Filter which systems get CI jobs |
-| `purr.hydraJobs.include` | nullOr \[str] | `null` | Which outputs to mirror (see below) |
+| `purr.hydraJobs.dir` | nullOr str | `null` | Directory for custom jobs; auto-detects `hydraJobs/` |
+| `purr.hydraJobs.systems` | nullOr \[str] | `null` | Restrict CI jobs to these systems. Also filters the top-level `images` output |
+| `purr.hydraJobs.include` | nullOr \[str] | `null` | Outputs to mirror; `null` auto-detects |
 | `purr.hydraJobs.extra` | attrs | `{}` | Extra jobs merged last, can override anything |
 
-## Renaming the output (`as`)
+## Renaming the output
 
-By default the jobs are exposed as `outputs.hydraJobs`, which is what Hydra looks
-for. `nix flake check` treats a `hydraJobs` output specially: it evaluates it
-**with import-from-derivation disabled**, so any host config that uses IFD (e.g.
-a palette/background rendered from a derivation) fails the check even if
-`allow-import-from-derivation` is enabled in your nix.conf.
+By default the jobs are exposed as `outputs.hydraJobs`, which Hydra looks for. `nix
+flake check` treats a `hydraJobs` output specially: it evaluates it with
+import-from-derivation disabled, so a host config that uses IFD can fail the check
+even when `allow-import-from-derivation` is enabled in `nix.conf`.
 
-Set `hydraJobs.as = "builds"` to expose the same jobs under a different output
-name that `nix flake check` does not force-evaluate. Then a tiny second flake
-re-exports them as `hydraJobs` for Hydra:
+Set `hydraJobs.as = "builds"` to expose the jobs under a different output name that
+`nix flake check` does not force. A second flake can re-export them as `hydraJobs`:
 
 ```nix
 # flake.nix
@@ -1416,7 +1625,7 @@ inputs.purr.lib.mkFlake {
 ```
 
 ```nix
-# hydra/flake.nix — the flake Hydra evaluates (via ?dir=hydra)
+# hydra/flake.nix, the flake Hydra evaluates with ?dir=hydra
 {
   inputs.nix-config.url = "github:you/nix-config";
   outputs = { self, nix-config }: {
@@ -1425,13 +1634,13 @@ inputs.purr.lib.mkFlake {
 }
 ```
 
-The `builds` output is fully lazy, so `nix flake check` on the main flake never
-evaluates it. Point the Hydra jobset at the re-exporting flake
-(`github:you/nix-config?dir=hydra`) and everything else stays identical.
+The `builds` output is lazy, so `nix flake check` on the main flake never evaluates
+it. Point the Hydra jobset at `github:you/nix-config?dir=hydra`.
 
-## What Gets Mirrored
+## What gets mirrored
 
-When `hydraJobs.include = null` (default), purr auto-discovers **everything buildable**:
+When `hydraJobs.include = null` (the default), purr auto-detects the available
+outputs:
 
 | Group | Source | Job |
 |-------|--------|-----|
@@ -1441,40 +1650,50 @@ When `hydraJobs.include = null` (default), purr auto-discovers **everything buil
 | `legacyPackages.<system>.<name>` | `legacyPackages/` | `legacyPackages.<system>.<name>` |
 | `formatter.<system>` | `formatters/` | `formatter.<system>` |
 | `nixosConfigurations.<system>.<host>` | `systems/` | `config.system.build.toplevel` |
-| `darwinConfigurations.<system>.<host>` | `systems/` | system derivation |
+| `darwinConfigurations.<system>.<host>` | `systems/` | `system` |
 | `homeConfigurations.<system>.<user@host>` | `homes/` | `activationPackage` |
 | `images.<host>.<format>` | host [meta](/meta) `images` | `config.system.build.images.<format>` |
 
-> **Note:** `apps` are **not** mirrored, even when present, because apps are `{ type = "app"; program = ...; }` metadata rather than derivations — Hydra cannot build them.
+`apps` are not auto-mirrored because they are `{ type = "app"; program = ...; }`
+metadata rather than derivations.
 
-> **Note:** image-only hosts (hosts with `images` set in their [meta](/meta) and no `deployable = true`) are excluded from `nixosConfigurations`/`darwinConfigurations` and never get a `toplevel` job. Their images still show up under `images.<host>.<format>`. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
+Linux hosts with `images` and no `deployable = true` are excluded from
+`nixosConfigurations` and the hydraJobs config groups. Their images still appear under
+`images.<host>.<format>`. See
+[Image-only hosts](/systems-homes#image-only-hosts).
 
-> **Note (flake-parts only):** the *per-system* rows in the table above (`checks`, `packages`, `devShells`, `legacyPackages`, `formatter`) are only mirrored in **mkFlake** mode. In **flake-parts** mode, hydraJobs mirrors the config outputs (`nixosConfigurations`, `darwinConfigurations`, `homeConfigurations`), images, directory jobs, and `extra` — but not the per-system outputs. Specify them with `include` in mkFlake mode; in flake-parts mode use `hydraJobs.extra` for anything beyond the config outputs.
+In flake-parts mode, the per-system rows (`checks`, `packages`, `devShells`,
+`legacyPackages`, `formatter`) are not mirrored. flake-parts mode mirrors
+configuration outputs, images, directory jobs, and `extra`. Add anything else through
+`purr.hydraJobs.extra`.
 
 ### Manual control
 
-Set `include` to an explicit list to mirror only what you want, or `[]` to disable mirroring entirely:
+Set `include` to mirror only selected outputs, or to `[]` to disable mirroring:
 
 ```nix
 hydraJobs.include = [ "checks" "packages" ];          # only these two
-hydraJobs.include = [ ];                              # no mirroring at all
+hydraJobs.include = [ ];                              # no mirroring
 hydraJobs.include = [ "checks" "nixosConfigurations" "homeConfigurations" ];
 ```
 
-Valid per-system names: `checks`, `packages`, `devShells`, `apps`, `legacyPackages`, `formatter`.
-Valid config names: `nixosConfigurations`, `darwinConfigurations`, `homeConfigurations`.
+Valid per-system names are `checks`, `packages`, `devShells`, `apps`,
+`legacyPackages`, and `formatter`. Valid config names are `nixosConfigurations`,
+`darwinConfigurations`, and `homeConfigurations`.
 
 ### Architecture filter
 
-Restrict CI jobs to specific systems (Hydra has no built-in system filtering — you control this in the flake):
+Restrict CI jobs to specific systems:
 
 ```nix
 hydraJobs.systems = [ "x86_64-linux" ];
 ```
 
-## Directory Jobs
+## Directory jobs
 
-Custom CI jobs go under `hydraJobs/<group>/<job>/default.nix`. Each job is a function receiving `{ pkgs, system, lib, inputs, namespace, ... }` that returns a derivation, an attrset of derivations, or `null` (skip for that system):
+Custom jobs go under `hydraJobs/<group>/<job>/default.nix`. Each job is a function
+that receives `{ pkgs, system, lib, inputs, namespace, ... }` and returns a
+derivation, an attrset of derivations, or `null` to skip the job for that system:
 
 ```
 hydraJobs/
@@ -1498,34 +1717,38 @@ else
 
 ### Extra jobs
 
-Add arbitrary jobs at the top level with `extra` — this has the highest priority and can override anything:
+Add jobs at the top level with `extra`. This has the highest priority and can
+override anything:
 
 ```nix
 hydraJobs.extra = {
   ci.gitStatus = {
-    x86_64-linux.check = pkgs.runCommand "git-check" { } "true";
+    "x86_64-linux".check = pkgs.runCommand "git-check" { } "true";
   };
 };
 ```
 
-## Example Output
+## Example output
 
-With `hydraJobs.enable = true`, a project with packages, a NixOS host, and home configs produces:
+With `hydraJobs.enable = true`, a mkFlake project with packages, a NixOS host, and
+home configs produces:
 
 ```
 hydraJobs
 ├── build.x86_64-linux.hello         # directory job
 ├── checks.x86_64-linux.good         # mirrored from checks/
 ├── packages.x86_64-linux.hello      # mirrored from packages/
-├── homeConfigurations.x86_64-linux.alice@server   # activationPackage
+├── homeConfigurations.x86_64-linux."alice@server"   # activationPackage
 ├── images.server.iso                # meta images
 ├── nixosConfigurations.x86_64-linux.server # toplevel
 └── test.x86_64-linux.unit           # directory job
 ```
 
-## Related: the `images` Output
+## The `images` output
 
-`images` is a **host meta key** — declare which image formats to build for a host in its [host meta](/meta). When set, purr exposes them as a top-level `images.<host>.<format>` output **regardless of whether hydraJobs is enabled**, so you can build an ISO directly:
+`images` is a host meta key for Linux hosts. Declare the formats in
+[host meta](/meta) and purr exposes them as `images.<host>.<format>`, whether or not
+hydraJobs is enabled:
 
 ```nix
 # systems/x86_64-linux/server/meta.nix
@@ -1538,23 +1761,29 @@ hydraJobs
 nix build .#images.server.iso
 ```
 
-A host with `images` is image-only by default: it is excluded from `nixosConfigurations` and from the `nixosConfigurations`/`darwinConfigurations` hydraJobs groups. Set `deployable = true` in the host meta to also expose it as a deployable configuration. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
+A Linux host with `images` is image-only by default and is excluded from
+`nixosConfigurations` and the hydraJobs config groups. Set `deployable = true` to
+expose it as a configuration as well. See
+[Image-only hosts](/systems-homes#image-only-hosts).
 
-The same declarations also feed `hydraJobs.images.<host>.<format>` when hydraJobs is enabled. See [Systems & Homes](/systems-homes) for available formats.
+The same declarations feed `hydraJobs.images.<host>.<format>` when hydraJobs is
+enabled. See [Systems & Homes](/systems-homes) for the available formats.
 
 # API Reference
 
-All 43 library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
+The library exports 43 functions from a single `rec` attrset under
+`inputs.purr.lib`.
 
-## Flake Builder
+## Flake builder
 
 ### `mkFlake`
 
-Standalone flake builder. See the [mkFlake Usage](/mkflake) page for the full parameter table.
+Build a flake from a project directory. See the [mkFlake Usage](/mkflake) page for the
+parameter table.
 
 **Signature:** `mkFlake :: { inputs, src, ... } -> attrs`
 
-## Attribute Utilities
+## Attribute utilities
 
 ### `optionalAttrs`
 
@@ -1565,7 +1794,7 @@ optionalAttrs true { foo = "bar"; }  # => { foo = "bar"; }
 optionalAttrs false { foo = "bar"; } # => { }
 ```
 
-## System Utilities
+## System utilities
 
 ### `defaultSystems`
 
@@ -1577,13 +1806,13 @@ defaultSystems  # => ["x86_64-linux" "aarch64-linux" "aarch64-darwin"]
 
 ### `eachSystem`
 
-`eachSystem :: systems: f: { system = f system; }`
+`eachSystem :: [string] -> (string -> attrs) -> attrs`
 
-Apply a function to each system, returning a system-keyed attrset.
+Apply a function to each system and return a system-keyed attrset.
 
 ### `eachDefaultSystem`
 
-`eachDefaultSystem :: f: { system = f system; }`
+`eachDefaultSystem :: (string -> attrs) -> attrs`
 
 Same as `eachSystem defaultSystems`.
 
@@ -1591,36 +1820,49 @@ Same as `eachSystem defaultSystems`.
 
 ### `getDefaultNixFiles`
 
-Recursively find all `default.nix` files under a path.
+Recursively find directories containing a `default.nix`. Returns a list of
+`{ path, relPath }` records, where `path` is the file and `relPath` is its directory.
 
-## Module Discovery
+## Module discovery
 
 ### `findModules`
 
-Discover nested module tree with `_module` keys. Recursively scans a directory for `.nix` files.
+Build a nested module tree from the `default.nix` files under
+`<parentDir>/<type>`. Each directory with a `default.nix` gets a `_module` entry.
+
+**Signature:** `findModules :: parentDir -> type -> attrs`
 
 ### `findModulesFlat`
 
-Discover flat (non-recursive) modules. Returns only immediate children.
+Discover only the immediate subdirectories of `<parentDir>/<type>` that contain a
+`default.nix`.
+
+**Signature:** `findModulesFlat :: parentDir -> type -> attrs`
 
 ### `findModulesLib`
 
-Discover lib-like modules (nested `default.nix` files).
+Discover lib-like modules: every `default.nix` under `<parentDir>/<type>` becomes a
+nested attrset entry. The root `default.nix` is handled by
+`buildImportedPurrLib`, not by this function.
+
+**Signature:** `findModulesLib :: parentDir -> type -> attrs`
 
 ### `findModulesByName`
 
-Discover packages using the `by-name/` convention (`<dir>/by-name/<shard>/<name>/package.nix`).
-Returns a flat attrset of `{ name = path; }`.
+Discover packages using the `by-name/` layout
+(`<dir>/by-name/<shard>/<name>/package.nix`). Returns a flat attrset of
+`{ name = path; }`.
 
 ### `validateByName`
 
-Validate a by-name packages directory. Returns a list of errors; empty list means all valid.
-Checks that each package's shard prefix matches its name, and that each package has a `package.nix`.
+Validate a by-name packages directory. Returns a list of errors; an empty list means
+all entries are valid. Each package's shard prefix must match its name, and each
+package must have a `package.nix`.
 
 ```nix
 validateByName src "packages"
 # => [ ]
-# or errors like:
+# or errors such as:
 # => [ { name = "badshard"; shard = "xx"; error = "shard mismatch: ..."; } ]
 ```
 
@@ -1630,15 +1872,19 @@ Recursively load all `.nix` files from a directory.
 
 ### `readDirModules`
 
-Read directory entries into a module tree structure.
+Read a directory into a module tree, using `_module` for a `default.nix` and
+recursing into subdirectories.
 
 ### `mergeModuleTree`
 
-Merge multiple module trees together.
+Merge two module trees. When both sides define `_module`, their imports are combined.
 
 ### `discoverModules`
 
-Multi-type module discovery from a modules directory. `modulesPath -> moduleTypes -> { nixos, darwin, home }`
+Multi-type module discovery. Takes a modules directory and the `moduleTypes` mapping
+and returns `{ nixos, darwin, home }`.
+
+**Signature:** `discoverModules :: modulesPath -> moduleTypes -> attrs`
 
 ### `collectModules`
 
@@ -1646,81 +1892,110 @@ Flatten a nested module attrset into a flat list for `imports`.
 
 ### `discoverSystems`
 
-Discover system configs using `<arch>-<format>/<name>` convention.
+Discover system configs using the `<arch>-<format>/<name>/default.nix` layout.
 
 ### `discoverHomes`
 
-Discover home configs using `<arch>/<user>@<host>` convention.
+Discover home configs using the `<arch>-<format>/<user>@<host>/default.nix` layout.
 
-## Namespace Wrapping
+## Namespace wrapping
 
 ### `deepMapAttrs`
 
-Map over nested attrs, treating modules as leaves (not recursing into module functions).
+Map over nested attrsets, treating modules as leaves instead of recursing into them.
 
 ### `wrapModule`
 
-Wrap a single module with namespace and/or lib injection.
+Wrap one module with namespace and lib injection.
 
 ### `wrapModuleSet`
 
-Wrap a module tree (nested attrset of modules) with namespace/lib injection.
+Wrap a module tree (a nested attrset of modules) with namespace and lib injection.
 
-## Configuration Builders
+## Configuration builders
 
 ### `buildHomeConfigs`
 
 Build home-manager configurations from discovered homes.
 
+**Signature:** `buildHomeConfigs :: { discoveredHomes, discoveredSystems, inputs, ... } -> attrs`
+
 ### `buildSystemConfigs`
 
-Build nixos/darwin configurations from discovered systems. Hosts whose [meta](/meta) declares `images` are image-only by default and are excluded from the returned `nixosConfigurations`/`darwinConfigurations`; set `deployable = true` in the host meta to keep them deployable. Also returns an `imageRecipes` attribute — `{ host = { system; images; cfg; }; }` — consumed by `imagesFromConfigs`. Accepts `hostsMeta` (`{ <name> = metaAttrs; }`) merged over each host's `meta.nix`.
+Build NixOS and darwin configurations from discovered systems. Linux hosts whose
+[meta](/meta) declares `images` are image-only by default and are excluded from the
+returned `nixosConfigurations` and `darwinConfigurations`. Set `deployable = true` in
+the host meta to keep them deployable.
+
+The result also contains:
+
+* `configSystems`: host to system-string mapping, used by hydraJobs grouping
+* `imageRecipes`: `{ host = { system; images; cfg; }; }`, consumed by
+  `imagesFromConfigs`
+
+Accepts `hostsMeta` (`{ <name> = metaAttrs; }`) merged over each host's `meta.nix`.
 
 ### `buildSystemRegistry`
 
-Build the global host metadata registry — a pure-metadata `name -> merged meta` map for every discovered host, cycle-free because it never touches config `value`s. Exposed to modules as `purr.systemMetas`. Used internally by both `buildSystemConfigs` and `buildHomeConfigs`.
+Build the host metadata registry. Returns `{ hostMeta, registry }`, where `registry`
+is a `name -> merged meta` map for every discovered host. The registry never touches
+config values and is exposed to modules as `purr.systemMetas`. It is used by both
+`buildSystemConfigs` and `buildHomeConfigs`.
+
+### `formatOutputKey`
+
+Map a format string to its flake output key:
+`"linux" -> "nixosConfigurations"`, `"darwin" -> "darwinConfigurations"`. Throws for
+other formats.
 
 ### `parseArchFormat`
 
 `parseArchFormat :: "x86_64-linux" -> { arch = "x86_64"; format = "linux"; }`
 
+Returns `{ arch = null; format = null; }` when the string does not match.
+
 ### `parseUserHost`
 
 `parseUserHost :: "alice@server" -> { user = "alice"; host = "server"; }`
 
+Returns `{ user = null; host = null; }` when the string does not match.
+
 ### `findMatchingHomes`
 
-Find homes matching a host across all architectures.
-
-### `formatOutputKey`
-
-Map format string to flake output key (`"linux" -> "nixosConfigurations"`, `"darwin" -> "darwinConfigurations"`). Throws for unsupported formats.
+Find homes matching a host across all architectures. Returns a list of
+`{ user, path }`.
 
 ### `imagesFromConfigs`
 
 `imagesFromConfigs :: imageRecipes -> systemsOrNull -> { host = { format = derivation; }; }`
 
-Extract image derivations from image recipes. For each recipe, resolves `cfg.config.system.build.images.<format>` lazily for the formats listed in its `images` attr. Filters recipes by system when `systems` is non-null. Used by both the top-level `images` output and `hydraJobs.images`.
+Extract image derivations from image recipes. For each recipe, it resolves
+`cfg.config.system.build.images.<format>` lazily for the formats listed in
+`recipe.images`. When `systems` is non-null, recipes are filtered by system. Used by
+both the top-level `images` output and `hydraJobs.images`.
 
-## Directory Resolution
+## Directory resolution
 
 ### `resolveDir`
 
 `resolveDir :: src -> dirOption -> [candidates] -> pathOrNull`
 
-Resolve a directory from an explicit value or auto-detect from candidate paths.
+Use the explicit option value when it is not `null`; otherwise return the first
+candidate that exists under `src`.
 
 ### `resolveDirs`
 
 `resolveDirs :: src -> dirOptions -> resolvedDirs`
 
-Resolve all standard purr directories at once. Used internally by both `mkFlake` and the flake-parts module.
+Resolve every standard purr directory at once. Used by both `mkFlake` and the
+flake-parts module. The result includes `hydraJobsDir`.
 
-## Library Construction
+## Library construction
 
 ### `buildImportedPurrLib`
 
-Build the project's custom lib (with fix recursion). Imports a `lib/` directory recursively and provides `inputs`, `lib`, and `namespace` to each function.
+Build the project's custom lib. Imports the `lib/` directory and provides `inputs`,
+`lib`, and `namespace` to each function module.
 
 ### `mergePurrLib`
 
@@ -1730,32 +2005,42 @@ Merge the project lib into nixpkgs lib under the namespace:
 
 ```nix
 mergedLib = lib                    # base: nixpkgs lib
-  // { ${namespace} = ownLib }     # flake's own namespace lib
+  // { ${namespace} = ownLib }     # project namespace lib
 ```
+
+When `namespace` is `null`, the project lib is merged at the top level.
 
 ### `buildMergedLib`
 
-`buildMergedLib :: { inputs, lib, importedPurrLib, namespace } -> mergedLib`
+`buildMergedLib :: { effectiveInputs, lib, importedPurrLib, namespace } -> mergedLib`
 
-Resolve the merged lib handed to modules. The base is the flake's real `inputs.nixpkgs.lib` when available (keeping everything on one nixpkgs), falling back to the caller-provided lib otherwise; the namespace lib is then merged on top. Home configurations re-add home-manager's `lib.hm` extension so its internals keep working. This replaces the old `purrLib` module argument — modules access the merged lib via `lib`, and bridged homes via `purr.lib`.
+Resolve the merged lib handed to modules. The base is
+`effectiveInputs.nixpkgs.lib` when available, otherwise the caller-provided `lib`.
+The namespace lib is merged on top. Home configurations re-add home-manager's
+`lib.hm` extension so home-manager internals keep working.
 
-## Auto-Discovery
+## Auto-discovery
 
 ### `autoModules`
 
-Per-system auto-discovery for checks, shells, packages, and apps. Each module is imported with `pkgs` spread into the function arguments (like `callPackage`), so `{ stdenv, fetchurl, pkgs, lib, ... }` style destructuring works directly.
+Per-system auto-discovery for directories such as checks, shells, packages, legacy
+packages, and apps. Each module is imported with the whole `pkgs` attrset spread into
+its arguments, like `callPackage`, so destructuring works directly:
+`{ stdenv, fetchurl, pkgs, lib, ... }`.
 
 ### `autoPackages`
 
-Per-system package discovery for `packages/`, identical to `autoModules` except
-each discovered package is wrapped with `lib.makeOverridable` (so
-`.override`/`.overrideAttrs` work like a `callPackage` package). Used for the
-`packages.<system>.*` output and for the overlay that auto-registers packages
-into `pkgs` (`packagesToPkgs`).
+Per-system package discovery for `packages/`. It works like `autoModules`, but each
+discovered package is wrapped with `purrLib.makeOverridable`, so `.override` and
+`.overrideAttrs` work like a `callPackage` package. Used for the
+`packages.<system>.*` output and for the overlay that registers packages in `pkgs`
+(`packagesToPkgs`).
 
 ### `autoFormatter`
 
-Per-system formatter discovery. Imports `<dir>/default.nix` with the same `pkgs`-spread arguments as `autoModules` and returns a single derivation, or `null` when the directory is absent. Used to produce `formatter.<system>`:
+Per-system formatter discovery. Imports `<dir>/default.nix` with the same
+`pkgs`-spread arguments as `autoModules` and returns a single derivation, or `null`
+when the directory is absent. Used to produce `formatter.<system>`:
 
 ```nix
 # formatters/default.nix
@@ -1764,7 +2049,8 @@ Per-system formatter discovery. Imports `<dir>/default.nix` with the same `pkgs`
 
 ### `overlayModules`
 
-Discover and normalize overlays from a directory.
+Discover and normalize overlays from a directory. Plain `final: prev: attrs` overlays
+are passed through; overlays that return another overlay are normalized.
 
 ### `templateModules`
 
@@ -1776,30 +2062,39 @@ Discover flake templates from a directory.
 
 `filterSystems :: attrs -> systemsOrNull -> attrs`
 
-Filter an attrset keyed by system to only the given systems. Returns the attrset unchanged when `systems` is `null`.
+Filter an attrset keyed by system to the given systems. Returns the attrset unchanged
+when `systems` is `null`.
 
 ### `mirrorOutputs`
 
 `mirrorOutputs :: perSystemOutputs -> names -> systemsOrNull -> attrs`
 
-Mirror named per-system outputs (e.g. `checks`, `packages`) into `hydraJobs.<name>.<system>.<key>` form, optionally filtered by system.
+Mirror named per-system outputs into `hydraJobs.<name>.<system>.<key>` form,
+optionally filtered by system.
 
 ### `hydraJobsFromDir`
 
 `hydraJobsFromDir :: src -> dir -> systems -> systemPkgs -> lib -> namespace -> inputs -> extraArgs -> attrs`
 
-Scan `src/<dir>/<group>/<job>/default.nix` and produce `hydraJobs.<group>.<system>.<job>`. Each job is a function `{ pkgs, system, lib, inputs, namespace, ... }` returning a derivation, derivation attrset, or `null` (skipped).
+Scan `src/<dir>/<group>/<job>/default.nix` and produce
+`hydraJobs.<group>.<system>.<job>`. Each job is a function
+`{ pkgs, system, lib, inputs, namespace, ... }` that returns a derivation, a
+derivation attrset, or `null` to skip the job.
 
 ### `configOutputs`
 
-> **Internal** — exported from `lib/hydraJobs.nix` but **not** re-exported from `inputs.purr.lib`.
+Internal: exported from `lib/hydraJobs.nix` but not re-exported from
+`inputs.purr.lib`.
 
-`configOutputs :: systemConfigurations -> homeConfigurations -> names -> systemsOrNull -> homeSystems -> attrs`
+`configOutputs :: systemConfigs -> homeConfigs -> names -> systemsOrNull -> homeSystems -> attrs`
 
-Mirror system and home configurations into hydraJobs: `nixosConfigurations` (toplevel), `darwinConfigurations` (system), `homeConfigurations` (activationPackage), grouped by system.
+Mirror system and home configurations into hydraJobs:
+`nixosConfigurations` (toplevel), `darwinConfigurations` (system), and
+`homeConfigurations` (activationPackage), grouped by system.
 
 ### `buildHydraJobs`
 
-`buildHydraJobs :: { src, hydraJobsDir, hydraSystems, hydraJobsInclude, hydraJobsExtra, systemPkgs, perSystemOutputs, systemConfigurations, homeConfigurations, ... } -> attrs`
+`buildHydraJobs :: { src, hydraJobsDir, hydraSystems, hydraJobsInclude, hydraJobsExtra, systemPkgs, perSystemOutputs, systemConfigs, homeConfigs, homeSystems, lib, namespace, inputs, extraArgs } -> attrs`
 
-Combine all hydraJobs sources — directory jobs, mirrored per-system outputs, config outputs, images, and `hydraJobsExtra` (highest priority) — into the final `hydraJobs` flake output.
+Combine the hydraJobs sources: directory jobs, mirrored per-system outputs, config
+outputs, images, and `hydraJobsExtra` (highest priority).

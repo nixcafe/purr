@@ -1,8 +1,10 @@
 # Systems & Homes
 
-purr auto-discovers NixOS/darwin systems and home-manager homes using the `<arch>-<format>/<name>` convention (compatible with [Snowfall Lib](https://snowfall.org)). Only `linux` and `darwin` formats are supported.
+purr discovers NixOS and darwin systems from `<arch>-<format>/<name>` and
+home-manager homes from `<arch>-<format>/<user>@<host>`. Only the `linux` and `darwin`
+formats are supported.
 
-## Directory Structure
+## Directory layout
 
 ```
 src/
@@ -21,16 +23,18 @@ src/
 │       └── alice@macbook/default.nix # → homeConfigurations."alice@macbook"
 ```
 
-## System Output Mapping
+## Output mapping
 
-| Format in dir name | Flake output key | Builder |
+| Format in directory name | Flake output key | Builder |
 |---|---|---|
 | `linux` | `nixosConfigurations.<name>` | `nixosSystem` |
 | `darwin` | `darwinConfigurations.<name>` | `darwinSystem` |
 
-## Home Auto-Linking
+## Home auto-linking
 
-Homes named `<user>@<host>` are automatically injected into matching hosts. When `home-manager` (or `homeManager`) is available as an input, building `nixosConfigurations.server` will include all homes with `@server` suffix:
+Homes named `<user>@<host>` are linked to the matching system. When `home-manager`
+(or `homeManager`) is available as an input, building `nixosConfigurations.server`
+includes every home with the `@server` suffix:
 
 ```nix
 # homes/x86_64-linux/alice@server/default.nix
@@ -40,15 +44,22 @@ Homes named `<user>@<host>` are automatically injected into matching hosts. When
 }
 ```
 
-The home is auto-configured via `home-manager.users.alice` in the host's NixOS config. No additional wiring needed. For every linked home, purr also:
+The home is added through `home-manager.users.alice` in the host's NixOS
+configuration. For every linked home, purr also:
 
-* sets `home-manager.useGlobalPkgs` and `home-manager.useUserPackages` to `mkDefault true`
-* auto-creates `users.users.<name>` (`isNormalUser = mkDefault true`) for non-root users on Linux hosts
-* injects the username as a module argument (`_module.args.user = "alice"`) and default `home.username` / `home.homeDirectory`
+* sets `home-manager.useGlobalPkgs` and `home-manager.useUserPackages` to
+  `mkDefault true`
+* creates `users.users.<name>` (`isNormalUser = mkDefault true`) for non-root users on
+  Linux hosts
+* passes the username as `_module.args.user` and injects `home.username` and
+  `home.homeDirectory` as defaults
 
-## Building Images (ISO, qemu, raw, cloud, …)
+## Building images
 
-purr does **not** have special format directories (`x86_64-iso`, `x86_64-do`, …). Instead, nixpkgs (25.05+) already imports `image/images.nix` by default, which makes every NixOS configuration capable of building all image formats out of the box. Just put your system under `systems/<arch>-linux/` and build any image from it:
+purr does not use special format directories such as `x86_64-iso`. nixpkgs 25.05 and
+later imports `image/images.nix` by default, so every NixOS configuration exposes
+`system.build.images`. Put the system under `systems/<arch>-linux/` and build an image
+from it:
 
 ```bash
 # ISO image
@@ -69,7 +80,9 @@ nix build .#nixosConfigurations.server.config.system.build.images.amazon
 
 ### Short `images.<host>.<format>` output
 
-Declare which formats to build for a host in its [host meta](/meta) (a `meta.nix` file or `hosts.<name>.meta` config), and purr exposes a top-level `images.<host>.<format>` output. This works regardless of whether [hydraJobs](/hydrajobs) is enabled:
+Declare the formats for a Linux host in its [host meta](/meta), either in `meta.nix`
+or in `hosts.<name>.meta`. purr then exposes a top-level
+`images.<host>.<format>` output:
 
 ```nix
 # systems/x86_64-linux/server/meta.nix
@@ -79,16 +92,21 @@ Declare which formats to build for a host in its [host meta](/meta) (a `meta.nix
 ```
 
 ```bash
-# Short names, always available
 nix build .#images.server.iso
 nix build .#images.server.qemu
 ```
 
-Available formats are the same as below. When hydraJobs is enabled, these same declarations are mirrored as `hydraJobs.images.<host>.<format>`.
+This output exists whether or not hydraJobs is enabled. When `hydraJobs.systems` is
+set, it also filters the `images` output. When hydraJobs is enabled, the same
+declarations are mirrored as `hydraJobs.images.<host>.<format>`.
 
-### Image-only hosts (not deployable)
+### Image-only hosts
 
-A host that declares `images` in its meta is treated as an **image-only recipe** by default. It is excluded from `nixosConfigurations`/`darwinConfigurations` (and from the `hydraJobs` config groups), so its `system.build.toplevel` is never evaluated and it cannot be deployed with `nixos-rebuild`. Use this for hosts like installer ISOs that have no root file system and exist only to build images:
+On Linux, a host that declares `images` in its meta is an image-only recipe by default.
+It is excluded from `nixosConfigurations` and `darwinConfigurations`, and from the
+hydraJobs config groups. Its `system.build.toplevel` is never evaluated, so it cannot
+be deployed with `nixos-rebuild`. Use this for hosts such as installer ISOs that have
+no root file system:
 
 ```nix
 # systems/x86_64-linux/installer/meta.nix
@@ -97,42 +115,48 @@ A host that declares `images` in its meta is treated as an **image-only recipe**
 }
 ```
 
-`installer` will **not** show up in `nixosConfigurations`, but `nix build .#images.installer.iso` still works. The image declarations are read cheaply from `meta.nix` — nixpkgs and home-manager are never evaluated just to decide how a host is exposed, and the image derivations stay lazy until you actually build them.
+`installer` does not appear in `nixosConfigurations`, but
+`nix build .#images.installer.iso` works. Meta is read from `meta.nix` before nixpkgs
+or home-manager is evaluated, and the image derivations stay lazy.
 
-To keep a host deployable **and** build images from it, set `deployable = true`:
+To keep a host deployable and build images from it, set `deployable = true`:
 
 ```nix
 # systems/x86_64-linux/server/meta.nix
 {
   images = [ "iso" "qemu" ];
-  deployable = true; # stays in nixosConfigurations AND builds images
+  deployable = true;
 }
 ```
 
-> **Note:** `deployable` is a host meta key, not a system option. A host is deployable by default when `images` is empty; declaring `images` without `deployable = true` makes it image-only.
+`deployable` is a host meta key, not a system option. A host is deployable by default
+when `images` is empty, or when the host is darwin. On Linux, declaring `images`
+without `deployable = true` makes the host image-only.
 
 ### Available image formats
 
-All formats from the now-deprecated [nixos-generators](https://github.com/nix-community/nixos-generators) are built into nixpkgs:
+These formats come from nixpkgs `image/images.nix`:
 
 | Format key | Image type | Format key | Image type |
 |---|---|---|---|
 | `iso` | Bootable ISO 9660 | `proxmox` | Proxmox VE image |
-| `qemu-efi` | QEMU qcow2 (EFI) | `proxmox-lxc` | Proxmox LXC container |
-| `qemu` | QEMU qcow2 (BIOS) | `lxc` | LXC container |
-| `raw-efi` | Raw disk (EFI) | `lxc-metadata` | LXC metadata tarball |
-| `raw` | Raw disk (BIOS) | `oci` | OCI container image |
-| `amazon` | AWS EC2 AMI | `vagrant-virtualbox` | Vagrant VirtualBox |
-| `azure` | Azure VM image | `virtualbox` | VirtualBox OVA |
-| `google-compute` | GCP image | `vmware` | VMware VMDK |
-| `digital-ocean` | DigitalOcean image | `kubevirt` | KubeVirt container disk |
-| `hyperv` | Hyper-V VHDX | `cloudstack` | Apache CloudStack |
-| `linode` | Linode image | `openstack` | OpenStack image |
+| `iso-installer` | Installer ISO | `proxmox-lxc` | Proxmox LXC container |
+| `qemu-efi` | QEMU qcow2 (EFI) | `lxc` | LXC container |
+| `qemu` | QEMU qcow2 (BIOS) | `lxc-metadata` | LXC metadata tarball |
+| `raw-efi` | Raw disk (EFI) | `oci` | OCI container image |
+| `raw` | Raw disk (BIOS) | `vagrant-virtualbox` | Vagrant VirtualBox |
+| `amazon` | AWS EC2 AMI | `virtualbox` | VirtualBox OVA |
+| `azure` | Azure VM image | `vmware` | VMware VMDK |
+| `google-compute` | GCP image | `kubevirt` | KubeVirt container disk |
+| `digital-ocean` | DigitalOcean image | `cloudstack` | Apache CloudStack |
+| `hyperv` | Hyper-V VHDX | `openstack` | OpenStack image |
+| `linode` | Linode image | `openstack-zfs` | OpenStack image with ZFS |
 | `kexec` | Netboot kexec image | `sd-card` | Raspberry Pi / SD card |
 
-### If you need different configs for different images
+### Different configs for different images
 
-Put multiple systems under `systems/x86_64-linux/` with different names. A minimal installer config is a good candidate for an image-only host (see [Image-only hosts](#image-only-hosts-not-deployable)):
+Put multiple systems under `systems/x86_64-linux/` with different names. A minimal
+installer config is a good candidate for an image-only host:
 
 ```
 systems/x86_64-linux/
@@ -153,9 +177,11 @@ Then build:
 nix build .#images.installer.iso
 ```
 
-## Namespace Bridge (system -> home config forwarding)
+## Namespace bridge (system to home config)
 
-On any host with linked homes (when home-manager is available as an input), purr defines the option `purr.users`. Setting `purr.users.<name>.homeConfig` from any NixOS module forwards that config to `home-manager.users.<name>`. This works whether or not a `namespace` is set:
+On a host with linked homes, purr defines the option `purr.users`. Setting
+`purr.users.<name>.homeConfig` from any NixOS module forwards that config to
+`home-manager.users.<name>`. The option exists whether or not a `namespace` is set:
 
 ```nix
 # systems/x86_64-linux/server/default.nix
@@ -170,61 +196,75 @@ On any host with linked homes (when home-manager is available as an input), purr
 }
 ```
 
-Keys inside `homeConfig` map directly to home-manager option paths (`home.packages`, `programs.*`, `services.*`, etc.). The bridge provides low-priority defaults — the user's home module (`homes/x86_64-linux/alice@server/default.nix`) always takes priority.
+Keys inside `homeConfig` map directly to home-manager option paths
+(`home.packages`, `programs.*`, `services.*`, and so on). The bridge config is
+forwarded as a normal-priority home-manager module. If both the bridge and the home
+module set the same non-mergeable option at normal priority, the module system reports
+a conflict. Use `lib.mkDefault` on one side when the home module should be able to
+override a bridge value.
 
-### Priority Order (lowest to highest)
+The bridge is added before the home module in the import list. Import order does not
+change option priority.
 
-1. `purr.users.<name>.homeConfig` (bridge)
-2. `home-manager.users.<name>` set directly in any NixOS module
-3. The home module file (`homes/.../default.nix`)
+## `purr` metadata
 
-## `purr` Metadata
+Each system and home module receives a `purr` attrset with metadata about the current
+configuration. It is passed through `specialArgs` for systems and `extraSpecialArgs`
+for homes.
 
-Each system and home module receives a `purr` attrset with metadata about the current configuration. This is passed via `specialArgs` (systems) and `extraSpecialArgs` (homes).
-
-### System Modules (`specialArgs.purr`)
-
-| Field | Example | Description |
-|---|---|---|
-| `meta` | see [Host Meta](/meta) | Merged host metadata (contains `name`, `arch`, `format`, `isDarwin`, `isLinux`, `system`, `homes`, `images`, `deployable`, `roles`, plus custom keys) |
-| `systemMetas` | `{ server = {...}; workstation = {...}; }` | Registry of **every** discovered host's merged meta, keyed by host name (including self) |
-
-### Home Modules (`extraSpecialArgs.purr`)
+### System modules (`specialArgs.purr`)
 
 | Field | Example | Description |
 |---|---|---|
-| `meta` | `{ user = "alice"; host = "server"; ... }` | Home metadata: `user`, `host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system` |
-| `systemMeta` | see [Host Meta](/meta) | Merged meta of the system named by the home's host, or `null` when no matching system exists |
-| `systemMetas` | `{ server = {...}; ... }` | The same global host registry as systems receive |
-| `lib` | `{ hm = {...}; ... }` | The merged namespace lib (with home-manager's `lib.hm` extension), also available as `lib` for standalone homes |
+| `meta` | see [Host Meta](/meta) | Merged host metadata: `name`, `host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system`, `homes`, `images`, `deployable`, `roles`, plus custom keys |
+| `systemMetas` | `{ server = {...}; workstation = {...}; }` | Registry of every discovered host's merged meta, keyed by host name, including the current host |
 
-> **Note:** `purr.lib` is the merged namespace lib, available uniformly in **both** standalone and bridged homes — use `purr.lib.<namespace>.xxx` from any home module. Standalone homes additionally receive the same lib under `lib`.
+### Home modules (`extraSpecialArgs.purr`)
 
-### Usage Example
+| Field | Example | Description |
+|---|---|---|
+| `meta` | `{ user = "alice"; host = "server"; ... }` | Standalone homes: home metadata (`user`, `host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system`). Bridged homes: the host's merged meta, as described in [Host Meta](/meta) |
+| `systemMeta` | see [Host Meta](/meta) | Merged meta of the system named by the home's host, or `null` when no matching system exists. In a bridged home this is the same host meta passed as `meta` |
+| `systemMetas` | `{ server = {...}; ... }` | The same host registry that systems receive |
+| `lib` | `{ hm = {...}; ... }` | The merged namespace lib with home-manager's `lib.hm` extension, also available as `lib` for standalone homes |
+
+Bridged homes receive the host's merged meta as `purr.meta`, so `purr.meta.user` is
+not set there. Use the `user` module argument in home modules that run both
+standalone and bridged.
+
+`purr.lib` is the merged namespace lib with `lib.hm` re-added. It is available in
+both standalone and bridged homes, so `purr.lib.<namespace>.xxx` works from any home
+module. Bridged homes keep home-manager's own evaluation lib and do not receive a
+`lib` override. Standalone homes also receive their evaluation lib as `lib`;
+`purr.lib` follows the home's resolved nixpkgs role.
+
+### Usage
 
 ```nix
 # systems/x86_64-linux/server/default.nix
 { config, pkgs, lib, purr, ... }:
 {
-  networking.hostName = purr.meta.name;       # "server"
-  nixpkgs.hostPlatform = purr.meta.archFormat;  # "x86_64-linux"
-  services.foo.enable = purr.meta.tier == "prod";  # custom meta key
+  networking.hostName = purr.meta.name;              # "server"
+  nixpkgs.hostPlatform = purr.meta.archFormat;       # "x86_64-linux"
+  services.foo.enable = purr.meta.tier == "prod";    # custom meta key
   services.bar.enable = purr.systemMetas.workstation.tier == "dev";
 }
 ```
 
-````nix
+```nix
 # homes/x86_64-linux/alice@server/default.nix
 { pkgs, lib, purr, ... }:
 {
   home.packages = [ pkgs.neovim ];
-  # systemMeta is the meta of "server" (or null when not linked to a system)
+  # systemMeta is the meta of "server", or null when not linked to a system
   programs.git.enable = purr.systemMeta != null;
 }
+```
 
-## Auto-Injection
+## Auto-injection
 
-By default (`autoInject = true`), purr auto-injects basic configuration using `lib.mkDefault` — user modules can always override:
+By default (`autoInject = true`), purr injects basic configuration with
+`lib.mkDefault`, so user modules can override it:
 
 | Context | Injected config |
 |---|---|
@@ -232,7 +272,7 @@ By default (`autoInject = true`), purr auto-injects basic configuration using `l
 | Home config (linux) | `home.username`, `home.homeDirectory = "/home/<user>"` |
 | Home config (darwin) | `home.username`, `home.homeDirectory = "/Users/<user>"` |
 
-Disable with `autoInject = false`.
+Disable the defaults with `autoInject = false`.
 
 ## Usage in mkFlake
 
@@ -243,7 +283,7 @@ inputs.purr.lib.mkFlake {
   systemsDir = "systems";   # or "hosts", or null to auto-detect
   homesDir = "homes";
 }
-````
+```
 
 ## Usage in flake-parts
 

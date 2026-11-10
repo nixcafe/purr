@@ -1,4 +1,4 @@
-var e={accentColor:`#4fc3f7`,baseUrl:`https://purr.nixcafe.org`,basePath:`/`,cacheDir:`/home/runner/work/nixcafe-docs/nixcafe-docs/apps/purr-docs/node_modules/.cache/vocs`,checkDeadlinks:`warn`,codeHighlight:{langAlias:{sol:`solidity`,js:`javascript`,cjs:`javascript`,mjs:`javascript`,md:`markdown`,jade:`pug`,ts:`typescript`,cts:`typescript`,mts:`typescript`,coffeescript:`coffee`,regex:`regexp`,"c++":`cpp`,gql:`graphql`,yml:`yaml`,hbs:`handlebars`,bash:`shellscript`,sh:`shellscript`,shell:`shellscript`,zsh:`shellscript`,py:`python`,jl:`julia`,styl:`stylus`,lit:`ts-tags`,dockerfile:`docker`,protobuf:`proto`,rs:`rust`},langs:[`ansi`,`bash`,`html`,`js`,`json`,`jsx`,`markdown`,`md`,`mdx`,`plaintext`,`rust`,`sol`,`solidity`,`ts`,`tsx`,`zsh`,`nix`],themes:{light:`github-light`,dark:`github-dark-dimmed`}},colorScheme:`dark`,description:`purr - Nix flake framework with automatic discovery and module system`,editLink:{text:`Suggest changes to this page`,link:`https://github.com/nixcafe/nixcafe-docs/edit/main/apps/purr-docs/src/pages/:path`},feedback:!1,head:`_vocs-fn_() => ({
+var e={accentColor:`#4fc3f7`,baseUrl:`https://purr.nixcafe.org`,basePath:`/`,cacheDir:`/home/runner/work/nixcafe-docs/nixcafe-docs/apps/purr-docs/node_modules/.cache/vocs`,checkDeadlinks:`warn`,codeHighlight:{langAlias:{sol:`solidity`,js:`javascript`,cjs:`javascript`,mjs:`javascript`,md:`markdown`,jade:`pug`,ts:`typescript`,cts:`typescript`,mts:`typescript`,coffeescript:`coffee`,regex:`regexp`,"c++":`cpp`,gql:`graphql`,yml:`yaml`,hbs:`handlebars`,bash:`shellscript`,sh:`shellscript`,shell:`shellscript`,zsh:`shellscript`,py:`python`,jl:`julia`,styl:`stylus`,lit:`ts-tags`,dockerfile:`docker`,protobuf:`proto`,rs:`rust`},langs:[`ansi`,`bash`,`html`,`js`,`json`,`jsx`,`markdown`,`md`,`mdx`,`plaintext`,`rust`,`sol`,`solidity`,`ts`,`tsx`,`zsh`,`nix`],themes:{light:`github-light`,dark:`github-dark-dimmed`}},colorScheme:`dark`,description:`Nix flake framework based on directory layout, namespaces, and modules`,editLink:{text:`Suggest changes to this page`,link:`https://github.com/nixcafe/nixcafe-docs/edit/main/apps/purr-docs/src/pages/:path`},feedback:!1,head:`_vocs-fn_() => ({
 		meta: {
 			ogType: "website",
 			ogSiteName: "nixcafe",
@@ -19,7 +19,7 @@ var e={accentColor:`#4fc3f7`,baseUrl:`https://purr.nixcafe.org`,basePath:`/`,cac
 				"@graph": [{
 					"@type": "SoftwareSourceCode",
 					name: "purr",
-					description: "Nix flake framework with automatic discovery and module system",
+					description: "Nix flake framework based on directory layout, namespaces, and modules",
 					url: "https://purr.nixcafe.org",
 					codeRepository: "https://github.com/nixcafe/purr",
 					programmingLanguage: "Nix",
@@ -29,7 +29,7 @@ var e={accentColor:`#4fc3f7`,baseUrl:`https://purr.nixcafe.org`,basePath:`/`,cac
 					"@type": "WebSite",
 					name: "purr",
 					url: "https://purr.nixcafe.org",
-					description: "purr - Nix flake framework documentation"
+					description: "purr documentation"
 				}]
 			}
 		}]

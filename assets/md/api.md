@@ -1,16 +1,18 @@
 # API Reference
 
-All 43 library functions are exported from a single `rec` attrset under `inputs.purr.lib`.
+The library exports 43 functions from a single `rec` attrset under
+`inputs.purr.lib`.
 
-## Flake Builder
+## Flake builder
 
 ### `mkFlake`
 
-Standalone flake builder. See the [mkFlake Usage](/mkflake) page for the full parameter table.
+Build a flake from a project directory. See the [mkFlake Usage](/mkflake) page for the
+parameter table.
 
 **Signature:** `mkFlake :: { inputs, src, ... } -> attrs`
 
-## Attribute Utilities
+## Attribute utilities
 
 ### `optionalAttrs`
 
@@ -21,7 +23,7 @@ optionalAttrs true { foo = "bar"; }  # => { foo = "bar"; }
 optionalAttrs false { foo = "bar"; } # => { }
 ```
 
-## System Utilities
+## System utilities
 
 ### `defaultSystems`
 
@@ -33,13 +35,13 @@ defaultSystems  # => ["x86_64-linux" "aarch64-linux" "aarch64-darwin"]
 
 ### `eachSystem`
 
-`eachSystem :: systems: f: { system = f system; }`
+`eachSystem :: [string] -> (string -> attrs) -> attrs`
 
-Apply a function to each system, returning a system-keyed attrset.
+Apply a function to each system and return a system-keyed attrset.
 
 ### `eachDefaultSystem`
 
-`eachDefaultSystem :: f: { system = f system; }`
+`eachDefaultSystem :: (string -> attrs) -> attrs`
 
 Same as `eachSystem defaultSystems`.
 
@@ -47,36 +49,49 @@ Same as `eachSystem defaultSystems`.
 
 ### `getDefaultNixFiles`
 
-Recursively find all `default.nix` files under a path.
+Recursively find directories containing a `default.nix`. Returns a list of
+`{ path, relPath }` records, where `path` is the file and `relPath` is its directory.
 
-## Module Discovery
+## Module discovery
 
 ### `findModules`
 
-Discover nested module tree with `_module` keys. Recursively scans a directory for `.nix` files.
+Build a nested module tree from the `default.nix` files under
+`<parentDir>/<type>`. Each directory with a `default.nix` gets a `_module` entry.
+
+**Signature:** `findModules :: parentDir -> type -> attrs`
 
 ### `findModulesFlat`
 
-Discover flat (non-recursive) modules. Returns only immediate children.
+Discover only the immediate subdirectories of `<parentDir>/<type>` that contain a
+`default.nix`.
+
+**Signature:** `findModulesFlat :: parentDir -> type -> attrs`
 
 ### `findModulesLib`
 
-Discover lib-like modules (nested `default.nix` files).
+Discover lib-like modules: every `default.nix` under `<parentDir>/<type>` becomes a
+nested attrset entry. The root `default.nix` is handled by
+`buildImportedPurrLib`, not by this function.
+
+**Signature:** `findModulesLib :: parentDir -> type -> attrs`
 
 ### `findModulesByName`
 
-Discover packages using the `by-name/` convention (`<dir>/by-name/<shard>/<name>/package.nix`).
-Returns a flat attrset of `{ name = path; }`.
+Discover packages using the `by-name/` layout
+(`<dir>/by-name/<shard>/<name>/package.nix`). Returns a flat attrset of
+`{ name = path; }`.
 
 ### `validateByName`
 
-Validate a by-name packages directory. Returns a list of errors; empty list means all valid.
-Checks that each package's shard prefix matches its name, and that each package has a `package.nix`.
+Validate a by-name packages directory. Returns a list of errors; an empty list means
+all entries are valid. Each package's shard prefix must match its name, and each
+package must have a `package.nix`.
 
 ```nix
 validateByName src "packages"
 # => [ ]
-# or errors like:
+# or errors such as:
 # => [ { name = "badshard"; shard = "xx"; error = "shard mismatch: ..."; } ]
 ```
 
@@ -86,15 +101,19 @@ Recursively load all `.nix` files from a directory.
 
 ### `readDirModules`
 
-Read directory entries into a module tree structure.
+Read a directory into a module tree, using `_module` for a `default.nix` and
+recursing into subdirectories.
 
 ### `mergeModuleTree`
 
-Merge multiple module trees together.
+Merge two module trees. When both sides define `_module`, their imports are combined.
 
 ### `discoverModules`
 
-Multi-type module discovery from a modules directory. `modulesPath -> moduleTypes -> { nixos, darwin, home }`
+Multi-type module discovery. Takes a modules directory and the `moduleTypes` mapping
+and returns `{ nixos, darwin, home }`.
+
+**Signature:** `discoverModules :: modulesPath -> moduleTypes -> attrs`
 
 ### `collectModules`
 
@@ -102,81 +121,110 @@ Flatten a nested module attrset into a flat list for `imports`.
 
 ### `discoverSystems`
 
-Discover system configs using `<arch>-<format>/<name>` convention.
+Discover system configs using the `<arch>-<format>/<name>/default.nix` layout.
 
 ### `discoverHomes`
 
-Discover home configs using `<arch>/<user>@<host>` convention.
+Discover home configs using the `<arch>-<format>/<user>@<host>/default.nix` layout.
 
-## Namespace Wrapping
+## Namespace wrapping
 
 ### `deepMapAttrs`
 
-Map over nested attrs, treating modules as leaves (not recursing into module functions).
+Map over nested attrsets, treating modules as leaves instead of recursing into them.
 
 ### `wrapModule`
 
-Wrap a single module with namespace and/or lib injection.
+Wrap one module with namespace and lib injection.
 
 ### `wrapModuleSet`
 
-Wrap a module tree (nested attrset of modules) with namespace/lib injection.
+Wrap a module tree (a nested attrset of modules) with namespace and lib injection.
 
-## Configuration Builders
+## Configuration builders
 
 ### `buildHomeConfigs`
 
 Build home-manager configurations from discovered homes.
 
+**Signature:** `buildHomeConfigs :: { discoveredHomes, discoveredSystems, inputs, ... } -> attrs`
+
 ### `buildSystemConfigs`
 
-Build nixos/darwin configurations from discovered systems. Hosts whose [meta](/meta) declares `images` are image-only by default and are excluded from the returned `nixosConfigurations`/`darwinConfigurations`; set `deployable = true` in the host meta to keep them deployable. Also returns an `imageRecipes` attribute — `{ host = { system; images; cfg; }; }` — consumed by `imagesFromConfigs`. Accepts `hostsMeta` (`{ <name> = metaAttrs; }`) merged over each host's `meta.nix`.
+Build NixOS and darwin configurations from discovered systems. Linux hosts whose
+[meta](/meta) declares `images` are image-only by default and are excluded from the
+returned `nixosConfigurations` and `darwinConfigurations`. Set `deployable = true` in
+the host meta to keep them deployable.
+
+The result also contains:
+
+* `configSystems`: host to system-string mapping, used by hydraJobs grouping
+* `imageRecipes`: `{ host = { system; images; cfg; }; }`, consumed by
+  `imagesFromConfigs`
+
+Accepts `hostsMeta` (`{ <name> = metaAttrs; }`) merged over each host's `meta.nix`.
 
 ### `buildSystemRegistry`
 
-Build the global host metadata registry — a pure-metadata `name -> merged meta` map for every discovered host, cycle-free because it never touches config `value`s. Exposed to modules as `purr.systemMetas`. Used internally by both `buildSystemConfigs` and `buildHomeConfigs`.
+Build the host metadata registry. Returns `{ hostMeta, registry }`, where `registry`
+is a `name -> merged meta` map for every discovered host. The registry never touches
+config values and is exposed to modules as `purr.systemMetas`. It is used by both
+`buildSystemConfigs` and `buildHomeConfigs`.
+
+### `formatOutputKey`
+
+Map a format string to its flake output key:
+`"linux" -> "nixosConfigurations"`, `"darwin" -> "darwinConfigurations"`. Throws for
+other formats.
 
 ### `parseArchFormat`
 
 `parseArchFormat :: "x86_64-linux" -> { arch = "x86_64"; format = "linux"; }`
 
+Returns `{ arch = null; format = null; }` when the string does not match.
+
 ### `parseUserHost`
 
 `parseUserHost :: "alice@server" -> { user = "alice"; host = "server"; }`
 
+Returns `{ user = null; host = null; }` when the string does not match.
+
 ### `findMatchingHomes`
 
-Find homes matching a host across all architectures.
-
-### `formatOutputKey`
-
-Map format string to flake output key (`"linux" -> "nixosConfigurations"`, `"darwin" -> "darwinConfigurations"`). Throws for unsupported formats.
+Find homes matching a host across all architectures. Returns a list of
+`{ user, path }`.
 
 ### `imagesFromConfigs`
 
 `imagesFromConfigs :: imageRecipes -> systemsOrNull -> { host = { format = derivation; }; }`
 
-Extract image derivations from image recipes. For each recipe, resolves `cfg.config.system.build.images.<format>` lazily for the formats listed in its `images` attr. Filters recipes by system when `systems` is non-null. Used by both the top-level `images` output and `hydraJobs.images`.
+Extract image derivations from image recipes. For each recipe, it resolves
+`cfg.config.system.build.images.<format>` lazily for the formats listed in
+`recipe.images`. When `systems` is non-null, recipes are filtered by system. Used by
+both the top-level `images` output and `hydraJobs.images`.
 
-## Directory Resolution
+## Directory resolution
 
 ### `resolveDir`
 
 `resolveDir :: src -> dirOption -> [candidates] -> pathOrNull`
 
-Resolve a directory from an explicit value or auto-detect from candidate paths.
+Use the explicit option value when it is not `null`; otherwise return the first
+candidate that exists under `src`.
 
 ### `resolveDirs`
 
 `resolveDirs :: src -> dirOptions -> resolvedDirs`
 
-Resolve all standard purr directories at once. Used internally by both `mkFlake` and the flake-parts module.
+Resolve every standard purr directory at once. Used by both `mkFlake` and the
+flake-parts module. The result includes `hydraJobsDir`.
 
-## Library Construction
+## Library construction
 
 ### `buildImportedPurrLib`
 
-Build the project's custom lib (with fix recursion). Imports a `lib/` directory recursively and provides `inputs`, `lib`, and `namespace` to each function.
+Build the project's custom lib. Imports the `lib/` directory and provides `inputs`,
+`lib`, and `namespace` to each function module.
 
 ### `mergePurrLib`
 
@@ -186,32 +234,42 @@ Merge the project lib into nixpkgs lib under the namespace:
 
 ```nix
 mergedLib = lib                    # base: nixpkgs lib
-  // { ${namespace} = ownLib }     # flake's own namespace lib
+  // { ${namespace} = ownLib }     # project namespace lib
 ```
+
+When `namespace` is `null`, the project lib is merged at the top level.
 
 ### `buildMergedLib`
 
-`buildMergedLib :: { inputs, lib, importedPurrLib, namespace } -> mergedLib`
+`buildMergedLib :: { effectiveInputs, lib, importedPurrLib, namespace } -> mergedLib`
 
-Resolve the merged lib handed to modules. The base is the flake's real `inputs.nixpkgs.lib` when available (keeping everything on one nixpkgs), falling back to the caller-provided lib otherwise; the namespace lib is then merged on top. Home configurations re-add home-manager's `lib.hm` extension so its internals keep working. This replaces the old `purrLib` module argument — modules access the merged lib via `lib`, and bridged homes via `purr.lib`.
+Resolve the merged lib handed to modules. The base is
+`effectiveInputs.nixpkgs.lib` when available, otherwise the caller-provided `lib`.
+The namespace lib is merged on top. Home configurations re-add home-manager's
+`lib.hm` extension so home-manager internals keep working.
 
-## Auto-Discovery
+## Auto-discovery
 
 ### `autoModules`
 
-Per-system auto-discovery for checks, shells, packages, and apps. Each module is imported with `pkgs` spread into the function arguments (like `callPackage`), so `{ stdenv, fetchurl, pkgs, lib, ... }` style destructuring works directly.
+Per-system auto-discovery for directories such as checks, shells, packages, legacy
+packages, and apps. Each module is imported with the whole `pkgs` attrset spread into
+its arguments, like `callPackage`, so destructuring works directly:
+`{ stdenv, fetchurl, pkgs, lib, ... }`.
 
 ### `autoPackages`
 
-Per-system package discovery for `packages/`, identical to `autoModules` except
-each discovered package is wrapped with `lib.makeOverridable` (so
-`.override`/`.overrideAttrs` work like a `callPackage` package). Used for the
-`packages.<system>.*` output and for the overlay that auto-registers packages
-into `pkgs` (`packagesToPkgs`).
+Per-system package discovery for `packages/`. It works like `autoModules`, but each
+discovered package is wrapped with `purrLib.makeOverridable`, so `.override` and
+`.overrideAttrs` work like a `callPackage` package. Used for the
+`packages.<system>.*` output and for the overlay that registers packages in `pkgs`
+(`packagesToPkgs`).
 
 ### `autoFormatter`
 
-Per-system formatter discovery. Imports `<dir>/default.nix` with the same `pkgs`-spread arguments as `autoModules` and returns a single derivation, or `null` when the directory is absent. Used to produce `formatter.<system>`:
+Per-system formatter discovery. Imports `<dir>/default.nix` with the same
+`pkgs`-spread arguments as `autoModules` and returns a single derivation, or `null`
+when the directory is absent. Used to produce `formatter.<system>`:
 
 ```nix
 # formatters/default.nix
@@ -220,7 +278,8 @@ Per-system formatter discovery. Imports `<dir>/default.nix` with the same `pkgs`
 
 ### `overlayModules`
 
-Discover and normalize overlays from a directory.
+Discover and normalize overlays from a directory. Plain `final: prev: attrs` overlays
+are passed through; overlays that return another overlay are normalized.
 
 ### `templateModules`
 
@@ -232,30 +291,39 @@ Discover flake templates from a directory.
 
 `filterSystems :: attrs -> systemsOrNull -> attrs`
 
-Filter an attrset keyed by system to only the given systems. Returns the attrset unchanged when `systems` is `null`.
+Filter an attrset keyed by system to the given systems. Returns the attrset unchanged
+when `systems` is `null`.
 
 ### `mirrorOutputs`
 
 `mirrorOutputs :: perSystemOutputs -> names -> systemsOrNull -> attrs`
 
-Mirror named per-system outputs (e.g. `checks`, `packages`) into `hydraJobs.<name>.<system>.<key>` form, optionally filtered by system.
+Mirror named per-system outputs into `hydraJobs.<name>.<system>.<key>` form,
+optionally filtered by system.
 
 ### `hydraJobsFromDir`
 
 `hydraJobsFromDir :: src -> dir -> systems -> systemPkgs -> lib -> namespace -> inputs -> extraArgs -> attrs`
 
-Scan `src/<dir>/<group>/<job>/default.nix` and produce `hydraJobs.<group>.<system>.<job>`. Each job is a function `{ pkgs, system, lib, inputs, namespace, ... }` returning a derivation, derivation attrset, or `null` (skipped).
+Scan `src/<dir>/<group>/<job>/default.nix` and produce
+`hydraJobs.<group>.<system>.<job>`. Each job is a function
+`{ pkgs, system, lib, inputs, namespace, ... }` that returns a derivation, a
+derivation attrset, or `null` to skip the job.
 
 ### `configOutputs`
 
-> **Internal** — exported from `lib/hydraJobs.nix` but **not** re-exported from `inputs.purr.lib`.
+Internal: exported from `lib/hydraJobs.nix` but not re-exported from
+`inputs.purr.lib`.
 
-`configOutputs :: systemConfigurations -> homeConfigurations -> names -> systemsOrNull -> homeSystems -> attrs`
+`configOutputs :: systemConfigs -> homeConfigs -> names -> systemsOrNull -> homeSystems -> attrs`
 
-Mirror system and home configurations into hydraJobs: `nixosConfigurations` (toplevel), `darwinConfigurations` (system), `homeConfigurations` (activationPackage), grouped by system.
+Mirror system and home configurations into hydraJobs:
+`nixosConfigurations` (toplevel), `darwinConfigurations` (system), and
+`homeConfigurations` (activationPackage), grouped by system.
 
 ### `buildHydraJobs`
 
-`buildHydraJobs :: { src, hydraJobsDir, hydraSystems, hydraJobsInclude, hydraJobsExtra, systemPkgs, perSystemOutputs, systemConfigurations, homeConfigurations, ... } -> attrs`
+`buildHydraJobs :: { src, hydraJobsDir, hydraSystems, hydraJobsInclude, hydraJobsExtra, systemPkgs, perSystemOutputs, systemConfigs, homeConfigs, homeSystems, lib, namespace, inputs, extraArgs } -> attrs`
 
-Combine all hydraJobs sources — directory jobs, mirrored per-system outputs, config outputs, images, and `hydraJobsExtra` (highest priority) — into the final `hydraJobs` flake output.
+Combine the hydraJobs sources: directory jobs, mirrored per-system outputs, config
+outputs, images, and `hydraJobsExtra` (highest priority).

@@ -1,31 +1,40 @@
 # Host Meta
 
-Every system host can carry **metadata** that purr reads at flake-evaluation time and re-exposes to the host's modules as `purr.meta`. It drives host behaviour (which images to build, whether the host is deployable) and gives your modules a cheap, structured way to read per-host facts — no placeholder-arg imports, no nixpkgs/system evaluation.
+Every system host can carry metadata that purr reads during flake evaluation and
+passes to the host's modules as `purr.meta`. The same data decides which images to
+build and whether the host is exposed as a configuration.
 
-## Why meta instead of module options?
+## Why host meta
 
-Image/host declarations used to live inside the host's `default.nix` and were read back out by importing the module with placeholder arguments. That was fragile — a module touching `config`/`pkgs` at the top level would crash the cheap read, and conditional declarations were silently ignored.
+Host declarations used to live in the host's `default.nix`. purr had to import the
+module with placeholder arguments to read them, which could fail when the module
+touched `config` or `pkgs` at the top level. Host meta is a separate file or config
+value that purr reads directly. The host module is not imported to decide how the
+host is exposed.
 
-Host meta is a dedicated, tiny file/config that purr reads directly. The host module is never imported just to decide how the host is exposed.
+## Sources and merge order
 
-## Sources & Merge Order
+Host meta is merged from up to three sources. Later sources win:
 
-Host meta is merged from up to three sources, in increasing priority (later wins):
+1. Auto-generated: `name`, `host`, `arch`, `archFormat`, `format`, `isDarwin`,
+   `isLinux`, `system`, and `homes`. These come from the host's directory path and
+   matched homes.
+2. `meta.nix`: a file next to the host's `default.nix`.
+3. `hosts.<name>.meta`: flake-level config (`hosts` in `mkFlake`, `purr.hosts` in
+   flake-parts).
 
-1. **Auto-generated** — `name`, `host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system`, `homes` (derived from the host's directory path and matched homes).
-2. **`meta.nix`** — a file next to the host's `default.nix`.
-3. **`hosts.<name>.meta`** — flake-level config (`mkFlake` / `purr.hosts`).
-
-The two user sources are **deep-merged** (`lib.recursiveUpdate`), so a flake-level config can override individual nested keys of a `meta.nix` without replacing the whole attrset.
+The two user sources are deep-merged with `lib.recursiveUpdate`, so a flake-level
+config can override one nested key without replacing the whole attrset.
 
 ```
-auto meta ──► meta.nix ──► hosts.<name>.meta
-  (lowest)                    (highest)
+auto meta -> meta.nix -> hosts.<name>.meta
+ (lowest)                  (highest)
 ```
 
 ## `meta.nix`
 
-Place a `meta.nix` next to the host's `systems/<arch>-<format>/<name>/default.nix`:
+Place `meta.nix` next to the host's
+`systems/<arch>-<format>/<name>/default.nix`:
 
 ```
 src/
@@ -33,7 +42,7 @@ src/
     └── x86_64-linux/
         └── server/
             ├── default.nix
-            └── meta.nix          # ← optional host metadata
+            └── meta.nix          # optional host metadata
 ```
 
 ### Plain attrset
@@ -48,11 +57,13 @@ src/
 
 ### Function
 
-`meta.nix` may also be a function. It is called with the auto-generated meta plus convenient fixed values — all **lazily bound**, so cheap conditionals like `if inputs ? nix-darwin then ...` cost nothing extra:
+`meta.nix` may also be a function. purr calls it with the auto-generated meta plus
+fixed values. The arguments are bound lazily, so conditions such as
+`if inputs ? nix-darwin then ...` do not force nixpkgs or the module system:
 
 ```nix
 # systems/x86_64-linux/server/meta.nix
-{ inputs, lib, arch, format, extraArgs, ... }:
+{ inputs, lib, arch, ... }:
 assert lib != null;
 if arch == "x86_64" && inputs ? home-manager then
   {
@@ -65,22 +76,23 @@ else
 
 | Parameter | Description |
 |---|---|
-| `inputs` | All flake inputs (incl. transitive inputs in mkFlake mode) |
-| `lib` | The merged purr lib (nixpkgs lib + namespace lib) |
+| `inputs` | The flake inputs |
+| `lib` | The merged purr lib (nixpkgs lib plus the namespace lib) |
 | `namespace` | The configured namespace, or `null` |
-| `extraArgs` | The configured `extraArgs` (same as system modules receive) |
+| `extraArgs` | The configured `extraArgs` |
 | `host` / `name` | Host name |
-| `system` | Full triple, e.g. `"x86_64-linux"` |
-| `arch` | Architecture, e.g. `"x86_64"` |
-| `archFormat` | Directory name, e.g. `"x86_64-linux"` |
+| `system` | Full triple, for example `"x86_64-linux"` |
+| `arch` | Architecture, for example `"x86_64"` |
+| `archFormat` | Directory name, for example `"x86_64-linux"` |
 | `format` | `"linux"` or `"darwin"` |
 | `isDarwin` / `isLinux` | Platform booleans |
-| `homes` | Auto-matched homes, e.g. `[{ user = "alice"; host = "server"; }]` |
-| `...` | Extra args accepted, never forced |
+| `homes` | Matched homes, for example `[{ user = "alice"; host = "server"; }]` |
+| `...` | Extra arguments are accepted but not forced |
 
-`pkgs`, `config`, `options` are **not** provided — the whole point is that meta evaluation never touches nixpkgs or the module system.
+`pkgs`, `config`, and `options` are not provided. Meta evaluation does not evaluate a
+NixOS or home-manager configuration.
 
-## `hosts.<name>.meta` (flake config)
+## `hosts.<name>.meta`
 
 ### mkFlake
 
@@ -89,7 +101,7 @@ inputs.purr.lib.mkFlake {
   inherit inputs;
   src = ./.;
   hosts.server.meta = {
-    tier = "prod";      # overrides / deep-merges meta.nix
+    tier = "prod";      # deep-merges over meta.nix
   };
 }
 ```
@@ -102,11 +114,13 @@ purr.hosts.server.meta = {
 };
 ```
 
-Referencing a host that has no matching `systems/<arch>-<format>/<name>/default.nix` is an error.
+Referencing a host that has no matching
+`systems/<arch>-<format>/<name>/default.nix` is an error.
 
-## Reserved Keys
+## Reserved keys
 
-The auto-generated keys **cannot be overridden**. Setting one in `meta.nix` or `hosts.<name>.meta` emits a warning (to stderr during flake evaluation) and the value is silently dropped — the auto-generated value always wins.
+The auto-generated keys cannot be overridden. Setting one in `meta.nix` or
+`hosts.<name>.meta` emits a warning during flake evaluation and drops the user value.
 
 | Reserved key | Auto-generated value |
 |---|---|
@@ -114,57 +128,61 @@ The auto-generated keys **cannot be overridden**. Setting one in `meta.nix` or `
 | `host` | Host name (alias of `name`) |
 | `arch` | Architecture |
 | `archFormat` | Arch-format directory name |
-| `format` | `"linux"` / `"darwin"` |
+| `format` | `"linux"` or `"darwin"` |
 | `isDarwin` / `isLinux` | Platform booleans |
 | `system` | Full triple |
-| `homes` | Auto-matched homes |
+| `homes` | Matched homes |
 
-## Behaviour Keys
+## Behaviour keys
 
-These are consumed by purr itself:
+These keys are consumed by purr:
 
 | Key | Type | Description |
 |---|---|---|
-| `images` | `[str]` | Image formats to build. Exposed as `images.<host>.<format>` (and `hydraJobs.images.<host>.<format>` when hydraJobs is enabled). Each format maps to `config.system.build.images.<format>`. Must be a list of strings. |
-| `deployable` | `bool` | Whether the host is exposed as a `nixosConfigurations`/`darwinConfigurations` output. Defaults to `true` when `images == []` or the host is darwin. |
-| `roles` | `attrs` | Maps a role name to a key of the **effective inputs** to build this host from, e.g. `roles.nixpkgs = "nixpkgs-stable"`. Never modifies your flake inputs. See [below](#roles-per-host-inputs). |
+| `images` | list of strings | Image formats to build for a Linux host. Exposed as `images.<host>.<format>`, and as `hydraJobs.images.<host>.<format>` when hydraJobs is enabled. Each format maps to `config.system.build.images.<format>` |
+| `deployable` | bool | Whether the host is exposed in `nixosConfigurations` or `darwinConfigurations`. Defaults to `true` when `images` is empty or the host is darwin |
+| `roles` | attrs | Maps a role name to a key of the effective inputs, for example `roles.nixpkgs = "nixpkgs-stable"`. See [roles](#roles-per-host-inputs) |
 
-A host with `images` and no explicit `deployable` is **image-only**: it is excluded from `nixosConfigurations`/`darwinConfigurations` (and the hydraJobs config groups), so its `system.build.toplevel` is never evaluated. See [Image-only hosts](/systems-homes#image-only-hosts-not-deployable).
+A Linux host with `images` and no explicit `deployable` is image-only. It is excluded
+from the configuration outputs and the hydraJobs config groups, so its
+`system.build.toplevel` is not evaluated. See
+[Image-only hosts](/systems-homes#image-only-hosts).
 
 ### roles (per-host inputs)
 
-Give different hosts different inputs (e.g. a second nixpkgs for some hosts, a
-different home-manager) without touching your flake inputs. Two pieces work
-together:
+Different hosts can build from different inputs, for example a second nixpkgs or a
+different home-manager. Two pieces work together:
 
-1. **`inputsFor`** — filters/replaces the raw flake inputs into the *effective*
-   inputs purr builds from internally (see [mkFlake](/mkflake#per-host-inputs-multi-nixpkgs)
-   or [flake-parts](/flake-parts)). Default is the identity.
-2. **`meta.roles.<role>`** — points a host at a specific effective-input key.
-   The role names (`nixpkgs`, `home-manager`, `nix-darwin`) live under the
-   single nested `roles` key so they never collide with your free-form custom
-   meta keys. Absent roles fall back to the conventional input key
-   (`nixpkgs`, `home-manager`/`homeManager`, `nix-darwin`/`darwin`).
+1. `inputsFor` filters or replaces the raw flake inputs into the effective inputs
+   that purr builds from internally. See
+   [mkFlake](/mkflake#per-host-inputs-multi-nixpkgs) or
+   [flake-parts](/flake-parts). Default is the identity.
+2. `meta.roles.<role>` points a host at an effective-input key. The role names
+   (`nixpkgs`, `home-manager`, `nix-darwin`) live under `roles` so they do not collide
+   with custom meta keys. If a role is absent, purr falls back to the conventional
+   input key (`nixpkgs`, `home-manager` or `homeManager`, `nix-darwin` or `darwin`).
 
 ```nix
 # systems/x86_64-linux/server/meta.nix
 {
-  roles.nixpkgs = "nixpkgs-stable";        # build from the nixpkgs-stable input
+  roles.nixpkgs = "nixpkgs-stable";
   roles."home-manager" = "home-manager-stable";
-  tier = "prod";                            # still a normal custom key
+  tier = "prod";
 }
 ```
 
-This is internal-only: it changes which input purr *consumes* to build pkgs,
-system configs, home configs, and the merged lib base. The `inputs` argument
-your modules receive is **never** modified — modules always see the raw flake
-inputs. Homes inherit their linked system's nixpkgs; unmatched homes use the
-effective-input default. Referencing an input missing from the effective
-inputs throws a clear error.
+Role replacement is internal. It changes which input purr uses to build pkgs, system
+configs, home configs, and the merged lib base. The `inputs` argument that modules
+receive is never modified. Homes inherit their linked system's nixpkgs; unmatched
+homes use the effective-input default. Referencing an input that is missing from the
+effective inputs throws an error.
 
 ## `purr.meta`
 
-The merged meta is injected into every system host module via `specialArgs.purr.meta` (and the home-manager bridge's `extraSpecialArgs`). It always contains the 8 auto keys plus the normalized `images` and derived `deployable`, plus any custom keys you set:
+For system modules, the merged meta is passed through `specialArgs.purr.meta`. The
+home-manager bridge receives the same host meta through `extraSpecialArgs`. It always
+contains the 9 auto-generated keys plus the normalized `images` and derived
+`deployable`, plus any custom keys:
 
 ```nix
 # systems/x86_64-linux/server/default.nix
@@ -190,36 +208,48 @@ purr.meta =
     homes = [ { user = "alice"; host = "server"; } ];
     images = [ "iso" "qemu" ];
     deployable = true;
-    tier = "prod";      # ← custom key
+    tier = "prod";      # custom key
   }
 ```
 
-### `purr.systemMetas` (global host registry)
+### `purr.systemMetas`
 
-Every discovered host's merged meta is registered in `purr.systemMetas` — a pure-metadata registry keyed by host name, including the current host. It is available to both system and home modules, so you can read any other host's facts cheaply without evaluating its config:
+Every discovered host's merged meta is registered in `purr.systemMetas`, a pure
+metadata registry keyed by host name. The registry includes the current host and is
+available to both system and home modules. Reading another host's facts does not
+evaluate that host's config:
 
 ```nix
 # systems/x86_64-linux/server/default.nix
 { purr, ... }:
 {
-  # read another host's meta
   services.bar.enable = purr.systemMetas.workstation.tier == "dev";
 }
 ```
 
-Home modules additionally get `purr.systemMeta` — the merged meta of the system named by the home's host (or `null` when no matching system exists).
+Home modules also get `purr.systemMeta`, the merged meta of the system named by the
+home's host, or `null` when no matching system exists.
 
 ### Custom keys
 
-Any key other than the reserved/behaviour keys is carried through untouched and exposed as `purr.meta.<key>`. This is a free-form slot for your own automation — role/tier labels, machine groups, feature flags, and anything else that should be cheaply readable both by purr and by your modules.
+Any key other than the reserved and behaviour keys is passed through and exposed as
+`purr.meta.<key>`. This is a free-form slot for labels, groups, feature flags, or
+other data that both purr and your modules need to read.
 
 ## Validation
 
-* `images` must be a list — anything else throws.
-* `meta.nix` must evaluate to an attrset — anything else throws.
-* `hosts.<name>.meta` referencing a non-existent host throws.
-* Reserved keys are dropped with a warning (not an error).
+* `images` must be a list, otherwise evaluation throws.
+* `meta.nix` must evaluate to an attrset, otherwise evaluation throws.
+* `hosts.<name>.meta` referencing a nonexistent host throws.
+* Reserved keys are dropped with a warning, not an error.
 
-## For homes
+## Homes
 
-Home modules receive `purr.meta` with home-specific fields (`user`, `host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system`) — **not** the full host meta (no `images`/`deployable`). They also get `purr.systemMeta` (the linked system's merged host meta, or `null` when unlinked) and `purr.systemMetas` (the global registry). See [Systems & Homes — purr Metadata](/systems-homes#purr-metadata).
+Standalone home modules receive `purr.meta` with home-specific fields (`user`,
+`host`, `arch`, `archFormat`, `format`, `isDarwin`, `isLinux`, `system`). They do not
+receive the full host meta, so `images` and `deployable` are absent. Bridged homes
+receive the host's merged meta as both `purr.meta` and `purr.systemMeta`; use the
+`user` module argument for the username there. In both forms `purr.systemMetas` is the
+host registry, and `purr.systemMeta` is the linked system's merged meta (or `null` for
+an unlinked standalone home). See
+[Systems & Homes: purr metadata](/systems-homes#purr-metadata).

@@ -1,8 +1,9 @@
 # mkFlake Usage
 
-`mkFlake` is purr's standalone flake builder. Use it when you don't need or want flake-parts.
+`mkFlake` builds a flake from a project directory without flake-parts. The call returns
+the complete `outputs` attrset.
 
-## Basic Usage
+## Basic usage
 
 ```nix
 {
@@ -23,46 +24,46 @@
 }
 ```
 
-## Full API Reference
+## Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `inputs` | attrs | *required* | Flake inputs. Required: `nixpkgs`. Optional: `home-manager` (or `homeManager`) for home-manager support, `nix-darwin` (or `darwin`) for darwin support |
-| `inputsFor` | nullOr fn | identity | Transform `{ inputs, ... } -> inputs'` (or a plain attrset) that filters/replaces the raw flake inputs into the **effective inputs** purr builds from internally. Modules always keep the raw `inputs`. See [Per-host inputs](#per-host-inputs-multi-nixpkgs) below |
-| `src` | path | *required* | Project root directory |
-| `namespace` | nullOr str | `null` | Module option namespace, also used as lib key (`lib.<namespace>`) |
-| `libDir` | nullOr str | `null` | Lib directory (relative to `src`), auto-detects `lib/` |
-| `flattenLib` | bool | `false` | Flatten lib subdirectories into root (no dir nesting) |
-| `systems` | list | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` | Systems to generate for |
-| `nixpkgsConfig` | attrs | `{}` | nixpkgs config (`allowUnfree`, etc.) |
-| `outputsBuilder` | fn | `({ pkgs, system, inputs, namespace, lib, ... }: {})` | Per-system extra flake outputs. Also receives all `extraArgs` keys. Results are **deep-merged** with auto-discovered outputs, so both coexist (e.g. `packages` from auto-discovery and from `outputsBuilder`) |
-| `modulesDir` | str | `"modules"` | Module directory name under src |
-| `moduleTypes` | attrs | `{nixos=["nixos" "shared"]; ...}` | Subdirectory mapping per output |
-| `extraModules` | attrs | `{}` | `{nixos=[...]; darwin=[...]; home=[...]}` — raw module injection |
-| `extraArgs` | attrs | `{}` | Custom key-value pairs injected into all auto-discovered module args (packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`). Purr's own keys override `extraArgs` on conflict |
+| `inputs` | attrs | required | Flake inputs. `nixpkgs` is required. `home-manager` (or `homeManager`) enables home-manager outputs, and `nix-darwin` (or `darwin`) enables darwin support |
+| `inputsFor` | fn | identity | Filter or replace the flake inputs that purr uses internally. Accepts `{ inputs, ... } -> inputs'` or a plain attrset. Modules still receive the raw `inputs`. See [Per-host inputs](#per-host-inputs-multi-nixpkgs) |
+| `src` | path | required | Project root directory |
+| `namespace` | nullOr str | `null` | Module option namespace, also used as the lib key (`lib.<namespace>`) |
+| `libDir` | nullOr str | `null` | Lib directory relative to `src`; auto-detects `lib/` |
+| `flattenLib` | bool | `false` | Flatten lib subdirectories into the namespace root |
+| `systems` | list | `["x86_64-linux" "aarch64-linux" "aarch64-darwin"]` | Systems to generate per-system outputs for |
+| `nixpkgsConfig` | attrs | `{}` | nixpkgs config such as `allowUnfree` |
+| `outputsBuilder` | fn | `(_: {})` | Per-system extra outputs. Called with `{ pkgs, system, inputs, namespace, lib, ... }` plus every `extraArgs` key. The result is deep-merged with the discovered outputs |
+| `modulesDir` | str | `"modules"` | Module directory name under `src` |
+| `moduleTypes` | attrs | `{ nixos = [...]; darwin = [...]; home = [...]; }` | Subdirectory mapping per output |
+| `extraModules` | attrs | `{}` | Raw module injection: `{ nixos = [...]; darwin = [...]; home = [...]; }` |
+| `extraArgs` | attrs | `{}` | Custom values added to the arguments of every auto-discovered module, system `specialArgs`, and home `extraSpecialArgs`. purr's own keys win on conflict |
 | `hosts` | attrs | `{}` | Per-host config: `hosts.<name>.meta = { images = [...]; deployable = true; roles.nixpkgs = "..."; ... }`, deep-merged over the host's `meta.nix`. See [Host Meta](/meta) |
-| `bundleModules` | bool | `false` | Include `extraModules` in the auto-generated `default` bundle (the `default` module itself is always generated unless you define your own) |
-| `bundleExtraModules` | bool | `true` | Include extra modules in the `default` bundle (only when `bundleModules = true`) |
+| `bundleModules` | bool | `false` | Include `extraModules` in the generated `default` module bundle |
+| `bundleExtraModules` | bool | `true` | Include extra modules in the bundle when `bundleModules` is on |
 | `checksDir` | nullOr str | `null` | auto-detects `checks/` |
 | `shellsDir` | nullOr str | `null` | auto-detects `shells/` then `devShells/` |
 | `overlaysDir` | nullOr str | `null` | auto-detects `overlays/` |
 | `packagesDir` | nullOr str | `null` | auto-detects `packages/` |
-| `packagesByName` | bool | `false` | Also discover packages via `by-name/` convention (coexists with regular discovery) |
-| `packagesToPkgs` | bool | `true` | Auto-register discovered packages into `pkgs` (addressable as `pkgs.<name>`, overridable, usable by other modules). See [Packages](#packages) |
+| `packagesByName` | bool | `false` | Also discover packages from `packages/by-name/<shard>/<name>/package.nix` |
+| `packagesToPkgs` | bool | `true` | Register discovered packages in `pkgs` as well. See [Packages](#packages) |
 | `legacyPackagesDir` | nullOr str | `null` | auto-detects `legacyPackages/` |
-| `legacyPackagesByName` | bool | `false` | Also discover legacy packages via `by-name/` convention (coexists with regular discovery) |
+| `legacyPackagesByName` | bool | `false` | Also discover legacy packages from the `by-name/` layout |
 | `appsDir` | nullOr str | `null` | auto-detects `apps/` |
 | `templatesDir` | nullOr str | `null` | auto-detects `templates/` |
-| `templatesRecursive` | bool | `false` | Whether to scan `templates/` recursively |
-| `formatterDir` | nullOr str | `null` | auto-detects `formatters/` then `formatter/`. The `default.nix` must return a derivation (`{ pkgs, ... }: pkgs.nixfmt-rfc-style`) |
+| `templatesRecursive` | bool | `false` | Scan `templates/` recursively |
+| `formatterDir` | nullOr str | `null` | auto-detects `formatters/` then `formatter/`. The `default.nix` must return a derivation |
 | `systemsDir` | nullOr str | `null` | auto-detects `systems/` then `hosts/` |
 | `homesDir` | nullOr str | `null` | auto-detects `homes/` |
-| `autoInject` | bool | `true` | Auto-inject `networking.hostName`, `home.username`, etc. |
+| `autoInject` | bool | `true` | Inject `networking.hostName`, `home.username`, and `home.homeDirectory` with `lib.mkDefault` |
 | `hydraJobs` | attrs | `{}` | Hydra CI options: `{ enable, as, dir, systems, include, extra }`. See below |
 
-## Hydra CI (hydraJobs)
+## Hydra CI
 
-Generate a `hydraJobs` output for Hydra CI that automatically mirrors every buildable output, plus custom jobs from a `hydraJobs/` directory:
+`hydraJobs` mirrors buildable outputs and adds jobs from a `hydraJobs/` directory:
 
 ```nix
 inputs.purr.lib.mkFlake {
@@ -78,7 +79,7 @@ inputs.purr.lib.mkFlake {
 
 See the [hydraJobs](/hydrajobs) page for the full reference.
 
-## Customizing Systems
+## Customizing systems
 
 ```nix
 inputs.purr.lib.mkFlake {
@@ -88,7 +89,7 @@ inputs.purr.lib.mkFlake {
 }
 ```
 
-## Custom Module Directories
+## Custom module directories
 
 ```nix
 inputs.purr.lib.mkFlake {
@@ -100,7 +101,7 @@ inputs.purr.lib.mkFlake {
 }
 ```
 
-## Systems & Homes
+## Systems and homes
 
 ```nix
 inputs.purr.lib.mkFlake {
@@ -113,51 +114,57 @@ inputs.purr.lib.mkFlake {
 
 ## Per-host inputs (multi-nixpkgs)
 
-Replace or filter which inputs purr builds with via `inputsFor`, then point
-individual hosts at a specific input through a `roles` meta key. Modules
-always keep the original `inputs` argument — replacement only affects how
-purr builds pkgs, system configs, home configs, and the merged lib. See
-[Host Meta — roles](/meta#roles) for the full role reference.
+`inputsFor` selects which inputs purr builds from. A host then points at one of those
+inputs with `meta.roles.<role>`. Modules always keep the original `inputs` argument.
+The replacement only affects how purr builds pkgs, system configs, home configs, and
+the merged lib. See [Host Meta: roles](/meta#roles-per-host-inputs) for the role
+reference.
 
 ```nix
 # flake.nix
-inputs = {
-  nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
-  # ...
-};
-
-outputs = inputs:
-  inputs.purr.lib.mkFlake {
-    inherit inputs;
-    src = ./.;
-    inputsFor = { inputs, ... }: {
-      inherit (inputs) nixpkgs;
-      inherit (inputs) nixpkgs-unstable;
-    };
-    hosts.desktop.meta.roles.nixpkgs = "nixpkgs-unstable";
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+    purr.url = "github:nixcafe/purr";
   };
+
+  outputs = inputs:
+    inputs.purr.lib.mkFlake {
+      inherit inputs;
+      src = ./.;
+      inputsFor = { inputs, ... }: {
+        inherit (inputs) nixpkgs;
+        inherit (inputs) nixpkgs-unstable;
+      };
+      hosts.server.meta.roles.nixpkgs = "nixpkgs-unstable";
+    };
+}
 ```
+
+The same role can be set in `meta.nix`:
 
 ```nix
 # systems/x86_64-linux/server/meta.nix
 { roles.nixpkgs = "nixpkgs-unstable"; }
 ```
 
-Supported role keys: `nixpkgs`, `home-manager`, `nix-darwin`. Homes inherit
-their linked system's nixpkgs; unmatched homes use the effective-input
-default.
+Supported role keys are `nixpkgs`, `home-manager`, and `nix-darwin`. Homes inherit
+their linked system's nixpkgs; unmatched homes use the effective-input default.
 
 ## Formatter
 
-Auto-discover a per-system formatter from `formatters/` (or `formatter/`). The `default.nix` receives `{ pkgs, lib, system, namespace, inputs, ... }` and must return a derivation:
+A per-system formatter is discovered from `formatters/` or `formatter/`. The
+`default.nix` receives `{ pkgs, lib, system, namespace, inputs, ... }` and must return
+a derivation:
 
 ```nix
 # formatters/default.nix
 { pkgs, ... }: pkgs.nixfmt-rfc-style
 ```
 
-This produces `formatter.<system>` so `nix fmt` works out of the box. You can still override via `outputsBuilder`:
+This produces `formatter.<system>`, which `nix fmt` uses. `outputsBuilder` can override
+it:
 
 ```nix
 inputs.purr.lib.mkFlake {
@@ -171,10 +178,9 @@ inputs.purr.lib.mkFlake {
 
 ## Packages
 
-Modules under `packages/` are exposed as `packages.<system>.<name>` **and
-auto-registered into `pkgs`** (when `packagesToPkgs = true`, the default). This
-means any module — packages, shells, checks, apps, NixOS/darwin/home configs —
-can reference them as `pkgs.<name>`:
+Modules under `packages/` are exposed as `packages.<system>.<name>`. When
+`packagesToPkgs = true` (the default), they are also registered in `pkgs`, so any
+per-system module or host config can reference them as `pkgs.<name>`:
 
 ```nix
 # packages/hello/default.nix
@@ -186,31 +192,34 @@ can reference them as `pkgs.<name>`:
 { pkgs, ... }: pkgs.hello   # the discovered package
 ```
 
-Each discovered package is wrapped like a `callPackage` package
-(`.override`/`.overrideAttrs` work), and can depend on other discovered
-packages:
+Each discovered package is wrapped like a `callPackage` package, so
+`.override` and `.overrideAttrs` work, and packages can depend on each other:
 
 ```nix
-# packages/wrapper/default.nix — `hello` resolves from `pkgs`
+# packages/wrapper/default.nix
+# `hello` resolves from `pkgs`
 { hello, ... }: hello.override { /* ... */ }
 ```
 
-Registration is implemented as a nixpkgs overlay built on the package-set
-fixpoint, so one-way dependencies resolve lazily. Mutually-recursive packages
-recurse, exactly like any nixpkgs overlay. Set `packagesToPkgs = false` to keep
-packages out of `pkgs` (they remain available as `packages.<system>.<name>`).
+Registration is a nixpkgs overlay built on the package-set fixpoint. One-way
+dependencies resolve lazily. Mutually recursive packages recurse, as in any nixpkgs
+overlay.
+
+Set `packagesToPkgs = false` to keep packages out of `pkgs`. They remain available as
+`packages.<system>.<name>`:
 
 ```nix
 inputs.purr.lib.mkFlake {
   inherit inputs;
   src = ./.;
-  packagesToPkgs = false;   # opt out of pkgs registration
+  packagesToPkgs = false;
 }
 ```
 
-## Legacy Packages
+## Legacy packages
 
-Auto-discover `legacyPackages.<system>.*` from `legacyPackages/` — the convention for unmergeable or non-standard packages, still buildable via `nix build .#<name>`:
+`legacyPackages.<system>.*` is discovered from `legacyPackages/`. These packages are
+not added to `pkgs`:
 
 ```nix
 # legacyPackages/hello/default.nix
@@ -225,7 +234,52 @@ inputs.purr.lib.mkFlake {
 }
 ```
 
-## Extra Args
+Build one with `nix build .#legacyPackages.<system>.hello`.
+
+## Checks and shells
+
+`checks/<name>/default.nix` becomes `checks.<system>.<name>`, and
+`shells/<name>/default.nix` becomes `devShells.<system>.<name>`:
+
+```nix
+# checks/lint/default.nix
+{ pkgs, ... }: pkgs.runCommand "lint" { } "true"
+
+# shells/dev/default.nix
+{ pkgs, ... }: pkgs.mkShell { packages = [ pkgs.git ]; }
+```
+
+## Apps
+
+`apps/<name>/default.nix` becomes `apps.<system>.<name>` and must return a flake app:
+
+```nix
+# apps/hello/default.nix
+{ pkgs, ... }: {
+  type = "app";
+  program = "${pkgs.hello}/bin/hello";
+}
+```
+
+## Overlays and templates
+
+`overlays/<name>/default.nix` becomes `overlays.<name>`, and
+`templates/<name>/default.nix` becomes `templates.<name>`:
+
+```nix
+# overlays/custom/default.nix
+_final: prev: {
+  hello = prev.hello.overrideAttrs (_: { doCheck = false; });
+}
+
+# templates/rust/default.nix
+{
+  path = ./.;
+  description = "A Rust project";
+}
+```
+
+## Extra args
 
 Pass custom values to every auto-discovered module:
 
@@ -247,4 +301,6 @@ Modules receive `extraArgs` values as function parameters:
 pkgs.writeText "myapp" "target: ${deploymentTarget}"
 ```
 
-All auto-discovered modules receive `extraArgs` keys — packages, shells, checks, apps, templates, system `specialArgs`, home `extraSpecialArgs`, and `outputsBuilder`. Purr's own keys (`inputs`, `pkgs`, `namespace`, `lib`, etc.) always override `extraArgs` in case of naming conflicts.
+The keys are passed to packages, shells, checks, apps, templates, system
+`specialArgs`, home `extraSpecialArgs`, and `outputsBuilder`. purr's own keys
+(`inputs`, `pkgs`, `namespace`, `lib`, and similar) override `extraArgs` on conflict.
