@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run every purr test one at a time, printing a live [PASS]/[FAIL] per test.
 #
-# Nix is lazy, so a single `nix eval` cannot stream results — this script
+# Nix is lazy, so a single `nix eval` cannot stream results; this script
 # enumerates all test cases and evaluates each one individually, so you can
 # watch tests pass/fail one by one.
 #

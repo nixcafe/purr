@@ -24,7 +24,7 @@ let
 
           # Import a lib module and only call it with arguments when it is a
           # function. Plain attrset modules (e.g. static data) are returned
-          # as-is — snowfall behaves the same way.
+          # as-is: snowfall behaves the same way.
           call =
             path:
             let
@@ -75,7 +75,7 @@ let
   # `nixpkgs.lib` when available (keeping everything on one nixpkgs, which
   # pairs naturally with home-manager), otherwise it falls back to the
   # caller-provided lib. Namespace/libDir are then merged on top. Only the
-  # base is affected by `inputsFor` replacement — modules still receive the
+  # base is affected by `inputsFor` replacement: modules still receive the
   # raw flake inputs as the `inputs` argument.
   buildMergedLib =
     {

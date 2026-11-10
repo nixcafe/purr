@@ -142,7 +142,7 @@ let
   # auto-generated meta -> `meta.nix` next to the host's `default.nix` -> the
   # `hosts.<name>.meta` config (deep merge). `meta.nix` may be a plain attrset
   # or a function; functions are called with the auto meta plus `host`,
-  # `inputs`, `lib`, `namespace`, `extraArgs` — all lazily bound, so users can
+  # `inputs`, `lib`, `namespace`, `extraArgs`: all lazily bound, so users can
   # write cheap conditional metadata without paying for nixpkgs/system eval.
   # Reserved keys in user meta are warned about and dropped, guaranteeing the
   # auto-generated structure can never be overridden.
@@ -209,7 +209,7 @@ let
       inherit deployable images;
     };
 
-  # Build the per-host metadata registry. Pure metadata only — it never
+  # Build the per-host metadata registry. Pure metadata only: it never
   # touches system config `value`s, so it is cycle-free and safe to build
   # independently from the configs themselves (and reusable by home configs).
   #
@@ -336,7 +336,7 @@ let
   # The lib handed to home-manager modules. Starts from the merged lib and
   # re-adds home-manager's own `hm` extension, since home-manager evaluates
   # with its own extended lib as `lib`. Built via `extend` (not `//`) so the
-  # merged namespace lib and `hm` survive further `extend`s — home-manager's
+  # merged namespace lib and `hm` survive further `extend`s: home-manager's
   # manual/docs path extends the module lib again, and a plain `//` merged lib
   # would silently drop both, breaking `lib.hm` inside the docs evaluation.
   homeLibFor =
@@ -381,7 +381,7 @@ let
       inherit (registryInfo) hostMeta registry;
 
       # Second pass: build the actual system config values. Reads only metadata
-      # from `hostMeta` plus the registry for `purr.systemMetas` — no cycles.
+      # from `hostMeta` plus the registry for `purr.systemMetas`: no cycles.
       hostEntries = builtins.map (
         {
           arch,
@@ -489,7 +489,7 @@ let
                     # Bridged homes keep home-manager's own extended lib; the
                     # merged namespace lib is exposed via `purr.lib` instead.
                     #
-                    # TODO: home-manager upstream regression — once
+                    # TODO: home-manager upstream regression; once
                     # submoduleWith + `lib` override stops breaking internal
                     # module collection, bridged homes can get `lib =
                     # homeLib` directly and `purr.lib` can be dropped.
@@ -777,7 +777,7 @@ let
                   systemMetas = registry;
                   # The merged namespace lib, uniformly available in both
                   # standalone and bridged homes (bridged homes can't get it
-                  # as `lib` — see the TODO above).
+                  # as `lib`; see the TODO above).
                   lib = purrLib;
                 };
               in

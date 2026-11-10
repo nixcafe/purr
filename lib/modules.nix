@@ -100,7 +100,7 @@ let
           file:
           let
             # Relative path of the file's directory below `dir`.  The root
-            # `default.nix` (relPath == dir) is intentionally excluded here —
+            # `default.nix` (relPath == dir) is intentionally excluded here;
             # callers import it separately (e.g. `buildImportedPurrLib`'s
             # `rootModule`).
             relPath = removePrefix (toString dir) (toString file.relPath);

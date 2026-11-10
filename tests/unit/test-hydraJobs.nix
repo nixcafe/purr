@@ -335,7 +335,7 @@ in
       # Regression guard: configOutputs must group purely from the pre-known
       # system maps (configSystems / homeSystems) and never read cfg.pkgs.
       # Reading cfg.pkgs.system used to force a full nixpkgs/stdenv evaluation
-      # per config just to obtain the system — the `throw` sentinels below fail
+      # per config just to obtain the system: the `throw` sentinels below fail
       # loudly if that behavior is ever reintroduced.
       "uses configSystems map so cfg.pkgs is never forced" = {
         expr =

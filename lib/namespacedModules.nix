@@ -4,7 +4,7 @@
 # _module.args users, etc.).
 #
 # The defining flake's `inputs` are captured here (not taken from the consumer's
-# args) so that a module can reference inputs its own flake declares — e.g. a
+# args) so that a module can reference inputs its own flake declares: e.g. a
 # library flake's module using `inputs.develop-templates`. This mirrors
 # snowfall-lib's `create-modules`, which injects `inputs = user-inputs` when
 # instantiating each project module.

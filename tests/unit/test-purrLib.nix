@@ -1,4 +1,4 @@
-# Unit tests for lib/purrLib.nix — lib construction and merging.
+# Unit tests for lib/purrLib.nix: lib construction and merging.
 { lib }:
 let
   inherit (lib) attrNames sort;

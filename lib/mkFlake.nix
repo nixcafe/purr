@@ -91,7 +91,7 @@ let
     }:
     let
       # Effective inputs: the raw flake inputs after an optional `inputsFor`
-      # filter/replace. This is internal only — modules still receive the raw
+      # filter/replace. This is internal only: modules still receive the raw
       # `inputs` as an argument; replacement affects how purr builds pkgs,
       # system configs, and home configs.
       effectiveInputs =
@@ -142,8 +142,8 @@ let
 
       # Auto-register every package discovered under `packages/` into `pkgs` as
       # a normal nixpkgs overlay. This makes them addressable as
-      # `pkgs.<name>` and — because purr spreads the whole `pkgs` attrset into
-      # every module invocation — available as arguments to other discovered
+      # `pkgs.<name>` and, because purr spreads the whole `pkgs` attrset into
+      # every module invocation, available as arguments to other discovered
       # packages, shells and checks (exactly like nixpkgs packages).
       #
       # Implemented with `final` as the fixpoint so packages may depend on one

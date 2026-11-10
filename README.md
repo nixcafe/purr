@@ -1,6 +1,6 @@
 <h1 align="center">purr</h1>
 <p align="center">
-  A lean Nix flake framework — <strong>auto-discovery, namespaces, and module composition</strong>.
+  A Nix flake framework based on directory layout, namespaces, and modules.
   <br />
   <a href="https://purr.nixcafe.org"><strong>purr.nixcafe.org</strong></a>
 </p>
@@ -12,14 +12,16 @@
 
 ---
 
-## What is purr?
+## What it does
 
-purr turns your project directory structure into a fully wired Nix flake — **no boilerplate, no manual wiring**. Drop files into conventional directories and purr discovers everything: modules, packages, shells, checks, apps, overlays, templates, NixOS/darwin systems, home-manager homes, and a shared lib.
+purr builds a flake from the files in your project. It discovers modules, packages,
+systems, homes, and the other outputs from the directory layout, so you don't have to
+wire them together by hand.
 
-Compared to other flake auto-discovery tools, purr stays **minimal** — a single dependency (`nixpkgs-lib`, ~2 MB) and a small, focused API surface.
+purr only depends on `nixpkgs-lib` (about 2 MB), and the API is small.
 
 ```nix
-# flake.nix — that's it. No manual wiring needed.
+# flake.nix
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -34,7 +36,7 @@ Compared to other flake auto-discovery tools, purr stays **minimal** — a singl
 }
 ```
 
-Put your code in the right directories, and purr wires your entire flake:
+The directory layout looks like this:
 
 ```
 .
@@ -54,9 +56,9 @@ Put your code in the right directories, and purr wires your entire flake:
 └── homes/                → homeConfigurations
 ```
 
-## Quick Start
+## Getting started
 
-Scaffold a new purr project in seconds:
+Start from one of the templates:
 
 ```bash
 # Standalone (mkFlake)
@@ -68,7 +70,7 @@ nix flake init -t github:nixcafe/purr#flake-parts
 
 ## Usage
 
-purr offers two integration modes — pick the one that fits your workflow.
+purr works either on its own or as a flake-parts module.
 
 ### Standalone (`mkFlake`)
 
@@ -113,11 +115,11 @@ purr offers two integration modes — pick the one that fits your workflow.
 }
 ```
 
-## Core Concepts
+## How it works
 
-### Automatic Module Discovery
+### Modules
 
-Drop modules into `modules/` — purr discovers them by subdirectory convention:
+Modules under `modules/` are exposed by their subdirectory path:
 
 ```
 modules/
@@ -127,7 +129,7 @@ modules/
 └── shared/users/default.nix            → merged into nixos + darwin
 ```
 
-Customize the mapping with `moduleTypes`:
+Change the mapping with `moduleTypes`:
 
 ```nix
 moduleTypes = {
@@ -135,9 +137,10 @@ moduleTypes = {
 };
 ```
 
-### Namespace Support
+### Namespaces
 
-purr injects a `namespace` parameter into every module, scoping options under `config.<namespace>.*` — no more global option collisions:
+Every module receives a `namespace` argument. Options declared under
+`config.<namespace>.*` stay separate from options in other modules:
 
 ```nix
 { config, lib, namespace, ... }:
@@ -150,9 +153,10 @@ in
 }
 ```
 
-### Custom Lib (`lib.<namespace>.*`)
+### Shared lib
 
-Create a `lib/` directory to share functions across all modules, packages, shells, and checks:
+A `lib/` directory is available as `lib.<namespace>.*` in every module, package, shell,
+and check:
 
 ```nix
 # lib/default.nix
@@ -163,13 +167,12 @@ Create a `lib/` directory to share functions across all modules, packages, shell
 }
 ```
 
-Access anywhere with `lib.<namespace>.keys`, `lib.<namespace>.utils`, etc.
+Access it with `lib.<namespace>.keys`, `lib.<namespace>.utils`, and so on.
 
 ### Packages
 
-Modules under `packages/` become per-system packages
-(`packages.<system>.<name>`) and are **auto-registered into `pkgs`**, so any
-module can reference them as `pkgs.<name>` — no imports or overlays to wire:
+Packages under `packages/` become `packages.<system>.<name>`. They are also added to
+`pkgs`, so other modules can refer to them directly:
 
 ```nix
 # packages/hello/default.nix
@@ -181,23 +184,15 @@ module can reference them as `pkgs.<name>` — no imports or overlays to wire:
 { pkgs, ... }: pkgs.hello   # the discovered package
 ```
 
-Each package is wrapped like a `callPackage` package (`.override` /
-`.overrideAttrs` work) and added to `pkgs` through an overlay built on the
-package-set fixpoint, so packages may depend on each other:
+Packages are wrapped the same way as `callPackage` packages, so `.override` and
+`.overrideAttrs` work. They can depend on each other; mutual recursion is an error, as
+in any nixpkgs overlay. To keep packages out of `pkgs`, set `packagesToPkgs = false`.
+They remain available under `packages.<system>.<name>`. This applies to `mkFlake` and
+the flake-parts module.
 
-```nix
-# packages/wrapper/default.nix — `hello` resolves from `pkgs`
-{ hello, ... }: hello.override { /* ... */ }
-```
+### Systems and homes
 
-One-way dependencies resolve lazily; mutual cycles are an error, as with any
-nixpkgs overlay. Disable registration with `packagesToPkgs = false` (packages
-stay available as `packages.<system>.<name>`). Registration applies to both
-`mkFlake` and the flake-parts module.
-
-### Systems & Homes
-
-purr auto-discovers NixOS/darwin systems and home-manager homes using `<arch>-<format>/<name>`:
+Systems and homes are discovered from `<arch>-<format>/<name>`:
 
 ```
 systems/
@@ -208,7 +203,11 @@ homes/
 └── x86_64-linux/alice@server/default.nix  → homeConfigurations."alice@server"
 ```
 
-Each host can carry **host meta** — a `meta.nix` next to its `default.nix`, or `hosts.<name>.meta` in the flake config. Declaring `images` in the meta makes the host an **image-only recipe** (e.g. installer ISOs): it is excluded from `nixosConfigurations`/`darwinConfigurations` unless you also set `deployable = true`. Its images are exposed as a top-level `images.<host>.<format>` output:
+Host metadata can live in a `meta.nix` next to `default.nix`, or in `hosts.<name>.meta`
+in the flake config. Setting `images` turns the host into an image-only recipe, useful
+for installer ISOs. Such a host is left out of `nixosConfigurations` and
+`darwinConfigurations` unless you also set `deployable = true`. Its images are exposed
+as `images.<host>.<format>`:
 
 ```nix
 # systems/x86_64-linux/installer/meta.nix
@@ -217,22 +216,22 @@ Each host can carry **host meta** — a `meta.nix` next to its `default.nix`, or
 }
 ```
 
-The merged meta (auto-generated keys + your custom keys) is injected into the host's modules as `purr.meta`.
+The merged metadata is passed to the host's modules as `purr.meta`.
 
-Homes named `<user>@<host>` auto-link to matching hosts. No extra wiring needed.
+A home named `<user>@<host>` links to the matching host automatically.
 
 ```nix
 # systems/x86_64-linux/server/default.nix
 { config, pkgs, lib, purr, ... }:
 {
   networking.hostName = purr.meta.name;  # "server"
-  # ...auto-injects home-manager config for alice@server automatically
+  # home-manager config for alice@server is injected automatically
 }
 ```
 
-### Namespace Bridge
+### Namespace bridge
 
-Forward home-manager config from any NixOS module via the namespace bridge — set `purr.users.<name>.homeConfig` on a host with linked homes:
+A NixOS module can configure a linked home through `purr.users.<name>.homeConfig`:
 
 ```nix
 { config, pkgs, lib, ... }:
@@ -246,20 +245,17 @@ Forward home-manager config from any NixOS module via the namespace bridge — s
 
 ## Why purr?
 
-| | purr | Other frameworks |
-|---|---|---|
-| **Dependencies** | 1 (`nixpkgs-lib`, ~2 MB) | 3+ (flake-parts, flake-utils, ...) |
-| **API surface** | Single `mkFlake` call or one flake-parts module | Multiple nested imports |
-| **Option namespace** | Built-in `namespace` injection | Manual `config.<name>.` prefixing |
-| **Systems & homes** | Auto-discovered, auto-linked | Manual wiring |
-| **Custom lib** | `lib.<namespace>.*` propagated everywhere | Manual import passthrough |
+- One dependency, `nixpkgs-lib`.
+- A single `mkFlake` call, or one flake-parts module.
+- `namespace` injection without manual prefixes.
+- Systems and homes discovered from the layout and linked automatically.
+- A shared lib under `lib.<namespace>.*`.
 
 ## Testing
 
-Tests live under `tests/` and are auto-discovered — drop a
-`test-*.nix` into `tests/unit/` (1:1 with a `lib/` module) or
-`tests/integration/` (real-project runs against `tests/integration/project`)
-and it is picked up automatically.
+Tests live in `tests/` and are discovered automatically. Add a `test-*.nix` file under
+`tests/unit/` for a `lib/` module, or under `tests/integration/` for a real project run
+against `tests/integration/project`.
 
 ```bash
 nix flake check                       # CI gate: pre-commit + purr-tests
@@ -268,15 +264,15 @@ tests/run-tests.sh                    # run directly, live per-test output
 nix develop --command purr-test       # same, from the dev shell
 ```
 
-The `purr-tests` check writes the full report into its `result`; if a test
-fails the build fails and `nix log` shows the failing cases. Unit tests run
-hermetically with `nixpkgs-lib`; integration tests mock `nixosSystem` /
-`homeManagerConfiguration` to evaluate the generated configs through the real
-`lib.evalModules` without pulling a full nixpkgs.
+The `purr-tests` check writes the full report to `result`. If a test fails, the build
+fails and `nix log` shows the failing cases. Unit tests run with `nixpkgs-lib`.
+Integration tests mock `nixosSystem` and `homeManagerConfiguration` and evaluate the
+generated configs through the real `lib.evalModules`, without a full nixpkgs.
 
 ## Documentation
 
-Full documentation at **[purr.nixcafe.org](https://purr.nixcafe.org)** — flake-parts integration, full API reference, directory layout guide, and more.
+More documentation is at [purr.nixcafe.org](https://purr.nixcafe.org): flake-parts
+integration, the API reference, the directory layout guide, and more.
 
 ## License
 

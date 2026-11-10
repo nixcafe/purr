@@ -5,7 +5,7 @@
 #
 # Discovery is automatic: every `test-*.nix` file under `tests/unit/` and
 # `tests/integration/` is picked up, so adding a new test file is as simple as
-# dropping it in one of those directories — the shell runner, the Nix report,
+# dropping it in one of those directories: the shell runner, the Nix report,
 # and the check derivation all pick it up automatically.
 { lib }:
 let

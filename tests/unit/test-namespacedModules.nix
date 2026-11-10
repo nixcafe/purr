@@ -1,4 +1,4 @@
-# Unit tests for lib/namespacedModules.nix — namespace wrapping of modules.
+# Unit tests for lib/namespacedModules.nix: namespace wrapping of modules.
 { lib }:
 let
   nsm = import ../../lib/namespacedModules.nix;

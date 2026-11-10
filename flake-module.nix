@@ -380,7 +380,7 @@ in
         internally. A function is called with `{ inputs }` (the raw flake
         inputs) and must return the effective inputs attrset; a plain attrset
         is used as-is. The `inputs` argument your modules receive is never
-        modified — replacement only affects how purr builds pkgs, system
+        modified. The replacement only affects how purr builds pkgs, system
         configs, and home configs. Combine with the per-host meta keys
         `nixpkgs` / `home-manager` / `nix-darwin` (which reference keys of the
         effective inputs) to give different hosts different inputs.
@@ -397,8 +397,8 @@ in
       default = { };
       description = ''
         Additional arguments to pass to every module. These are merged
-        into the argument set for all auto-discovered modules —
-        packages, shells, checks, apps, templates — as well as
+        into the argument set for all auto-discovered modules
+        (packages, shells, checks, apps, and templates), as well as
         system `specialArgs` and home `extraSpecialArgs`.
         Purr's own keys (inputs, pkgs, namespace, lib, system, purr)
         always override `extraArgs` in case of naming conflicts.
@@ -446,7 +446,7 @@ in
               and `nixosConfigurations`/`darwinConfigurations` exposure; any
               other key is exposed to the host's modules as `purr.meta.<key>`.
               Auto-generated keys (name, arch, archFormat, format, isDarwin,
-              isLinux, system, homes) cannot be overridden — setting them emits
+              isLinux, system, homes) cannot be overridden; setting them emits
               a warning and the value is ignored.
             '';
           };
@@ -477,7 +477,7 @@ in
         description = ''
           Name of the flake output that carries the Hydra CI jobs.
           Set to something else (e.g. `"builds"`) when the flake must
-          not expose a `hydraJobs` output — `nix flake check` evaluates
+          not expose a `hydraJobs` output, since `nix flake check` evaluates
           a `hydraJobs` output with import-from-derivation disabled.
           A separate flake can then re-export this output as
           `hydraJobs` for Hydra to pick up.
@@ -554,7 +554,7 @@ in
       };
 
       # Effective inputs: the raw flake inputs after an optional `inputsFor`
-      # filter/replace. Internal only — modules still receive the raw `inputs`.
+      # filter/replace. Internal only; modules still receive the raw `inputs`.
       effectiveInputs =
         if cfg.inputsFor == null then
           inputs
